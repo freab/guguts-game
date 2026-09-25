@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gugut Maze
 
-## Getting Started
+A 3D **maze-escape game** (Maze Runner style) built with Next.js and React
+Three Fiber. A rigged character spawns in a randomly generated maze and has to
+find the exit; a timer tracks how fast you escape.
 
-First, run the development server:
+![modes: Maze (physics) + Foot-lock IK](docs/foot-locking-plan.md)
+
+## Play
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Move:** `W` `A` `S` `D` or arrow keys
+- **Run:** hold `Shift`
+- **Jump:** `Space` (physics mode only)
+- **Goal:** reach the glowing **green** tile → "You escaped!"
+- **New maze:** the toolbar button, the leva panel button, or "Play again" after escaping
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Two character controllers
 
-## Learn More
+The toolbar switches between two ways of driving the character in the same maze:
 
-To learn more about Next.js, take a look at the following resources:
+| Mode | Engine | Notes |
+|------|--------|-------|
+| **Maze** | [ecctrl](https://github.com/pmndrs/ecctrl) physics capsule | The main game mode: gravity, jump, physics wall-collision, follow camera. |
+| **Foot-lock IK** | Custom controller + two-bone IK | An animation-quality showcase: grid-based collision, foot-locking IK so feet don't slide. Orbit camera. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tech stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Next.js 16** (App Router, client-only WebGL via `dynamic({ ssr: false })`)
+- **React Three Fiber** + **drei** — the 3D scene
+- **Rapier** (`@react-three/rapier`) — physics for the Maze mode
+- **ecctrl** — third-person physics character controller
+- **leva** — live tuning panel (lighting, player speed, minimap toggle)
+- **Tailwind CSS v4** — HUD / overlay styling
 
-## Deploy on Vercel
+## Documentation
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+See [`docs/`](docs/README.md) for a full write-up:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Architecture](docs/architecture.md) — folder-by-folder map of the code
+- [Gameplay & phases](docs/gameplay.md) — controls, win loop, and the build roadmap
+- [Maze system](docs/maze.md) — generation, collision, coordinate helpers
+- [Controllers](docs/controllers.md) — the two character controllers compared
+- [UI & leva](docs/ui.md) — HUD, minimap, and the controls panel
+- [Foot-locking plan](docs/foot-locking-plan.md) — the IK implementation notes

@@ -1,9 +1,9 @@
-import Scene from "./Scene";
+import SceneClient from "./scene/SceneClient";
 
 export default function Home() {
   return (
     <main className="h-screen w-screen">
-      <Scene />
+      <SceneClient />
     </main>
   );
 }
