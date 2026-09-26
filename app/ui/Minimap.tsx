@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CELL, COLS, ROWS, cellAt, exitPosition, worldToCell } from "../maze/mazeData";
-import { playerState } from "../maze/playerState";
+import { COLS, ROWS, cellAt, exitPosition, worldToCell } from "../maze/mazeData";
 
-// A 2D top-down minimap drawn to a canvas. It reads the live maze grid and the
-// player's position on its own animation loop, so it reflects the current maze
-// (including regenerations) and tracks the player without React re-renders.
+// A 2D top-down minimap drawn to a canvas. The maze is static between
+// regenerations, so it draws once on mount; SceneClient remounts it (via `key`)
+// whenever a new maze is generated or resized.
 const SIZE = 160; // px
 
 export default function Minimap() {
@@ -24,47 +23,27 @@ export default function Minimap() {
     canvas.height = SIZE * dpr;
     ctx.scale(dpr, dpr);
 
-    let raf = 0;
+    const cw = SIZE / COLS;
+    const ch = SIZE / ROWS;
 
-    const draw = () => {
-      // Recomputed each frame so the map tracks live maze resizes.
-      const cw = SIZE / COLS;
-      const ch = SIZE / ROWS;
+    ctx.fillStyle = "#0d0d12";
+    ctx.fillRect(0, 0, SIZE, SIZE);
 
-      ctx.clearRect(0, 0, SIZE, SIZE);
-      ctx.fillStyle = "#0d0d12";
-      ctx.fillRect(0, 0, SIZE, SIZE);
-
-      // Walls.
-      ctx.fillStyle = "#3a3a48";
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (cellAt(r, c) === "wall") {
-            ctx.fillRect(c * cw, r * ch, cw + 0.5, ch + 0.5);
-          }
+    // Walls.
+    ctx.fillStyle = "#3a3a48";
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (cellAt(r, c) === "wall") {
+          ctx.fillRect(c * cw, r * ch, cw + 0.5, ch + 0.5);
         }
       }
+    }
 
-      // Exit tile.
-      const [ex, ez] = exitPosition();
-      const [er, ec] = worldToCell(ex, ez);
-      ctx.fillStyle = "#39d98a";
-      ctx.fillRect(ec * cw, er * ch, cw, ch);
-
-      // Player dot — fractional grid coords (inverse of cellToWorld) for smooth
-      // motion between cells.
-      const fc = playerState.x / CELL + (COLS - 1) / 2;
-      const fr = playerState.z / CELL + (ROWS - 1) / 2;
-      ctx.fillStyle = "#f87171";
-      ctx.beginPath();
-      ctx.arc((fc + 0.5) * cw, (fr + 0.5) * ch, Math.max(cw, ch) * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    return () => cancelAnimationFrame(raf);
+    // Exit tile.
+    const [ex, ez] = exitPosition();
+    const [er, ec] = worldToCell(ex, ez);
+    ctx.fillStyle = "#39d98a";
+    ctx.fillRect(ec * cw, er * ch, cw, ch);
   }, []);
 
   return (

@@ -1,23 +1,18 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
+import { createGroundMaterial, createWallMaterial } from "../scene/materials";
 import {
   CELL,
   COLS,
   ROWS,
   WALL_HEIGHT,
-  cellAt,
-  cellToWorld,
   exitPosition,
+  wallSlabs,
 } from "./mazeData";
 
-// Wall thickness as a fraction of a cell — walls are slim slabs, not full-cell
-// blocks, so the corridors read as an open grassy grid. Runs still span the full
-// cell *along* their direction, so the maze stays sealed (no gaps to slip through).
-const THICKNESS = CELL * 0.32;
-
-/** Procedural grass: a tiled canvas of speckled green blades. Cheap and seamless
+/** Procedural lawn: a tiled canvas of speckled green blades. Cheap and seamless
  *  enough that the noise hides the tile repeat under the sun. */
 function makeGrassTexture(): THREE.CanvasTexture {
   const S = 256;
@@ -55,35 +50,14 @@ function makeGrassTexture(): THREE.CanvasTexture {
 
 // Renders the maze: a grassy ground, all wall cells as ONE instanced mesh (a unit
 // box scaled per instance — one draw call however big the maze gets), and a
-// glowing marker on the exit tile. Purely visual now (no physics colliders).
+// glowing marker on the exit tile. Purely visual (no physics colliders).
+// Walls and ground are physically based (MeshStandardNodeMaterial) so they take
+// their ambient light from the sky environment map — Lambert ignores it.
 export default function Maze() {
   const wallsRef = useRef<THREE.InstancedMesh>(null);
 
-  // Collect each wall cell's box, sized thin across the run and full along it so
-  // adjacent walls tile edge-to-edge (junctions stay full on both axes).
-  const walls = useMemo(() => {
-    const isWall = (r: number, c: number) =>
-      r >= 0 && r < ROWS && c >= 0 && c < COLS && cellAt(r, c) === "wall";
-
-    const out: {
-      pos: [number, number, number];
-      size: [number, number, number];
-    }[] = [];
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (cellAt(r, c) !== "wall") continue;
-        const [x, z] = cellToWorld(r, c);
-        const horiz = isWall(r, c - 1) || isWall(r, c + 1);
-        const vert = isWall(r - 1, c) || isWall(r + 1, c);
-        out.push({
-          pos: [x, WALL_HEIGHT / 2, z],
-          size: [horiz ? CELL : THICKNESS, WALL_HEIGHT, vert ? CELL : THICKNESS],
-        });
-      }
-    }
-    return out;
-  }, []);
+  // Slim wall slabs (thin across the run, full along it) from the shared helper.
+  const walls = useMemo(() => wallSlabs(), []);
 
   // Push each wall's transform into the instanced mesh (unit box + per-instance
   // scale gives every slab its own thin/full dimensions from one geometry).
@@ -91,9 +65,9 @@ export default function Maze() {
     const mesh = wallsRef.current;
     if (!mesh) return;
     const dummy = new THREE.Object3D();
-    walls.forEach(({ pos, size }, i) => {
-      dummy.position.set(pos[0], pos[1], pos[2]);
-      dummy.scale.set(size[0], size[1], size[2]);
+    walls.forEach(({ x, z, w, d }, i) => {
+      dummy.position.set(x, WALL_HEIGHT / 2, z);
+      dummy.scale.set(w, WALL_HEIGHT, d);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     });
@@ -105,44 +79,46 @@ export default function Maze() {
   // A generous grassy field that runs well past the maze out to the horizon.
   const mazeSpan = Math.max(COLS, ROWS) * CELL;
   const groundSize = mazeSpan * 3 + 60;
-  const grass = useMemo(() => {
-    const tex = makeGrassTexture();
-    const tiles = groundSize / 3; // one grass tile ≈ every 3 world units
-    tex.repeat.set(tiles, tiles);
-    return tex;
-  }, [groundSize]);
+  const lawn = useMemo(() => makeGrassTexture(), []);
+  // One lawn tile ≈ every 3 world units.
+  const groundMaterial = useMemo(
+    () => createGroundMaterial(lawn, groundSize / 3),
+    [lawn, groundSize]
+  );
+  const wallMaterial = useMemo(() => createWallMaterial(), []);
+  useEffect(
+    () => () => {
+      lawn.dispose();
+      groundMaterial.dispose();
+      wallMaterial.dispose();
+    },
+    [lawn, groundMaterial, wallMaterial]
+  );
 
   const [exitX, exitZ] = exitPosition();
 
   return (
     <>
       {/* Grassy ground (single mesh). */}
-      <mesh position={[0, -0.05, 0]} receiveShadow>
+      <mesh position={[0, -0.05, 0]} material={groundMaterial} receiveShadow>
         <boxGeometry args={[groundSize, 0.1, groundSize]} />
-        <meshStandardMaterial map={grass} roughness={0.95} metalness={0} />
       </mesh>
 
       {/* All walls in one instanced draw call. */}
       <instancedMesh
         key={walls.length}
         ref={wallsRef}
-        args={[undefined, undefined, walls.length]}
+        args={[undefined, wallMaterial, walls.length]}
         castShadow
         receiveShadow
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#c9bfa7" roughness={0.85} metalness={0} />
       </instancedMesh>
 
-      {/* Exit marker (visual only). */}
+      {/* Exit marker (unlit, full-bright). */}
       <mesh position={[exitX, 0.03, exitZ]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[CELL * 0.9, CELL * 0.9]} />
-        <meshStandardMaterial
-          color="#39d98a"
-          emissive="#39d98a"
-          emissiveIntensity={1.2}
-          toneMapped={false}
-        />
+        <meshBasicMaterial color="#39d98a" toneMapped={false} />
       </mesh>
     </>
   );

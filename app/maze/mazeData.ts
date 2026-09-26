@@ -136,6 +136,104 @@ export function worldToCell(x: number, z: number): [number, number] {
   return [row, col];
 }
 
+/** Wall thickness as a fraction of a cell (walls are slim slabs, not blocks). */
+export const WALL_THICKNESS_RATIO = 0.32;
+
+/** A wall cell rendered as a slab: its cell, centre (x, z) and footprint w × d. */
+export interface WallSlab {
+  r: number;
+  c: number;
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+}
+
+/**
+ * Every wall cell as a slim slab: full cell length along its run (so adjacent
+ * walls tile edge-to-edge and the maze stays sealed) and thin across it. Each
+ * slab stays inside its own cell. Reads the live CELL, so it tracks corridor
+ * width changes. Shared by the wall renderer and the grass scatter.
+ */
+export function wallSlabs(): WallSlab[] {
+  const t = CELL * WALL_THICKNESS_RATIO;
+  const isWall = (r: number, c: number) =>
+    r >= 0 && r < ROWS && c >= 0 && c < COLS && cellAt(r, c) === "wall";
+
+  const out: WallSlab[] = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!isWall(r, c)) continue;
+      const [x, z] = cellToWorld(r, c);
+      const horiz = isWall(r, c - 1) || isWall(r, c + 1);
+      const vert = isWall(r - 1, c) || isWall(r + 1, c);
+      out.push({ r, c, x, z, w: horiz ? CELL : t, d: vert ? CELL : t });
+    }
+  }
+  return out;
+}
+
+/** Is (row, col) an open, walkable cell inside the grid? */
+function isOpen(row: number, col: number): boolean {
+  return (
+    row >= 0 && row < ROWS && col >= 0 && col < COLS && cellAt(row, col) !== "wall"
+  );
+}
+
+/** A walkway link between two adjacent open cells: its midpoint + direction. */
+export interface PathLink {
+  x: number;
+  z: number;
+  /** true = runs along z (between rows), false = runs along x. */
+  vertical: boolean;
+}
+
+/**
+ * The walkway network down the middle of every corridor: each open cell centre
+ * is a joint, and every pair of edge-adjacent open cells is joined by a link one
+ * CELL long (listed once, rightward / downward).
+ */
+export function pathNetwork(): { joints: [number, number][]; links: PathLink[] } {
+  const joints: [number, number][] = [];
+  const links: PathLink[] = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (!isOpen(r, c)) continue;
+      const [x, z] = cellToWorld(r, c);
+      joints.push([x, z]);
+      if (isOpen(r, c + 1)) links.push({ x: x + CELL / 2, z, vertical: false });
+      if (isOpen(r + 1, c)) links.push({ x, z: z + CELL / 2, vertical: true });
+    }
+  }
+  return { joints, links };
+}
+
+/**
+ * Distance from world (x, z) to the nearest walkway centreline. Only links in
+ * the surrounding 3×3 cells are checked, so results beyond ~one cell are upper
+ * bounds — plenty for fading grass out near the path.
+ */
+export function distanceToPath(x: number, z: number): number {
+  const [r0, c0] = worldToCell(x, z);
+  let best = Infinity;
+  for (let r = r0 - 1; r <= r0 + 1; r++) {
+    for (let c = c0 - 1; c <= c0 + 1; c++) {
+      if (!isOpen(r, c)) continue;
+      const [cx, cz] = cellToWorld(r, c);
+      best = Math.min(best, Math.hypot(x - cx, z - cz));
+      if (isOpen(r, c + 1)) {
+        const px = Math.min(Math.max(x, cx), cx + CELL);
+        best = Math.min(best, Math.hypot(x - px, z - cz));
+      }
+      if (isOpen(r + 1, c)) {
+        const pz = Math.min(Math.max(z, cz), cz + CELL);
+        best = Math.min(best, Math.hypot(x - cx, z - pz));
+      }
+    }
+  }
+  return best;
+}
+
 /** Is the given world point inside a wall cell (or outside the maze)? */
 export function isWallAtWorld(x: number, z: number): boolean {
   const [row, col] = worldToCell(x, z);

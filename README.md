@@ -15,6 +15,13 @@ npm run dev
 
 Open <http://localhost:3000>.
 
+## Credits
+
+The grass look, tuft model (`public/grassLODs.glb`) and blade alpha mask
+(`public/grass.jpeg`) come from [FluffyGrass](https://github.com/thebenezer/FluffyGrass)
+by Ebenezer, MIT License. See `FLUFFYGRASS_LICENSE`. The shading here is a TSL
+(WebGPU node material) re-implementation.
+
 - **Move:** `W` `A` `S` `D` or arrow keys
 - **Run:** hold `Shift`
 - **Jump:** `Space` (physics mode only)

@@ -64,11 +64,11 @@ export default function SceneClient() {
         </button>
       </div>
 
-      {/* Minimap */}
-      {minimap && <Minimap />}
+      {/* Minimap (drawn once per maze; remounted with the scene). */}
+      {minimap && <Minimap key={`minimap-${runId}`} />}
 
       {/* Remount the whole scene on restart / resize. */}
-      <Scene key={runId} />
+      <Scene key={`scene-${runId}`} />
     </div>
   );
 }
