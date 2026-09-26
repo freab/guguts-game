@@ -35,16 +35,11 @@ class FrameThrottle {
 export default function Grass({
   pathWidth,
   pathGrass,
-  sunDirection,
-  sunColor,
 }: {
   /** Footpath half-width in world units; 0 = no footpath. */
   pathWidth: number;
   /** Grass height on the path centreline, as a fraction of full height. */
   pathGrass: number;
-  /** Unit vector towards the sun (drives the back-lit translucency). */
-  sunDirection: THREE.Vector3;
-  sunColor: THREE.Color;
 }) {
   const {
     enabled,
@@ -57,8 +52,6 @@ export default function Grass({
     windStrength,
     windFps,
     brightness,
-    translucency,
-    dryness,
     baseColor,
     tipColor1,
     tipColor2,
@@ -75,11 +68,9 @@ export default function Grass({
         windStrength: { value: 0.08, min: 0, max: 0.4, step: 0.01, label: "Wind strength" },
         windFps: { value: 30, min: 10, max: 60, step: 5, label: "Wind FPS" },
         brightness: { value: 1, min: 0.3, max: 2, step: 0.05, label: "Brightness" },
-        translucency: { value: 0.45, min: 0, max: 1.5, step: 0.05, label: "Translucency" },
-        dryness: { value: 0.35, min: 0, max: 1, step: 0.05, label: "Dry patches" },
-        baseColor: { value: "#26330f", label: "Base" },
-        tipColor1: { value: "#93ab4a", label: "Tip A" },
-        tipColor2: { value: "#4e7527", label: "Tip B" },
+        baseColor: { value: "#313f1b", label: "Base" },
+        tipColor1: { value: "#9bd38d", label: "Tip A" },
+        tipColor2: { value: "#1f352a", label: "Tip B" },
       },
       { collapsed: true }
     ),
@@ -109,34 +100,9 @@ export default function Grass({
 
   // Live-tunable look (uniforms only, no rebuild).
   useEffect(() => {
-    grass.setLook({
-      height,
-      windStrength,
-      brightness,
-      translucency,
-      dryness,
-      baseColor,
-      tipColor1,
-      tipColor2,
-    });
+    grass.setLook({ height, windStrength, brightness, baseColor, tipColor1, tipColor2 });
     invalidate();
-  }, [
-    grass,
-    height,
-    windStrength,
-    brightness,
-    translucency,
-    dryness,
-    baseColor,
-    tipColor1,
-    tipColor2,
-    invalidate,
-  ]);
-
-  useEffect(() => {
-    grass.setSun(sunDirection, sunColor);
-    invalidate();
-  }, [grass, sunDirection, sunColor, invalidate]);
+  }, [grass, height, windStrength, brightness, baseColor, tipColor1, tipColor2, invalidate]);
 
   useEffect(() => {
     field.setReceiveShadow(shadows);

@@ -2,13 +2,46 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
+import {
+  abs,
+  float,
+  length,
+  mix,
+  mx_noise_float,
+  positionWorld,
+  smoothstep,
+  uniform,
+  uv,
+} from "three/tsl";
 import { CELL, pathNetwork, type PathLink } from "../maze/mazeData";
-import { createDirtMaterial } from "./materials";
 
 /** Height above the ground plane (top at y = 0), clear of z-fighting. */
 const PATH_Y = 0.015;
 /** The ragged alpha edge lands at ~this fraction of each quad's half-width. */
 const EDGE = 0.78;
+
+/**
+ * Worn-dirt material for the footpath quads. `radial` shapes a round joint
+ * (fading from the centre); otherwise a straight link fading across its width.
+ * World-space noise roughens the edge and mottles the colour, so the path
+ * reads as trodden earth rather than a painted stripe. Opaque alpha-clip.
+ */
+function makeDirtMaterial(radial: boolean) {
+  const edgeNoise = mx_noise_float(positionWorld.xz.mul(2.5));
+  const mottle = mx_noise_float(positionWorld.xz.mul(0.9)).mul(0.5).add(0.5);
+  const centred = uv().mul(2).sub(1);
+  const edge = radial ? length(centred) : abs(centred.y);
+
+  const material = new THREE.MeshLambertNodeMaterial();
+  material.colorNode = mix(
+    uniform(new THREE.Color("#7b6647")),
+    uniform(new THREE.Color("#5b4a33")),
+    mottle
+  );
+  material.opacityNode = float(1).sub(smoothstep(0.55, 1, edge.add(edgeNoise.mul(0.3))));
+  material.alphaTest = 0.5;
+  return material;
+}
 
 /** Write link + joint transforms into the two instanced meshes. */
 function layoutPath(
@@ -60,8 +93,8 @@ export default function Footpath({
 
   const network = useMemo(() => pathNetwork(), []);
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), []);
-  const linkMaterial = useMemo(() => createDirtMaterial(false), []);
-  const jointMaterial = useMemo(() => createDirtMaterial(true), []);
+  const linkMaterial = useMemo(() => makeDirtMaterial(false), []);
+  const jointMaterial = useMemo(() => makeDirtMaterial(true), []);
   useEffect(
     () => () => {
       geometry.dispose();
