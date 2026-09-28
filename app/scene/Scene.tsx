@@ -1,11 +1,19 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stats } from "@react-three/drei";
+import { KeyboardControls, Stats } from "@react-three/drei";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
+import type { ViewMode } from "../character/CameraRig";
+import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import Maze from "../maze/Maze";
+import { CELL, COLS, ROWS } from "../maze/mazeData";
+import LightmapBaker from "./bake/LightmapBaker";
+import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
+import { setLightmapStrength } from "./bake/lightmap";
+import { setLoading } from "./bake/loadingStore";
+import PostEffects from "./post/PostEffects";
 import Footpath from "./Footpath";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
@@ -16,9 +24,6 @@ import SkyEnvironment from "./SkyEnvironment";
 // understands (avoids duplicate-module identity issues between three builds).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 extend(THREE as any);
-
-/** Sun light distance from the maze centre (|[40, 32, 40]|, the original spot). */
-const SUN_DISTANCE = Math.hypot(40, 32, 40);
 
 const TONE_MAPPINGS = {
   ACES: THREE.ACESFilmicToneMapping,
@@ -49,29 +54,122 @@ function PerfProbe() {
   return null;
 }
 
-/** Render a light's shadow map on the next frame, then never again. */
-function bakeShadowOnce(light: THREE.DirectionalLight) {
+const SHADOW_MAP_SIZE = 2048;
+
+/**
+ * Aim the sun at the maze centre, size its shadow camera to cover the whole
+ * maze from any sun direction (half-diagonal + margin), and render the shadow
+ * map once: only the walls cast, and they never move. The character uses a
+ * blob shadow instead, so nothing dynamic needs the map re-rendered.
+ */
+function bakeShadows(light: THREE.DirectionalLight, direction: THREE.Vector3) {
+  const half = ((Math.max(COLS, ROWS) * CELL) / 2) * Math.SQRT2 + 2;
+  const distance = half * 2 + 20;
+  light.position.copy(direction).multiplyScalar(distance);
+  light.target.position.set(0, 0, 0);
+  light.target.updateMatrixWorld();
+
+  const cam = light.shadow.camera;
+  cam.left = -half;
+  cam.right = half;
+  cam.top = half;
+  cam.bottom = -half;
+  cam.near = 1;
+  cam.far = distance * 2;
+  cam.updateProjectionMatrix();
+
   light.shadow.autoUpdate = false;
   light.shadow.needsUpdate = true;
 }
 
 /**
- * Bake the sun's shadow map once per sun position. The walls never move (grass
- * and the footpath don't cast), so re-rendering the shadow pass every frame is
- * wasted work. The scene also remounts on New maze / resize, which re-bakes.
+ * The sun, with a baked shadow map: rendered once when the scene mounts (the
+ * scene remounts on New maze / resize) and again only if the sun direction
+ * changes — no shadow pass in the per-frame cost at all.
  */
-function BakeShadows({
-  light,
-  sunDirection,
+function SunLight({
+  direction,
+  intensity,
+  onLight,
 }: {
-  light: RefObject<THREE.DirectionalLight | null>;
-  sunDirection: THREE.Vector3;
+  direction: THREE.Vector3;
+  intensity: number;
+  /** Receives the light object (the godrays pass needs it). */
+  onLight: (light: THREE.DirectionalLight | null) => void;
 }) {
-  const invalidate = useThree((s) => s.invalidate);
+  const light = useRef<THREE.DirectionalLight | null>(null);
+  const setLight = useCallback(
+    (l: THREE.DirectionalLight | null) => {
+      light.current = l;
+      onLight(l);
+    },
+    [onLight]
+  );
   useEffect(() => {
-    if (light.current) bakeShadowOnce(light.current);
-    invalidate();
-  }, [light, sunDirection, invalidate]);
+    if (light.current) bakeShadows(light.current, direction);
+  }, [direction]);
+  return (
+    <directionalLight
+      ref={setLight}
+      intensity={intensity}
+      color="#fff4e0"
+      castShadow
+      shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
+      shadow-bias={-0.0004}
+      shadow-normalBias={0.02}
+    />
+  );
+}
+
+/**
+ * The preloader's driver. It sits in the same Suspense boundary as everything
+ * else, so it mounts only once every asset has loaded. Then, in order:
+ * wait for all bakes (lightmap, sky, light probe; the first frames render the
+ * baked shadow map) → precompile every shader pipeline → switch on
+ * post-processing (it needs the shadow map) and let it render a few frames →
+ * "ready", which fades the loading screen out.
+ */
+function Readiness({ onPostReady }: { onPostReady: () => void }) {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+
+  useEffect(() => {
+    let cancelled = false;
+    const started = performance.now();
+    (async () => {
+      setLoading({ stage: "baking" });
+      await nextFrames(3); // bake effects register; shadow map renders once
+      const t0 = performance.now();
+      await allBakesSettled();
+      const t1 = performance.now();
+      if (cancelled) return;
+
+      setLoading({ stage: "compiling" });
+      await (gl as unknown as THREE.WebGPURenderer).compileAsync(scene, camera);
+      const t2 = performance.now();
+      if (cancelled) return;
+
+      setLoading({ stage: "warming" });
+      onPostReady();
+      await nextFrames(6); // post-processing compiles + first frames
+      if (!cancelled) {
+        setLoading({ stage: "ready" });
+        console.info(
+          `[gugut] ready in ${Math.round(performance.now() - started)} ms ` +
+            `(bakes ${Math.round(t1 - t0)} · shader compile ${Math.round(t2 - t1)} · ` +
+            `post warm-up ${Math.round(performance.now() - t2)})`
+        );
+      }
+    })().catch((err) => {
+      console.warn("[gugut] preload step failed, showing scene anyway:", err);
+      if (!cancelled) setLoading({ stage: "ready" });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [gl, scene, camera, onPostReady]);
+
   return null;
 }
 
@@ -92,19 +190,22 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
 }
 
 /**
- * Free-navigation viewer running on WebGPU: sky with clouds, maze and
- * FluffyGrass-style grass inside the maze, flown around with OrbitControls.
+ * The maze on WebGPU — sky with clouds, grid ground, walls, footpath and grass —
+ * explored by a playable character in first- or third-person view.
  *
- * Performance setup:
- * - frameloop="demand": frames render only when something changes (camera,
- *   controls, the grass wind clock), so an idle scene costs ~nothing.
- * - Shadow map and sky light baked only when the sun / sky change.
- * - Pixel ratio capped at 1.5.
- * - Walls are one instanced draw call; grass is chunked, culled and LOD'd.
+ * Performance setup — bake everything that doesn't depend on the view:
+ * - Sun shadow map (walls only; the character has a blob shadow), the sky
+ *   (cube background) and sky light probe: baked, re-baked only when the sun /
+ *   sky change. The ground lightmap bakes wall shadows + AO for the floor,
+ *   footpath and grass; walls get analytic base AO.
+ * - View-dependent effects (godrays, bloom, vignette) run live; godrays at
+ *   reduced resolution, raymarching the baked shadow map.
+ * - A preloader reveals the scene only after assets, bakes, shader compilation
+ *   and post-processing warm-up are done.
+ * - Pixel ratio capped at 1.5; walls are one instanced draw call; grass is
+ *   chunked, distance / frustum / occlusion culled and LOD'd.
  */
-export default function Scene() {
-  const sun = useRef<THREE.DirectionalLight>(null);
-
+export default function Scene({ view }: { view: ViewMode }) {
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   // Defaults reproduce the original look (sun at [40, 32, 40], ACES @ 1).
   const {
@@ -121,6 +222,9 @@ export default function Scene() {
     cloudDensity,
     skyBrightness,
     haze,
+    liveClouds,
+    bakedShadow,
+    bakedAO,
     skyLight,
     skyLightIntensity,
     toneMapping,
@@ -128,42 +232,50 @@ export default function Scene() {
   } = useControls({
     Lighting: folder(
       {
-        ambient: { value: 0.55, min: 0, max: 3, step: 0.05 },
-        directional: { value: 1.8, min: 0, max: 5, step: 0.05 },
-        hemisphere: { value: 0.6, min: 0, max: 3, step: 0.05 },
+        ambient: { value: 1.55, min: 0, max: 3, step: 0.05 },
+        directional: { value: 3.3, min: 0, max: 5, step: 0.05 },
+        hemisphere: { value: 1.45, min: 0, max: 3, step: 0.05 },
       },
       { collapsed: true }
     ),
     "Sun & Sky": folder(
       {
-        elevation: { value: 29.5, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
-        azimuth: { value: 45, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
-        turbidity: { value: 2.5, min: 1, max: 20, step: 0.1, label: "Turbidity" },
+        elevation: { value: 24.5, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
+        azimuth: { value: 68, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
+        turbidity: { value: 1, min: 1, max: 20, step: 0.1, label: "Turbidity" },
         rayleigh: { value: 1.2, min: 0, max: 4, step: 0.05, label: "Rayleigh" },
-        mieCoefficient: { value: 0.005, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
-        mieDirectionalG: { value: 0.8, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
+        mieCoefficient: { value: 0, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
+        mieDirectionalG: { value: 0.83, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
         clouds: { value: 0.35, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
         cloudDensity: { value: 0.5, min: 0, max: 1, step: 0.01, label: "Cloud density" },
         skyBrightness: { value: 0.5, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
-        haze: { value: 0, min: 0, max: 0.03, step: 0.001, label: "Haze" },
+        haze: { value: 0.01, min: 0, max: 0.03, step: 0.001, label: "Haze" },
+        liveClouds: { value: true, label: "Live clouds (costly)" },
+      },
+      { collapsed: true }
+    ),
+    "Baked lighting": folder(
+      {
+        bakedShadow: { value: 0.3, min: 0, max: 1, step: 0.05, label: "Shadow strength" },
+        bakedAO: { value: 0.45, min: 0, max: 1, step: 0.05, label: "AO strength" },
       },
       { collapsed: true }
     ),
     Environment: folder(
       {
         skyLight: { value: true, label: "Sky light" },
-        skyLightIntensity: { value: 0.6, min: 0, max: 3, step: 0.05, label: "Intensity" },
+        skyLightIntensity: { value: 3, min: 0, max: 3, step: 0.05, label: "Intensity" },
       },
       { collapsed: true }
     ),
     "Tone mapping": folder(
       {
         toneMapping: {
-          value: "ACES" as ToneMappingName,
+          value: "Neutral" as ToneMappingName,
           options: Object.keys(TONE_MAPPINGS) as ToneMappingName[],
           label: "Operator",
         },
-        exposure: { value: 1, min: 0.1, max: 3, step: 0.01, label: "Exposure" },
+        exposure: { value: 0.48, min: 0.1, max: 3, step: 0.01, label: "Exposure" },
       },
       { collapsed: true }
     ),
@@ -175,6 +287,80 @@ export default function Scene() {
       { collapsed: true }
     ),
   });
+
+  // Post-processing. Godrays read the baked shadow map, so they need no shadow
+  // re-render; they still depend on the view, so they run live (at reduced
+  // resolution) — as do bloom and vignette.
+  const post = useControls({
+    "Post-processing": folder(
+      {
+        postEnabled: { value: true, label: "Enabled" },
+        godrays: { value: true, label: "God rays" },
+        // Density is per 100 m of lit air; our rays cross ~10–30 m, so it needs
+        // to be high to show. Falloff dims rays far from the light (node default 2).
+        raysDensity: { value: 6, min: 0, max: 20, step: 0.1, label: "Rays density" },
+        raysMaxDensity: { value: 0.55, min: 0, max: 1, step: 0.01, label: "Rays max" },
+        raysFalloff: { value: 0.5, min: 0, max: 3, step: 0.05, label: "Rays falloff" },
+        raysSteps: { value: 60, min: 8, max: 120, step: 1, label: "Rays steps" },
+        raysResolution: {
+          value: 0.5,
+          options: { Quarter: 0.25, Half: 0.5, Full: 1 },
+          label: "Rays resolution",
+        },
+        raysColor: { value: "#ffe2a8", label: "Rays colour" },
+        bloom: { value: true, label: "Bloom" },
+        bloomStrength: { value: 0.3, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
+        bloomRadius: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Bloom radius" },
+        bloomThreshold: { value: 0.9, min: 0, max: 2, step: 0.01, label: "Bloom threshold" },
+        vignette: { value: true, label: "Vignette" },
+        vignetteStrength: { value: 0.35, min: 0, max: 1, step: 0.05, label: "Vignette strength" },
+      },
+      { collapsed: true }
+    ),
+  });
+  const postToggles = useMemo(
+    () => ({
+      bloom: post.bloom,
+      godrays: post.godrays,
+      vignette: post.vignette,
+      raysResolution: post.raysResolution,
+    }),
+    [post.bloom, post.godrays, post.vignette, post.raysResolution]
+  );
+  const postParams = useMemo(
+    () => ({
+      bloomStrength: post.bloomStrength,
+      bloomRadius: post.bloomRadius,
+      bloomThreshold: post.bloomThreshold,
+      raysDensity: post.raysDensity,
+      raysMaxDensity: post.raysMaxDensity,
+      raysFalloff: post.raysFalloff,
+      raysSteps: post.raysSteps,
+      raysColor: post.raysColor,
+      vignetteStrength: post.vignetteStrength,
+    }),
+    [
+      post.bloomStrength,
+      post.bloomRadius,
+      post.bloomThreshold,
+      post.raysDensity,
+      post.raysMaxDensity,
+      post.raysFalloff,
+      post.raysSteps,
+      post.raysColor,
+      post.vignetteStrength,
+    ]
+  );
+
+  useEffect(() => {
+    setLightmapStrength(bakedShadow, bakedAO);
+  }, [bakedShadow, bakedAO]);
+
+  // The sun light object (for godrays) and whether post may switch on yet —
+  // the preloader enables it once the baked shadow map exists.
+  const [sun, setSun] = useState<THREE.DirectionalLight | null>(null);
+  const [postReady, setPostReady] = useState(false);
+  const enablePost = useCallback(() => setPostReady(true), []);
 
   // Footpath down the middle of every corridor: worn-down grass + dirt strip.
   const { footpath, pathWidth, pathGrass, dirt } = useControls("Game", {
@@ -199,10 +385,6 @@ export default function Scene() {
       ),
     [elevation, azimuth]
   );
-  const sunPosition = useMemo(
-    () => sunDirection.clone().multiplyScalar(SUN_DISTANCE),
-    [sunDirection]
-  );
 
   const skyParams = useMemo(
     () => ({
@@ -219,9 +401,12 @@ export default function Scene() {
   );
 
   return (
+    <KeyboardControls map={KEYBOARD_MAP}>
     <Canvas
-      frameloop="demand"
-      camera={{ position: [0, 24, 34], fov: 50 }}
+      // A live, animated character: render every frame.
+      frameloop="always"
+      // The player's camera rig positions this every frame.
+      camera={{ position: [0, 24, 34], fov: 55, near: 0.05 }}
       // PCF shadows (WebGPU dropped PCFSoft, R3F's default, and warns about it).
       shadows="percentage"
       // Cap the pixel ratio: on a 2–3x HiDPI display this is a big fillrate win.
@@ -249,47 +434,36 @@ export default function Scene() {
       <PerfProbe />
       <ToneMapping mode={TONE_MAPPINGS[toneMapping]} exposure={exposure} />
 
-      {/* Physically based sky with clouds + the ambient sky light baked from it. */}
-      <SkyEnvironment params={skyParams} skyLight={skyLight ? skyLightIntensity : 0} />
-      {haze > 0 && <fogExp2 attach="fog" args={["#c3d3e3", haze]} />}
-
-      <ambientLight intensity={ambient} />
-      <hemisphereLight args={["#bcd4ff", "#5a5442", hemisphere]} />
-      <directionalLight
-        ref={sun}
-        position={sunPosition}
-        intensity={directional}
-        color="#fff4e0"
-        castShadow
-        // Baked only when the sun moves, so a sharp 2048² map costs ~nothing.
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={1}
-        shadow-camera-far={140}
-        shadow-camera-left={-24}
-        shadow-camera-right={24}
-        shadow-camera-top={24}
-        shadow-camera-bottom={-24}
-      />
-      <BakeShadows light={sun} sunDirection={sunDirection} />
-
-      {/* Walls first and outside the grass Suspense, so they are in place when
-          the shadow map is baked (the grass loads its model asynchronously). */}
-      <InfiniteGrid />
-      <Maze />
-      <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
+      {/* One Suspense boundary for the whole world: nothing shows until every
+          asset has loaded, then Readiness runs the bake / compile / warm-up
+          stages behind the loading screen. */}
       <Suspense fallback={null}>
+        {/* Physically based sky (baked to a cube) + the sky light probe. */}
+        <SkyEnvironment
+          params={skyParams}
+          skyLight={skyLight ? skyLightIntensity : 0}
+          liveClouds={liveClouds}
+        />
+        {haze > 0 && <fogExp2 attach="fog" args={["#c3d3e3", haze]} />}
+
+        <ambientLight intensity={ambient} />
+        <hemisphereLight args={["#bcd4ff", "#5a5442", hemisphere]} />
+        <SunLight direction={sunDirection} intensity={directional} onLight={setSun} />
+        <LightmapBaker sunDirection={sunDirection} />
+
+        <InfiniteGrid />
+        <Maze />
+        <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} />
+        <PlayerController view={view} />
+
+        <Readiness onPostReady={enablePost} />
       </Suspense>
 
-      <OrbitControls
-        makeDefault
-        target={[0, 0, 0]}
-        enableDamping
-        dampingFactor={0.08}
-        enablePan
-        maxDistance={200}
-        maxPolarAngle={Math.PI * 0.495}
-      />
+      {post.postEnabled && postReady && sun && (
+        <PostEffects light={sun} toggles={postToggles} params={postParams} />
+      )}
     </Canvas>
+    </KeyboardControls>
   );
 }

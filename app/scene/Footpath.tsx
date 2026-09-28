@@ -14,6 +14,7 @@ import {
   uv,
 } from "three/tsl";
 import { CELL, pathNetwork, type PathLink } from "../maze/mazeData";
+import { lightmapFactor } from "./bake/lightmap";
 
 /** Height above the ground plane (top at y = 0), clear of z-fighting. */
 const PATH_Y = 0.015;
@@ -37,7 +38,7 @@ function makeDirtMaterial(radial: boolean) {
     uniform(new THREE.Color("#7b6647")),
     uniform(new THREE.Color("#5b4a33")),
     mottle
-  );
+  ).mul(lightmapFactor); // baked wall shadows + AO
   material.opacityNode = float(1).sub(smoothstep(0.55, 1, edge.add(edgeNoise.mul(0.3))));
   material.alphaTest = 0.5;
   return material;
@@ -112,16 +113,9 @@ export default function Footpath({
 
   return (
     <group visible={visible}>
-      <instancedMesh
-        ref={linksRef}
-        args={[geometry, linkMaterial, network.links.length]}
-        receiveShadow
-      />
-      <instancedMesh
-        ref={jointsRef}
-        args={[geometry, jointMaterial, network.joints.length]}
-        receiveShadow
-      />
+      {/* Shadows come from the baked lightmap, so no shadow-map sampling. */}
+      <instancedMesh ref={linksRef} args={[geometry, linkMaterial, network.links.length]} />
+      <instancedMesh ref={jointsRef} args={[geometry, jointMaterial, network.joints.length]} />
     </group>
   );
 }

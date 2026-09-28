@@ -7,6 +7,7 @@ import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createGrassMaterial } from "./grass/grassNodeMaterial";
 import { GrassField, lodGeometries } from "./grass/GrassField";
+import { playerStore } from "../character/playerStore";
 
 /** Schedules at most one pending callback at a time (throttles the wind clock). */
 class FrameThrottle {
@@ -47,6 +48,9 @@ export default function Grass({
     tuftSize,
     height,
     lod,
+    drawDistance,
+    fadeWidth,
+    occlusion,
     shadows,
     wind,
     windStrength,
@@ -59,18 +63,21 @@ export default function Grass({
     Grass: folder(
       {
         enabled: { value: true, label: "Show grass" },
-        density: { value: 10, min: 1, max: 30, step: 1, label: "Tufts / m²" },
-        tuftSize: { value: 2.5, min: 1, max: 5, step: 0.1, label: "Tuft size" },
-        height: { value: 0.6, min: 0, max: 2, step: 0.05, label: "Fluff height" },
+        density: { value: 15, min: 1, max: 30, step: 1, label: "Tufts / m²" },
+        tuftSize: { value: 2.6, min: 1, max: 5, step: 0.1, label: "Tuft size" },
+        height: { value: 0.2, min: 0, max: 2, step: 0.05, label: "Fluff height" },
         lod: { value: "Auto", options: ["Auto", "High", "Medium", "Low"], label: "LOD" },
-        shadows: { value: true, label: "Wall shadows" },
+        drawDistance: { value: 15, min: 4, max: 80, step: 1, label: "Draw distance" },
+        fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
+        occlusion: { value: true, label: "Occlusion culling" },
+        shadows: { value: true, label: "Wall shadows (baked)" },
         wind: { value: true, label: "Wind" },
-        windStrength: { value: 0.08, min: 0, max: 0.4, step: 0.01, label: "Wind strength" },
-        windFps: { value: 30, min: 10, max: 60, step: 5, label: "Wind FPS" },
-        brightness: { value: 1, min: 0.3, max: 2, step: 0.05, label: "Brightness" },
-        baseColor: { value: "#313f1b", label: "Base" },
-        tipColor1: { value: "#9bd38d", label: "Tip A" },
-        tipColor2: { value: "#1f352a", label: "Tip B" },
+        windStrength: { value: 0.05, min: 0, max: 0.4, step: 0.01, label: "Wind strength" },
+        windFps: { value: 20, min: 10, max: 60, step: 5, label: "Wind FPS" },
+        brightness: { value: 1.75, min: 0.3, max: 2, step: 0.05, label: "Brightness" },
+        baseColor: { value: "#638332", label: "Base" },
+        tipColor1: { value: "#89c47b", label: "Tip A" },
+        tipColor2: { value: "#056535", label: "Tip B" },
       },
       { collapsed: true }
     ),
@@ -105,13 +112,18 @@ export default function Grass({
   }, [grass, height, windStrength, brightness, baseColor, tipColor1, tipColor2, invalidate]);
 
   useEffect(() => {
-    field.setReceiveShadow(shadows);
+    grass.setBakedShadows(shadows);
     invalidate();
-  }, [field, shadows, invalidate]);
+  }, [grass, shadows, invalidate]);
 
-  // Per frame: each chunk picks its LOD from its distance to the camera.
+  // Per frame: grass only where the character is and can see — distance,
+  // frustum and wall-occlusion culling — and each drawn chunk picks its LOD.
   const forcedLod = lod === "High" ? 0 : lod === "Medium" ? 1 : lod === "Low" ? 2 : -1;
-  useFrame(({ camera }) => field.updateLod(camera.position, forcedLod));
+  useFrame(({ camera }) => {
+    const { x, z } = playerStore;
+    grass.setFade(x, z, Math.max(0, drawDistance - fadeWidth), drawDistance);
+    field.updateVisibility(camera, x, z, enabled ? drawDistance : -1, forcedLod, occlusion);
+  });
 
   // Wind clock. The canvas renders on demand, so while wind is on we request
   // the next frame ourselves — throttled to `windFps` (30 halves the GPU work).

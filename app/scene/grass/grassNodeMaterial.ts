@@ -3,10 +3,12 @@ import {
   dot,
   exp,
   float,
+  length,
   mix,
   mx_noise_float,
   positionLocal,
   sin,
+  smoothstep,
   texture,
   transformNormalToView,
   uniform,
@@ -15,6 +17,7 @@ import {
   vec3,
   vertexStage,
 } from "three/tsl";
+import { lightmapFactor } from "../bake/lightmap";
 
 /** Live-tunable grass look (no shader rebuild needed). */
 export interface GrassLook {
@@ -54,9 +57,15 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     height: uniform(0.6),
     noiseScale: uniform(1.5),
     brightness: uniform(1),
-    baseColor: uniform(new THREE.Color("#313f1b")),
-    tipColor1: uniform(new THREE.Color("#9bd38d")),
-    tipColor2: uniform(new THREE.Color("#1f352a")),
+    baseColor: uniform(new THREE.Color("#638332")),
+    tipColor1: uniform(new THREE.Color("#89c47b")),
+    tipColor2: uniform(new THREE.Color("#056535")),
+    // Draw-distance fade around the player (world XZ centre, start/end radius).
+    fadeCenter: uniform(new THREE.Vector2()),
+    fadeStart: uniform(14),
+    fadeEnd: uniform(18),
+    // 0..1: how much the baked lightmap (wall shadows + AO) darkens the grass.
+    lightmapMix: uniform(1),
   };
 
   // 0 at the blade base, 1 at the tip (the GLB has uv.y = 1 at the base).
@@ -74,8 +83,22 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     .mul(0.5)
     .add(0.5);
 
-  // Height: stretch this vertex's own height (already scaled per instance).
-  const lifted = positionLocal.y.mul(exp(patch).mul(uniforms.height).add(1));
+  // Distance fade: 1 near the player, 0 at the draw distance. Faded blades
+  // shrink and sink below the floor, so culled chunks never visibly pop.
+  const fade = float(1).sub(
+    smoothstep(
+      uniforms.fadeStart,
+      uniforms.fadeEnd,
+      length(positionLocal.xz.sub(uniforms.fadeCenter))
+    )
+  );
+
+  // Height: stretch this vertex's own height (already scaled per instance),
+  // scaled by the fade and pushed under the floor as it fades out.
+  const lifted = positionLocal.y
+    .mul(exp(patch).mul(uniforms.height).add(1))
+    .mul(fade)
+    .sub(float(1).sub(fade));
 
   // Wind: a diagonal travelling wave, phase-jittered by the gust field, with
   // displacement proportional to height (base anchored, tall blades sway most).
@@ -98,9 +121,11 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
 
   // Colour: base -> tip gradient, tip hue picked by the patch noise.
   const tipColor = mix(uniforms.tipColor1, uniforms.tipColor2, vertexStage(patch));
-  material.colorNode = mix(uniforms.baseColor, tipColor, tip).mul(
-    uniforms.brightness
-  );
+  // Baked wall shadows + AO: one lightmap fetch per fragment instead of
+  // filtering the shadow map (the grass doesn't receive realtime shadows).
+  material.colorNode = mix(uniforms.baseColor, tipColor, tip)
+    .mul(uniforms.brightness)
+    .mul(mix(float(1), lightmapFactor, uniforms.lightmapMix));
 
   // Blade silhouettes from the alpha mask (same UV flip as FluffyGrass),
   // as an opaque alpha-clip: no blending, depth-write + early-Z stay on.
@@ -120,6 +145,16 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
       uniforms.baseColor.value.set(look.baseColor);
       uniforms.tipColor1.value.set(look.tipColor1);
       uniforms.tipColor2.value.set(look.tipColor2);
+    },
+    /** Centre and radii of the draw-distance fade (call every frame). */
+    /** Whether the baked wall shadows / AO darken the grass. */
+    setBakedShadows(on: boolean) {
+      uniforms.lightmapMix.value = on ? 1 : 0;
+    },
+    setFade(x: number, z: number, start: number, end: number) {
+      uniforms.fadeCenter.value.set(x, z);
+      uniforms.fadeStart.value = start;
+      uniforms.fadeEnd.value = end;
     },
     /** Advance the wind clock (clamped, so a long idle gap doesn't jump). */
     advance(delta: number) {

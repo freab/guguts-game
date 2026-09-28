@@ -29,6 +29,8 @@ function applySkyParams(sky: SkyMesh, p: SkyParams) {
 
 /** Resolution of the cube the sky is captured into for the light probe. */
 const PROBE_CUBE_SIZE = 32;
+/** Resolution (per face) of the baked sky background. */
+const BACKGROUND_CUBE_SIZE = 768;
 
 /**
  * Owns the visible sky and the ambient "sky light" derived from it.
@@ -42,6 +44,10 @@ const PROBE_CUBE_SIZE = 32;
  * is already a directional light) is rendered into a small cube and reduced to
  * spherical harmonics. Unlike an environment map, a probe lights Lambert
  * materials too, so every surface picks up sky-coloured ambient light.
+ *
+ * Baked background: a third SkyMesh is rendered once into a cube texture used
+ * as `scene.background`, so the per-pixel sky + cloud shader doesn't run every
+ * frame (the clouds hold still). `sky` is only for the optional live clouds.
  */
 export class SkyController {
   readonly sky = new SkyMesh();
@@ -54,14 +60,25 @@ export class SkyController {
     type: THREE.HalfFloatType,
   });
   private readonly cubeCamera = new THREE.CubeCamera(0.1, 100, this.cubeTarget);
+
+  private readonly bgSky = new SkyMesh();
+  private readonly bgScene = new THREE.Scene();
+  private readonly bgTarget = new THREE.CubeRenderTarget(BACKGROUND_CUBE_SIZE, {
+    type: THREE.HalfFloatType,
+  });
+  private readonly bgCamera = new THREE.CubeCamera(0.1, 100, this.bgTarget);
+
   private bakeId = 0;
   private disposed = false;
 
   constructor() {
-    this.sky.scale.setScalar(10000);
-    // SkyMesh's colorNode is a vec4 (sky rgb, alpha 1); the type is a wider union.
-    const base = this.sky.material.colorNode as ReturnType<typeof vec4>;
-    this.sky.material.colorNode = vec4(base.rgb.mul(this.brightness), 1);
+    for (const s of [this.sky, this.bgSky]) {
+      s.scale.setScalar(10000);
+      // SkyMesh's colorNode is a vec4 (sky rgb, alpha 1); the type is a wider union.
+      const base = s.material.colorNode as ReturnType<typeof vec4>;
+      s.material.colorNode = vec4(base.rgb.mul(this.brightness), 1);
+    }
+    this.bgScene.add(this.bgSky);
 
     this.envSky.scale.setScalar(10000);
     this.envSky.showSunDisc.value = 0;
@@ -70,8 +87,15 @@ export class SkyController {
 
   update(params: SkyParams) {
     applySkyParams(this.sky, params);
+    applySkyParams(this.bgSky, params);
     applySkyParams(this.envSky, params);
     this.brightness.value = params.brightness;
+  }
+
+  /** Render the sky (sun disc and clouds included) into the background cube. */
+  bakeBackground(renderer: THREE.WebGPURenderer): THREE.Texture {
+    this.bgCamera.update(renderer, this.bgScene);
+    return this.bgTarget.texture;
   }
 
   setProbeIntensity(intensity: number) {
@@ -94,7 +118,8 @@ export class SkyController {
   dispose() {
     this.disposed = true;
     this.cubeTarget.dispose();
-    for (const s of [this.sky, this.envSky]) {
+    this.bgTarget.dispose();
+    for (const s of [this.sky, this.envSky, this.bgSky]) {
       s.geometry.dispose();
       s.material.dispose();
     }

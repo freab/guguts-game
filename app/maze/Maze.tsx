@@ -1,13 +1,26 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
+import { mix, positionWorld, smoothstep, uniform } from "three/tsl";
 import {
   CELL,
   WALL_HEIGHT,
   exitPosition,
   wallSlabs,
 } from "./mazeData";
+
+/**
+ * Wall material: matte stone with ambient occlusion baked in analytically —
+ * darker towards the base where wall meets ground (computed from height, so no
+ * texture and no runtime AO pass).
+ */
+function createWallMaterial() {
+  const material = new THREE.MeshLambertNodeMaterial();
+  const base = uniform(new THREE.Color("#c9bfa7"));
+  material.colorNode = base.mul(mix(0.55, 1, smoothstep(0, 0.9, positionWorld.y)));
+  return material;
+}
 
 // Renders the maze: all wall cells as ONE instanced mesh (a unit
 // box scaled per instance — one draw call however big the maze gets), and a
@@ -37,6 +50,9 @@ export default function Maze() {
     mesh.computeBoundingSphere();
   }, [walls]);
 
+  const wallMaterial = useMemo(() => createWallMaterial(), []);
+  useEffect(() => () => wallMaterial.dispose(), [wallMaterial]);
+
   const [exitX, exitZ] = exitPosition();
 
   return (
@@ -45,12 +61,11 @@ export default function Maze() {
       <instancedMesh
         key={walls.length}
         ref={wallsRef}
-        args={[undefined, undefined, walls.length]}
+        args={[undefined, wallMaterial, walls.length]}
         castShadow
         receiveShadow
       >
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color="#c9bfa7" />
       </instancedMesh>
 
       {/* Exit marker (unlit, full-bright). */}

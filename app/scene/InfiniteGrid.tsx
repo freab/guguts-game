@@ -19,6 +19,7 @@ import {
   uniform,
 } from "three/tsl";
 import { CELL } from "../maze/mazeData";
+import { lightmapFactor } from "./bake/lightmap";
 
 /** Plane size; it follows the camera, and lines fade out well before its edge. */
 const PLANE_SIZE = 2000;
@@ -37,8 +38,9 @@ interface GridSettings {
 /**
  * Infinite ground grid as a TSL material (drei's <Grid> is GLSL, which WebGPU
  * can't run). Lines are computed from world XZ, anti-aliased in screen space
- * with fwidth, and fade out with distance from the camera. `fill` = a lit,
- * shadow-receiving floor with lines on it; otherwise lines only, over the sky.
+ * with fwidth, and fade out with distance from the camera. `fill` = a lit floor
+ * with lines on it (wall shadows + AO from the baked lightmap); otherwise lines
+ * only, over the sky.
  */
 function createGridMaterial(fill: boolean) {
   const u = {
@@ -74,7 +76,8 @@ function createGridMaterial(fill: boolean) {
   let material: THREE.MeshLambertNodeMaterial | THREE.MeshBasicNodeMaterial;
   if (fill) {
     material = new THREE.MeshLambertNodeMaterial();
-    material.colorNode = mix(u.fillColor, lineColor, lines);
+    // Wall shadows + AO come from the baked lightmap (no shadow-map sampling).
+    material.colorNode = mix(u.fillColor, lineColor, lines).mul(lightmapFactor);
   } else {
     material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
     material.colorNode = lineColor;
@@ -173,7 +176,6 @@ export default function InfiniteGrid() {
       ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]}
       material={grid.material}
-      receiveShadow
       frustumCulled={false}
     >
       <planeGeometry args={[PLANE_SIZE, PLANE_SIZE]} />
