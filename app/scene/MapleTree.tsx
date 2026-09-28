@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useControls, folder } from "leva";
+import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
 import { treeSeed } from "../maze/mazeData";
+import { playerStore } from "../character/playerStore";
+import { useDisposable } from "../hooks/useDisposable";
+import { useLoading } from "./bake/loadingStore";
 import { createMapleMaterials } from "./tree/mapleMaterials";
 import { mapleTreeLayout, type MapleTreeLayout } from "./tree/mapleTree";
-import { useDisposable } from "../hooks/useDisposable";
+import { TreeCuller, type CanopySectorMesh } from "./tree/TreeCuller";
 import {
   barkGeometry,
-  canopyLeaves,
+  canopySectors,
+  fallenLeafArea,
   fallenLeaves,
   fallingLeaves,
   mapleLeafGeometry,
@@ -21,6 +25,11 @@ import {
 const LEAVES_PER_CLUSTER = 320;
 const FALLEN_LEAVES = 2600;
 const FALLING_LEAVES = 70;
+/** Crown sectors (wedges around the trunk), each frustum-culled on its own. */
+const CANOPY_SECTORS = 8;
+
+/** Written every frame, read by the leva monitors. */
+const stats = { leaves: "", tree: "" };
 
 /** An instanced mesh over prebuilt matrices + colours. */
 function instanced(
@@ -37,34 +46,61 @@ function instanced(
   return mesh;
 }
 
-/** The whole tree as one group of meshes (built once per maze). */
-function buildTree(tree: MapleTreeLayout, mats: ReturnType<typeof createMapleMaterials>) {
+/**
+ * The whole tree, built once per maze: `tree` (bark, crown sectors, falling
+ * leaves; the lantern is added as a child) and the fallen-leaf carpet beside
+ * it under `root`, plus the culler that drives them.
+ */
+function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleMaterials>) {
   const leaf = mapleLeafGeometry();
-  const bark = new THREE.Mesh(barkGeometry(tree), mats.bark);
+  const bark = new THREE.Mesh(barkGeometry(layout), mats.bark);
   bark.castShadow = true;
   bark.receiveShadow = true;
 
-  // The canopy casts into the (baked) sun shadow map: shade on the walls and
-  // shafts of light through the crown in the god rays.
-  const canopy = instanced(leaf, mats.leaves, canopyLeaves(tree, treeSeed, LEAVES_PER_CLUSTER), true);
+  // The crown, in sectors. It casts into the (baked) sun shadow map: shade on
+  // the walls and shafts of light through it in the god rays. Each sector's
+  // leaf geometry carries its leaves' centres, for the distance-LOD scale-up.
+  const sectorGeometries: THREE.BufferGeometry[] = [];
+  const sectors: CanopySectorMesh[] = canopySectors(layout, treeSeed, LEAVES_PER_CLUSTER, CANOPY_SECTORS).map(
+    (sector) => {
+      const geometry = leaf.clone();
+      geometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(sector.origins, 3));
+      sectorGeometries.push(geometry);
+      return { mesh: instanced(geometry, mats.leaves, sector, true), total: sector.count };
+    }
+  );
+
+  const area = fallenLeafArea(layout);
   const ground = instanced(
     leaf,
     mats.fallen,
-    fallenLeaves(tree, treeSeed, Math.round(FALLEN_LEAVES * tree.scale ** 2)),
+    fallenLeaves(layout, treeSeed, Math.round(FALLEN_LEAVES * layout.scale ** 2)),
     false
   );
-  const falling = new THREE.Mesh(fallingLeaves(tree, treeSeed, FALLING_LEAVES), mats.falling);
-  falling.frustumCulled = false; // the shader moves it around
 
-  const group = new THREE.Group();
-  group.add(bark, canopy, ground, falling);
+  // Falling leaves: the shader moves them, so bound their whole fall by hand.
+  const fallingGeometry = fallingLeaves(layout, treeSeed, FALLING_LEAVES);
+  fallingGeometry.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(layout.canopyCenter.x, layout.canopyTop / 2, layout.canopyCenter.z),
+    Math.hypot(layout.canopySpread + 3, layout.canopyTop / 2 + 1)
+  );
+  const falling = new THREE.Mesh(fallingGeometry, mats.falling);
+
+  const tree = new THREE.Group();
+  tree.add(bark, falling, ...sectors.map((s) => s.mesh));
+  const root = new THREE.Group();
+  root.add(tree, ground);
+
   return {
-    group,
+    root,
+    tree,
+    culler: new TreeCuller(layout, tree, sectors, ground, area.center, area.radius),
     dispose() {
       leaf.dispose();
+      for (const g of sectorGeometries) g.dispose();
       bark.geometry.dispose();
-      falling.geometry.dispose();
-      canopy.dispose();
+      fallingGeometry.dispose();
+      for (const s of sectors) s.mesh.dispose();
       ground.dispose();
     },
   };
@@ -131,17 +167,28 @@ function Lantern({
  * its long limb. It towers over the walls — a landmark to steer by.
  */
 export default function MapleTree() {
-  const { show, leafBrightness, wind, lanternGlow } = useControls("Game", {
-    Tree: folder(
-      {
-        show: { value: true, label: "Show tree" },
-        leafBrightness: { value: 1, min: 0.3, max: 2.5, step: 0.05, label: "Leaf brightness" },
-        wind: { value: 1, min: 0, max: 3, step: 0.1, label: "Wind" },
-        lanternGlow: { value: 2.2, min: 0, max: 6, step: 0.1, label: "Lantern glow" },
-      },
-      { collapsed: true }
-    ),
-  });
+  const { show, leafBrightness, wind, lanternGlow, culling, occlusion, lodNear, lodMin, groundDistance } =
+    useControls("Game", {
+      Tree: folder(
+        {
+          show: { value: true, label: "Show tree" },
+          leafBrightness: { value: 1, min: 0.3, max: 2.5, step: 0.05, label: "Leaf brightness" },
+          wind: { value: 1, min: 0, max: 3, step: 0.1, label: "Wind" },
+          lanternGlow: { value: 2.2, min: 0, max: 6, step: 0.1, label: "Lantern glow" },
+          culling: { value: true, label: "Culling + LOD" },
+          occlusion: { value: true, label: "Occlusion culling" },
+          lodNear: { value: 16, min: 4, max: 80, step: 1, label: "Full detail within" },
+          lodMin: { value: 0.2, min: 0.05, max: 1, step: 0.05, label: "Fewest leaves" },
+          groundDistance: { value: 30, min: 5, max: 100, step: 1, label: "Fallen leaves dist." },
+          Leaves: monitor(() => stats.leaves, { graph: false, interval: 300 }),
+          Visible: monitor(() => stats.tree, { graph: false, interval: 300 }),
+        },
+        { collapsed: true }
+      ),
+    });
+  // Cull only once loading is done: the one-off shadow-map bake and shader
+  // compile must see the whole tree.
+  const ready = useLoading().stage === "ready";
 
   const tree = useMemo(() => mapleTreeLayout(), []);
   const mats = useDisposable(() => createMapleMaterials(tree), [tree]);
@@ -151,13 +198,28 @@ export default function MapleTree() {
     mats.setLook({ leafBrightness, wind, lanternGlow });
   }, [mats, leafBrightness, wind, lanternGlow]);
 
-  useFrame((_, delta) => mats.advance(delta));
+  const lod = useMemo(
+    () => ({ near: lodNear, min: lodMin, enabled: culling && ready }),
+    [lodNear, lodMin, culling, ready]
+  );
+  useEffect(() => mats.setLod(lod), [mats, lod]);
+
+  useFrame(({ camera }, delta) => {
+    mats.advance(delta);
+    const { x, z } = playerStore;
+    built.culler.update(camera, x, z, lod.enabled, occlusion, lod, groundDistance);
+    const s = built.culler.stats;
+    stats.leaves = `${s.leavesDrawn} / ${s.leavesTotal} · ${s.sectorsDrawn} sectors`;
+    stats.tree = `tree ${s.treeVisible ? "drawn" : "hidden"} · ground ${s.groundVisible ? "drawn" : "hidden"}`;
+  });
 
   if (!show) return null;
   return (
-    <>
-      <primitive object={built.group} />
-      <Lantern anchor={tree.lanternAnchor} scale={tree.scale} mats={mats} />
-    </>
+    <primitive object={built.root}>
+      {/* Inside the tree group, so it hides with the tree. */}
+      <primitive object={built.tree}>
+        <Lantern anchor={tree.lanternAnchor} scale={tree.scale} mats={mats} />
+      </primitive>
+    </primitive>
   );
 }

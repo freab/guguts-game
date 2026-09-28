@@ -1,12 +1,16 @@
 import * as THREE from "three/webgpu";
 import {
   attribute,
+  cameraPosition,
+  clamp,
   color,
   cos,
   float,
   fract,
   hash,
   instanceIndex,
+  inverseSqrt,
+  length,
   mix,
   mx_noise_float,
   normalize,
@@ -31,6 +35,23 @@ export interface MapleLook {
 }
 
 /**
+ * Canopy distance LOD: at distance d only `clamp(near / d, min, 1)` of each
+ * sector's leaves are drawn (TreeCuller sets the instance count); the shader
+ * scales the survivors up by 1/sqrt of that so the crown stays just as full.
+ */
+export interface LeafLod {
+  near: number;
+  min: number;
+  /** Off until loading is done, so the baked shadow map sees the full crown. */
+  enabled: boolean;
+}
+
+/** Fraction of leaves drawn at distance `d` (CPU twin of the shader's). */
+export function leafLodFraction(lod: LeafLod, d: number): number {
+  return lod.enabled ? Math.min(1, Math.max(lod.min, lod.near / Math.max(d, 1e-3))) : 1;
+}
+
+/**
  * The maple's node materials (TSL), sharing one wind clock:
  * - bark: streaky procedural bark, mossy at the foot;
  * - leaves: per-instance colour, shaded as one soft crown (normals point out
@@ -46,6 +67,9 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
     leafBrightness: uniform(1),
     lanternGlow: uniform(2.2),
     canopyCenter: uniform(tree.canopyCenter.clone()),
+    lodNear: uniform(16),
+    lodMin: uniform(0.2),
+    lodEnabled: uniform(0),
   };
   const crownBottom = tree.trunkTop;
   const crownTop = tree.canopyTop;
@@ -65,7 +89,13 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
     uniforms.time.mul(0.8).add(positionLocal.x.mul(0.3)).add(positionLocal.z.mul(0.22))
   );
   const flutter = sin(uniforms.time.mul(5.5).add(hash(instanceIndex).mul(6.283))).mul(0.018);
-  leaves.positionNode = positionLocal.add(
+  // Distance LOD: fewer, bigger leaves further away (grown about each leaf's
+  // own centre). Per leaf here, per sector on the CPU — close enough.
+  const origin = attribute<"vec3">("leafOrigin", "vec3");
+  const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
+  const grow = mix(float(1), inverseSqrt(keep), uniforms.lodEnabled);
+  const leafPos = origin.add(positionLocal.sub(origin).mul(grow));
+  leaves.positionNode = leafPos.add(
     vec3(gust.mul(0.1).mul(height).add(flutter), flutter.mul(0.5), gust.mul(0.05).mul(height).add(flutter)).mul(
       uniforms.wind
     )
@@ -114,6 +144,11 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
     falling,
     lanternFrame,
     lanternGlow,
+    setLod(lod: LeafLod) {
+      uniforms.lodNear.value = lod.near;
+      uniforms.lodMin.value = lod.min;
+      uniforms.lodEnabled.value = lod.enabled ? 1 : 0;
+    },
     setLook(look: MapleLook) {
       uniforms.leafBrightness.value = look.leafBrightness;
       uniforms.wind.value = look.wind;

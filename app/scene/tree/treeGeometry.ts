@@ -113,22 +113,43 @@ export interface LeafInstances {
   count: number;
 }
 
+/** Canopy leaves in one crown sector (see canopySectors). */
+export interface CanopySector extends LeafInstances {
+  /** Each leaf's centre (for the distance-LOD scale-up in the shader). */
+  origins: Float32Array;
+}
+
 /**
  * The canopy: leaves scattered through every cluster, mostly towards its
  * surface, with a little baked shading — darker deep inside a cluster and
  * low in the crown, lighter on top.
+ *
+ * Split into `sectors` wedges around the trunk (by cluster), so each can be
+ * its own instanced mesh with tight bounds and be frustum-culled on its own.
+ * Each sector's leaves are shuffled, so any prefix of them is an even thinning
+ * of the whole wedge: drawing only the first N is the distance LOD.
  */
-export function canopyLeaves(tree: MapleTreeLayout, seed: number, perCluster: number): LeafInstances {
+export function canopySectors(
+  tree: MapleTreeLayout,
+  seed: number,
+  perCluster: number,
+  sectors: number
+): CanopySector[] {
   const rng = mulberry32(seed ^ 0x51ed27);
   const s = tree.scale;
   const bottom = tree.canopyBottom;
   const top = tree.canopyTop;
-  const matrices: number[] = [];
-  const colors: number[] = [];
+  const buckets = Array.from({ length: sectors }, () => ({
+    matrices: [] as number[],
+    colors: [] as number[],
+    origins: [] as number[],
+  }));
   const dummy = new THREE.Object3D();
   const dir = new THREE.Vector3();
   const color = new THREE.Color();
   for (const cl of tree.clusters) {
+    const azimuth = Math.atan2(cl.center.z, cl.center.x) + Math.PI;
+    const bucket = buckets[Math.min(sectors - 1, Math.floor((azimuth / (Math.PI * 2)) * sectors))];
     const n = Math.round(perCluster * (cl.radius / (1.1 * s)) ** 2);
     for (let i = 0; i < n; i++) {
       dir.set(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1);
@@ -146,25 +167,56 @@ export function canopyLeaves(tree: MapleTreeLayout, seed: number, perCluster: nu
       dummy.rotation.set((rng() - 0.5) * 2, rng() * Math.PI * 2, (rng() - 0.5) * 2);
       dummy.scale.setScalar((0.2 + rng() * 0.09) * s);
       dummy.updateMatrix();
-      matrices.push(...dummy.matrix.elements);
+      bucket.matrices.push(...dummy.matrix.elements);
+      bucket.origins.push(dummy.position.x, dummy.position.y, dummy.position.z);
 
       const height = THREE.MathUtils.clamp((dummy.position.y - bottom) / (top - bottom), 0, 1);
       const shade = (0.55 + 0.45 * depth) * (0.72 + 0.28 * height);
       pickColor(rng, color).multiplyScalar(shade);
-      colors.push(color.r, color.g, color.b);
+      bucket.colors.push(color.r, color.g, color.b);
     }
   }
-  return { matrices: new Float32Array(matrices), colors: new Float32Array(colors), count: colors.length / 3 };
+
+  return buckets
+    .filter((b) => b.colors.length > 0)
+    .map((b) => {
+      const count = b.colors.length / 3;
+      const matrices = new Float32Array(count * 16);
+      const colors = new Float32Array(count * 3);
+      const origins = new Float32Array(count * 3);
+      // Fisher–Yates order, then gather: any prefix is a uniform subset.
+      const order = Array.from({ length: count }, (_, i) => i);
+      for (let i = count - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      order.forEach((from, to) => {
+        for (let e = 0; e < 16; e++) matrices[to * 16 + e] = b.matrices[from * 16 + e];
+        for (let e = 0; e < 3; e++) {
+          colors[to * 3 + e] = b.colors[from * 3 + e];
+          origins[to * 3 + e] = b.origins[from * 3 + e];
+        }
+      });
+      return { matrices, colors, origins, count };
+    });
+}
+
+/** Where the fallen leaves lie: centred between the trunk and the middle of the crown. */
+export function fallenLeafArea(tree: MapleTreeLayout): { center: THREE.Vector3; radius: number } {
+  return {
+    center: new THREE.Vector3(tree.canopyCenter.x * 0.6, 0, tree.canopyCenter.z * 0.6),
+    radius: tree.canopySpread * 0.9,
+  };
 }
 
 /** Leaves on the ground under the crown, thickest near the trunk. */
 export function fallenLeaves(tree: MapleTreeLayout, seed: number, count: number): LeafInstances {
   const rng = mulberry32(seed ^ 0x2c1b3c6d);
   const s = tree.scale;
-  // Centred between the trunk and the middle of the crown.
-  const cx = tree.canopyCenter.x * 0.6;
-  const cz = tree.canopyCenter.z * 0.6;
-  const reach = tree.canopySpread * 0.9;
+  const area = fallenLeafArea(tree);
+  const cx = area.center.x;
+  const cz = area.center.z;
+  const reach = area.radius;
   const matrices = new Float32Array(count * 16);
   const colors = new Float32Array(count * 3);
   const dummy = new THREE.Object3D();
