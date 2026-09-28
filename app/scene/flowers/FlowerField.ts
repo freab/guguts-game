@@ -10,10 +10,11 @@ import {
   worldToCell,
 } from "../../maze/mazeData";
 import { ChunkCuller, type CullableChunk } from "../grass/ChunkCuller";
+import { mapleTreeLayout } from "../tree/mapleTree";
 import { ChunkState } from "../grass/grassMapStore";
 
 /** Hard cap on flower heads, whatever the maze size or density. */
-const MAX_HEADS = 30000;
+const MAX_HEADS = 120000;
 /** Auto-LOD bands, as fractions of the draw distance (camera to chunk edge). */
 const LOD_FULL_BAND = 0.25;
 const LOD_MEDIUM_BAND = 0.6;
@@ -128,6 +129,9 @@ export class FlowerField {
     const verge = pathWidth > 0 ? pathWidth + Math.max(0.3, pathWidth * 0.8) * 0.6 : 0;
     const noiseOffset = rng() * 1000;
 
+    // No flowers in the maple's shade.
+    const shade = mapleTreeLayout().canopySpread * 0.75;
+
     const samples = Math.round(w * d * density);
     const dummy = new THREE.Object3D();
     const tint = new THREE.Color();
@@ -152,6 +156,7 @@ export class FlowerField {
         }
       }
       if (verge > 0 && distanceToPath(x, z) < verge) continue; // off the footpath
+      if (Math.hypot(x, z) < shade) continue;
 
       // One plant: a few heads on hidden stems, splayed out from its centre,
       // at slightly different heights, each nodding a little outwards.

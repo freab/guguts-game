@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
 import { mix, positionWorld, smoothstep, uniform } from "three/tsl";
+import { useDisposable } from "../hooks/useDisposable";
 import {
   CELL,
   WALL_HEIGHT,
@@ -50,8 +51,7 @@ export default function Maze() {
     mesh.computeBoundingSphere();
   }, [walls]);
 
-  const wallMaterial = useMemo(() => createWallMaterial(), []);
-  useEffect(() => () => wallMaterial.dispose(), [wallMaterial]);
+  const wallMaterial = useDisposable(() => createWallMaterial(), []);
 
   const [exitX, exitZ] = exitPosition();
 

@@ -9,6 +9,7 @@ import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import { depthAwareBlend } from "three/examples/jsm/tsl/display/depthAwareBlend.js";
 import { godrays } from "three/examples/jsm/tsl/display/GodraysNode.js";
 import type GodraysNode from "three/examples/jsm/tsl/display/GodraysNode.js";
+import { useDisposable } from "../../hooks/useDisposable";
 
 /** Structural options — changing these rebuilds the effect graph. */
 export interface PostToggles {
@@ -138,22 +139,20 @@ export default function PostEffects({
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
 
-  const pipeline = useMemo(
+  const pipeline = useDisposable(
     () => new THREE.RenderPipeline(gl as unknown as THREE.WebGPURenderer),
     [gl]
   );
-  useEffect(() => () => pipeline.dispose(), [pipeline]);
 
   const uniforms = useMemo(() => createUniforms(), []);
   const { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution } = toggles;
-  const graph = useMemo(
+  const graph = useDisposable(
     () =>
       buildGraph(scene, camera, light, { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution }, uniforms),
     [scene, camera, light, bloomOn, raysOn, vignetteOn, raysResolution, uniforms]
   );
   useEffect(() => {
     setPipelineOutput(pipeline, graph.output);
-    return () => graph.dispose();
   }, [pipeline, graph]);
 
   useEffect(() => {

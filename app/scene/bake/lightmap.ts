@@ -2,12 +2,14 @@ import * as THREE from "three/webgpu";
 import { float, mix, positionWorld, texture, uniform } from "three/tsl";
 import { WallCollider } from "../../character/WallCollider";
 import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld } from "../../maze/mazeData";
+import { mapleTreeLayout, treeTransmittance } from "../tree/mapleTree";
 import { nextFrames } from "./bakeTracker";
 
 /**
  * Baked ground lighting ("lightmap") for everything lying on the floor — the
  * grid floor, the footpath and the grass. Per ground texel, two channels:
- *   R = sun visibility (a ray towards the sun, tested against the walls),
+ *   R = sun visibility (a ray towards the sun, tested against the walls, and
+ *       filtered through the clearing's tree for dappled shade),
  *   G = ambient occlusion (darker close to wall bases).
  * Materials multiply by `lightmapFactor`: one texture fetch instead of
  * shadow-map filtering per pixel, and it gives the grass wall shadows for free.
@@ -113,6 +115,7 @@ export async function bakeLightmap(
   // Past the wall tops the ray can't be blocked any more.
   const reach = WALL_HEIGHT / Math.max(dir.y, 0.05) + 0.5;
   const origin = new THREE.Vector3();
+  const tree = mapleTreeLayout();
 
   for (let y = 0; y < h; y++) {
     const z = minZ + ((y + 0.5) / h) * sizeZ;
@@ -120,7 +123,7 @@ export async function bakeLightmap(
       const wx = minX + ((x + 0.5) / w) * sizeX;
       const i = y * w + x;
       origin.set(wx, 0.05, z);
-      sun[i] = walls.raycast(origin, dir, reach) === Infinity ? 1 : 0;
+      sun[i] = walls.raycast(origin, dir, reach) === Infinity ? treeTransmittance(tree, origin, dir) : 0;
       ao[i] = smoothstep(0, AO_REACH, walls.distanceToWalls(wx, z, AO_REACH));
     }
     if (y % ROWS_PER_SLICE === ROWS_PER_SLICE - 1) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
@@ -8,6 +8,7 @@ import { FLOWER_DETAIL, bakeAdeyAbeba, petalGeometry, type PetalLodData } from "
 import { FlowerField } from "./flowers/FlowerField";
 import { createFlowerMaterial } from "./flowers/flowerNodeMaterial";
 import { playerStore } from "../character/playerStore";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Petal LODs decoded from adey-abeba's petal2.drc (see flowers/adeyAbeba.ts). */
 const PETAL_LODS_URL = "/models/adey-abeba/petal-lods.json";
@@ -49,12 +50,12 @@ export default function Flowers({
     Flowers: folder(
       {
         enabled: { value: true, label: "Show flowers" },
-        density: { value: 3, min: 0.1, max: 10, step: 0.1, label: "Plants / m²" },
-        headsPerPlant: { value: 6, min: 2, max: 12, step: 1, label: "Heads / plant" },
-        clumping: { value: 0.7, min: 0, max: 1, step: 0.05, label: "Clumping" },
+        density: { value: 8, min: 0.1, max: 12, step: 0.1, label: "Plants / m²" },
+        headsPerPlant: { value: 11, min: 2, max: 12, step: 1, label: "Heads / plant" },
+        clumping: { value: 0.85, min: 0, max: 1, step: 0.05, label: "Clumping" },
         headSize: { value: 0.08, min: 0.02, max: 0.3, step: 0.005, label: "Head size (m)" },
-        height: { value: 0.55, min: 0.05, max: 1.2, step: 0.01, label: "Head height (m)" },
-        drawDistance: { value: 18, min: 4, max: 80, step: 1, label: "Draw distance" },
+        height: { value: 0.28, min: 0.05, max: 1.2, step: 0.01, label: "Head height (m)" },
+        drawDistance: { value: 8, min: 4, max: 80, step: 1, label: "Draw distance" },
         fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
         occlusion: { value: true, label: "Occlusion culling" },
         windStrength: { value: 0.03, min: 0, max: 0.2, step: 0.005, label: "Wind sway" },
@@ -71,20 +72,19 @@ export default function Flowers({
   ) as unknown as PetalLodsFile;
 
   // One baked flower head per LOD (high -> low detail).
-  const geometries = useMemo(
+  const geometries = useDisposable(
     () =>
       FLOWER_DETAIL.map((detail) => {
         const lod = petals.lods[detail.petalLod];
         return bakeAdeyAbeba(lod ? petalGeometry(lod) : null, detail);
       }),
-    [petals]
+    [petals],
+    (list) => list.forEach((g) => g.dispose())
   );
-  useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries]);
 
-  const flowers = useMemo(() => createFlowerMaterial(), []);
-  useEffect(() => () => flowers.dispose(), [flowers]);
+  const flowers = useDisposable(() => createFlowerMaterial(), []);
 
-  const field = useMemo(
+  const field = useDisposable(
     () =>
       new FlowerField(geometries, flowers.material, {
         density,
@@ -97,7 +97,6 @@ export default function Flowers({
       }),
     [geometries, flowers, density, headsPerPlant, headSize, height, clumping, pathWidth, seed]
   );
-  useEffect(() => () => field.dispose(), [field]);
 
   useEffect(() => {
     flowers.setLook({ maxHeight: height * 1.3, windStrength, brightness });

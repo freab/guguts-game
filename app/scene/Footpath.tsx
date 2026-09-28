@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
 import {
   abs,
@@ -15,6 +15,7 @@ import {
 } from "three/tsl";
 import { CELL, pathNetwork, type PathLink } from "../maze/mazeData";
 import { lightmapFactor } from "./bake/lightmap";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Height above the ground plane (top at y = 0), clear of z-fighting. */
 const PATH_Y = 0.015;
@@ -93,17 +94,9 @@ export default function Footpath({
   const jointsRef = useRef<THREE.InstancedMesh>(null);
 
   const network = useMemo(() => pathNetwork(), []);
-  const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), []);
-  const linkMaterial = useMemo(() => makeDirtMaterial(false), []);
-  const jointMaterial = useMemo(() => makeDirtMaterial(true), []);
-  useEffect(
-    () => () => {
-      geometry.dispose();
-      linkMaterial.dispose();
-      jointMaterial.dispose();
-    },
-    [geometry, linkMaterial, jointMaterial]
-  );
+  const geometry = useDisposable(() => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), []);
+  const linkMaterial = useDisposable(() => makeDirtMaterial(false), []);
+  const jointMaterial = useDisposable(() => makeDirtMaterial(true), []);
 
   useLayoutEffect(() => {
     if (linksRef.current && jointsRef.current) {

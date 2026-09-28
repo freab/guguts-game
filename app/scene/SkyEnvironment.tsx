@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three/webgpu";
 import { trackBake } from "./bake/bakeTracker";
 import { SkyController, type SkyParams } from "./sky/SkyController";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Show the baked sky cube as the background, or clear it (live sky mode). */
 function setSceneBackground(scene: THREE.Scene, texture: THREE.Texture | null): void {
@@ -37,8 +38,7 @@ export default function SkyEnvironment({
   // The renderer is the WebGPURenderer created in Scene's async `gl` factory.
   const renderer = gl as unknown as THREE.WebGPURenderer;
 
-  const controller = useMemo(() => new SkyController(), []);
-  useEffect(() => () => controller.dispose(), [controller]);
+  const controller = useDisposable(() => new SkyController(), []);
 
   useEffect(() => {
     controller.update(params);

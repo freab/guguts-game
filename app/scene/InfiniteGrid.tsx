@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useControls, folder } from "leva";
 import * as THREE from "three/webgpu";
@@ -20,6 +20,7 @@ import {
 } from "three/tsl";
 import { CELL } from "../maze/mazeData";
 import { lightmapFactor } from "./bake/lightmap";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Plane size; it follows the camera, and lines fade out well before its edge. */
 const PLANE_SIZE = 2000;
@@ -135,8 +136,7 @@ export default function InfiniteGrid() {
     ),
   });
 
-  const grid = useMemo(() => createGridMaterial(fill), [fill]);
-  useEffect(() => () => grid.dispose(), [grid]);
+  const grid = useDisposable(() => createGridMaterial(fill), [fill]);
 
   const {
     cellSize,

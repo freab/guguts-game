@@ -104,12 +104,21 @@ export class SkyController {
 
   /**
    * Re-capture the sky into the light probe. Async (GPU readback); resolves
-   * true once applied, or false if a newer bake superseded it.
+   * true once applied, or false if a newer bake superseded it or the scene
+   * unmounted meanwhile (e.g. back to the level chooser mid-load).
    */
   async bakeProbe(renderer: THREE.WebGPURenderer): Promise<boolean> {
+    if (this.disposed) return false;
     const id = ++this.bakeId;
     this.cubeCamera.update(renderer, this.envScene);
-    const baked = await LightProbeGenerator.fromCubeRenderTarget(renderer, this.cubeTarget);
+    let baked: THREE.LightProbe;
+    try {
+      baked = await LightProbeGenerator.fromCubeRenderTarget(renderer, this.cubeTarget);
+    } catch (err) {
+      // The readback spans several frames; disposal midway breaks it.
+      if (this.disposed) return false;
+      throw err;
+    }
     if (this.disposed || id !== this.bakeId) return false;
     this.probe.sh.copy(baked.sh);
     return true;

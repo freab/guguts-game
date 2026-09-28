@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
 import { CHARACTER_HEIGHT, MODEL_URL, RUN_CLIP_SPEED, WALK_CLIP_SPEED } from "./config";
 import { fitSkinnedModel } from "./fitSkinnedModel";
+import { useDisposable } from "../hooks/useDisposable";
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
@@ -85,8 +86,7 @@ export default function CharacterModel({
 }) {
   const { scene, animations } = useGLTF(MODEL_URL);
   const model = useMemo(() => fitSkinnedModel(scene, CHARACTER_HEIGHT), [scene]);
-  const rig = useMemo(() => new LocomotionRig(model.animated, animations), [model, animations]);
-  useEffect(() => () => rig.dispose(), [rig]);
+  const rig = useDisposable(() => new LocomotionRig(model.animated, animations), [model, animations]);
 
   useFrame((_, dt) => rig.update(Math.min(dt, 0.1), motor.speed, walkSpeed, runSpeed));
 

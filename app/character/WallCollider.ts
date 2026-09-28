@@ -1,5 +1,5 @@
 import type * as THREE from "three/webgpu";
-import { CELL, COLS, ROWS, WALL_HEIGHT, wallSlabs, worldToCell } from "../maze/mazeData";
+import { CELL, COLS, ROWS, WALL_HEIGHT, obstacles, wallSlabs, worldToCell } from "../maze/mazeData";
 
 /** A wall's footprint on the ground plane (walls run from y = 0 to WALL_HEIGHT). */
 interface WallBox {
@@ -70,10 +70,12 @@ function rayBox(o: THREE.Vector3, d: THREE.Vector3, b: WallBox, maxDist: number)
 /**
  * Collision against the maze walls. Every wall slab sits inside its own grid
  * cell, so walls are bucketed per cell and a query only touches nearby cells —
- * constant cost however big the maze is.
+ * constant cost however big the maze is. The player is also kept out of the
+ * few round obstacles (the clearing's tree trunk).
  */
 export class WallCollider {
   private readonly cells: WallBox[][] = Array.from({ length: ROWS * COLS }, () => []);
+  private readonly circles = obstacles();
 
   constructor() {
     for (const s of wallSlabs()) {
@@ -98,6 +100,18 @@ export class WallCollider {
             if (pushOut(p, radius, box)) moved = true;
           }
         }
+      }
+      for (const o of this.circles) {
+        const dx = p.x - o.x;
+        const dz = p.z - o.z;
+        const d = Math.hypot(dx, dz);
+        const min = o.r + radius;
+        if (d >= min) continue;
+        // Out along the line from its centre (any way out if exactly on it).
+        const k = d > 1e-6 ? min / d : 0;
+        p.x = d > 1e-6 ? o.x + dx * k : o.x + min;
+        p.z = d > 1e-6 ? o.z + dz * k : o.z;
+        moved = true;
       }
       if (!moved) return;
     }

@@ -6,9 +6,11 @@ import {
   WALL_THICKNESS_RATIO,
   cellToWorld,
   distanceToPath,
+  obstacles,
   wallSlabs,
   worldToCell,
 } from "../../maze/mazeData";
+import { mapleTreeLayout } from "../tree/mapleTree";
 import { ChunkCuller, type CullableChunk } from "./ChunkCuller";
 import { ChunkState, grassMapStore, type GrassChunkInfo } from "./grassMapStore";
 
@@ -103,6 +105,11 @@ export class GrassField {
     // Footpath profile: worn flat inside pathWidth, back to full grass by `fade`.
     const fade = Math.max(0.3, pathWidth * 0.8);
 
+    // The clearing's tree: nothing grows in the trunk, and the grass is thinner
+    // under the crown, where the fallen leaves lie.
+    const trunk = obstacles()[0];
+    const litter = mapleTreeLayout().canopySpread * 0.7;
+
     const samples = Math.min(Math.round(w * d * density), MAX_TUFTS);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < samples; i++) {
@@ -120,6 +127,10 @@ export class GrassField {
           continue; // on a wall
         }
       }
+
+      const fromTrunk = Math.hypot(x - trunk.x, z - trunk.z);
+      if (fromTrunk < trunk.r + 0.15) continue;
+      if (fromTrunk < litter && Math.random() < 0.55) continue;
 
       // 0 on the path centreline -> 1 on the verges.
       const verge =

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
-import { KeyboardControls, Stats } from "@react-three/drei";
+import { KeyboardControls } from "@react-three/drei";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
 import type { ViewMode } from "../character/CameraRig";
@@ -13,10 +13,11 @@ import { CELL, COLS, ROWS } from "../maze/mazeData";
 import LightmapBaker from "./bake/LightmapBaker";
 import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
 import { setLightmapStrength } from "./bake/lightmap";
-import { setLoading, useLoading } from "./bake/loadingStore";
+import { setLoading } from "./bake/loadingStore";
 import PostEffects from "./post/PostEffects";
 import Flowers from "./Flowers";
 import Footpath from "./Footpath";
+import MapleTree from "./MapleTree";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
 import SkyEnvironment from "./SkyEnvironment";
@@ -208,7 +209,6 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
  *   chunked, distance / frustum / occlusion culled and LOD'd.
  */
 export default function Scene({ view }: { view: ViewMode }) {
-  const ready = useLoading().stage === "ready";
 
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   // Defaults reproduce the original look (sun at [40, 32, 40], ACES @ 1).
@@ -433,9 +433,6 @@ export default function Scene({ view }: { view: ViewMode }) {
         return renderer;
       }}
     >
-      {/* Perf panel (FPS / ms), under the view buttons — only once the preloader is gone.
-          Draw calls + triangles: Controls → Perf. */}
-      {ready && <Stats className="top-14! left-3!" />}
       <PerfProbe />
       <ToneMapping mode={TONE_MAPPINGS[toneMapping]} exposure={exposure} />
 
@@ -459,6 +456,7 @@ export default function Scene({ view }: { view: ViewMode }) {
         <InfiniteGrid />
         <Maze />
         <Goat />
+        <MapleTree />
         <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} />
         <Flowers pathWidth={footpath ? pathWidth : 0} />

@@ -101,7 +101,64 @@ function generate(): void {
 
   // Punch the exit through the border.
   g[EXIT_OPENING[0]][EXIT_OPENING[1]] = 0;
+  carveClearing(g);
   grid = g;
+  treeSeed = (Math.random() * 0x7fffffff) | 0;
+}
+
+/**
+ * Open the round clearing in the middle of the maze (where the maple grows).
+ * Opening cells only ever adds connections, so the maze stays solvable. Wall
+ * cells left standing on their own around its edge — thin pillars, once their
+ * neighbours are gone — are knocked down too.
+ */
+function carveClearing(g: number[][]): void {
+  const radius = clearingRadius();
+  const near = (r: number, c: number, extra: number) => {
+    const [x, z] = cellToWorld(r, c);
+    return Math.hypot(x, z) <= radius + extra;
+  };
+  for (let r = 1; r < ROWS - 1; r++) {
+    for (let c = 1; c < COLS - 1; c++) {
+      if (near(r, c, 0)) g[r][c] = 0;
+    }
+  }
+  const wall = (r: number, c: number) => g[r]?.[c] === 1;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (let r = 1; r < ROWS - 1; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (!wall(r, c) || !near(r, c, CELL * 1.5)) continue;
+        if (!wall(r - 1, c) && !wall(r + 1, c) && !wall(r, c - 1) && !wall(r, c + 1)) {
+          g[r][c] = 0;
+          changed = true;
+        }
+      }
+    }
+  }
+}
+
+/** Seed for the clearing's tree; changes with every generated maze. */
+export let treeSeed = 1;
+
+/** Radius (world units) of the round clearing at the maze centre (the origin). */
+export function clearingRadius(): number {
+  return Math.min(8, Math.max(5, Math.min(ROWS, COLS) * CELL * 0.17));
+}
+
+/** Size of the clearing's tree relative to its reference build (≈8 m tall). */
+export function treeScale(): number {
+  return Math.min(1.2, Math.max(0.8, clearingRadius() / 6.5));
+}
+
+/** Is world (x, z) inside the clearing (shrunk by `margin`)? */
+export function inClearing(x: number, z: number, margin = 0): boolean {
+  return Math.hypot(x, z) <= clearingRadius() - margin;
+}
+
+/** Round obstacles the player can't walk through (the tree trunk). */
+export function obstacles(): { x: number; z: number; r: number }[] {
+  return [{ x: 0, z: 0, r: 0.55 * treeScale() }];
 }
 
 /** Regenerate a fresh random maze. Call before restarting a run. */
@@ -180,6 +237,16 @@ function isOpen(row: number, col: number): boolean {
   );
 }
 
+/**
+ * Does the worn footpath run through this cell? Every open corridor cell, but
+ * not the clearing: the trails stop at its edge and it stays a meadow.
+ */
+function onTrail(row: number, col: number): boolean {
+  if (!isOpen(row, col)) return false;
+  const [x, z] = cellToWorld(row, col);
+  return !inClearing(x, z, CELL * 0.5);
+}
+
 /** A walkway link between two adjacent open cells: its midpoint + direction. */
 export interface PathLink {
   x: number;
@@ -198,11 +265,11 @@ export function pathNetwork(): { joints: [number, number][]; links: PathLink[] }
   const links: PathLink[] = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      if (!isOpen(r, c)) continue;
+      if (!onTrail(r, c)) continue;
       const [x, z] = cellToWorld(r, c);
       joints.push([x, z]);
-      if (isOpen(r, c + 1)) links.push({ x: x + CELL / 2, z, vertical: false });
-      if (isOpen(r + 1, c)) links.push({ x, z: z + CELL / 2, vertical: true });
+      if (onTrail(r, c + 1)) links.push({ x: x + CELL / 2, z, vertical: false });
+      if (onTrail(r + 1, c)) links.push({ x, z: z + CELL / 2, vertical: true });
     }
   }
   return { joints, links };
@@ -218,14 +285,14 @@ export function distanceToPath(x: number, z: number): number {
   let best = Infinity;
   for (let r = r0 - 1; r <= r0 + 1; r++) {
     for (let c = c0 - 1; c <= c0 + 1; c++) {
-      if (!isOpen(r, c)) continue;
+      if (!onTrail(r, c)) continue;
       const [cx, cz] = cellToWorld(r, c);
       best = Math.min(best, Math.hypot(x - cx, z - cz));
-      if (isOpen(r, c + 1)) {
+      if (onTrail(r, c + 1)) {
         const px = Math.min(Math.max(x, cx), cx + CELL);
         best = Math.min(best, Math.hypot(x - px, z - cz));
       }
-      if (isOpen(r + 1, c)) {
+      if (onTrail(r + 1, c)) {
         const pz = Math.min(Math.max(z, cz), cz + CELL);
         best = Math.min(best, Math.hypot(x - cx, z - pz));
       }

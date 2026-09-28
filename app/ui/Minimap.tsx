@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { playerStore } from "../character/playerStore";
 import { CELL, COLS, ROWS, cellAt, exitPosition, worldToCell } from "../maze/mazeData";
+import { mapleTreeLayout } from "../scene/tree/mapleTree";
 import { ChunkState, grassMapStore } from "../scene/grass/grassMapStore";
 
 // A 2D top-down minimap. The maze is static between regenerations, so it's
@@ -50,6 +51,19 @@ export default function Minimap() {
         if (cellAt(r, c) === "wall") ctx.fillRect(c * cw, r * ch, cw + 0.5, ch + 0.5);
       }
     }
+
+    // The maple in the central clearing: its crown and trunk.
+    const tree = mapleTreeLayout();
+    const px = (x: number) => (x / CELL + (COLS - 1) / 2 + 0.5) * cw;
+    const py = (z: number) => (z / CELL + (ROWS - 1) / 2 + 0.5) * ch;
+    ctx.fillStyle = "rgba(226, 64, 40, 0.35)";
+    ctx.beginPath();
+    ctx.arc(px(tree.canopyCenter.x), py(tree.canopyCenter.z), (tree.canopySpread * cw) / CELL, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#6b4a33";
+    ctx.beginPath();
+    ctx.arc(px(0), py(0), Math.max(2, (tree.trunkRadius * cw) / CELL), 0, Math.PI * 2);
+    ctx.fill();
 
     const [ex, ez] = exitPosition();
     const [er, ec] = worldToCell(ex, ez);

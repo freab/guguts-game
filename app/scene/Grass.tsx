@@ -8,6 +8,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createGrassMaterial } from "./grass/grassNodeMaterial";
 import { GrassField, lodGeometries } from "./grass/GrassField";
 import { playerStore } from "../character/playerStore";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Schedules at most one pending callback at a time (throttles the wind clock). */
 class FrameThrottle {
@@ -63,7 +64,7 @@ export default function Grass({
     Grass: folder(
       {
         enabled: { value: true, label: "Show grass" },
-        density: { value: 15, min: 1, max: 30, step: 1, label: "Tufts / m²" },
+        density: { value: 8, min: 1, max: 30, step: 1, label: "Tufts / m²" },
         tuftSize: { value: 2.6, min: 1, max: 5, step: 0.1, label: "Tuft size" },
         height: { value: 0.2, min: 0, max: 2, step: 0.05, label: "Fluff height" },
         lod: { value: "Auto", options: ["Auto", "High", "Medium", "Low"], label: "LOD" },
@@ -90,10 +91,9 @@ export default function Grass({
   const geometries = useMemo(() => lodGeometries(gltf.scene), [gltf]);
 
   // One material for the life of the scene; the field rebuilds around it.
-  const grass = useMemo(() => createGrassMaterial(alphaMap), [alphaMap]);
-  useEffect(() => () => grass.dispose(), [grass]);
+  const grass = useDisposable(() => createGrassMaterial(alphaMap), [alphaMap]);
 
-  const field = useMemo(
+  const field = useDisposable(
     () =>
       new GrassField(geometries, grass.material, {
         density,
@@ -103,7 +103,6 @@ export default function Grass({
       }),
     [geometries, grass, density, tuftSize, pathWidth, pathGrass]
   );
-  useEffect(() => () => field.dispose(), [field]);
 
   // Live-tunable look (uniforms only, no rebuild).
   useEffect(() => {

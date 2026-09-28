@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
 import * as THREE from "three/webgpu";
 import { float, length, smoothstep, uv, vec3 } from "three/tsl";
+import { useDisposable } from "../hooks/useDisposable";
 
 /** Diameter of the shadow under the feet (m), and its darkness at the centre. */
 const SIZE = 1.2;
@@ -34,8 +34,7 @@ export default function BlobShadow({
   /** Height above the ground; raise it to sit above the exit marker. */
   height?: number;
 }) {
-  const material = useMemo(() => createBlobMaterial(), []);
-  useEffect(() => () => material.dispose(), [material]);
+  const material = useDisposable(() => createBlobMaterial(), []);
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]} material={material} renderOrder={1}>
