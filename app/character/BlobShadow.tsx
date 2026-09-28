@@ -25,13 +25,21 @@ function createBlobMaterial() {
  * tiny transparent quad instead of re-rendering the shadow map every frame.
  * Place it inside the body group so it follows the player.
  */
-export default function BlobShadow() {
+export default function BlobShadow({
+  size = SIZE,
+  height = HEIGHT,
+}: {
+  /** Diameter (m). */
+  size?: number;
+  /** Height above the ground; raise it to sit above the exit marker. */
+  height?: number;
+}) {
   const material = useMemo(() => createBlobMaterial(), []);
   useEffect(() => () => material.dispose(), [material]);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, HEIGHT, 0]} material={material} renderOrder={1}>
-      <planeGeometry args={[SIZE, SIZE]} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, height, 0]} material={material} renderOrder={1}>
+      <planeGeometry args={[size, size]} />
     </mesh>
   );
 }

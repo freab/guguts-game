@@ -7,13 +7,15 @@ import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
 import type { ViewMode } from "../character/CameraRig";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
+import Goat from "../maze/Goat";
 import Maze from "../maze/Maze";
 import { CELL, COLS, ROWS } from "../maze/mazeData";
 import LightmapBaker from "./bake/LightmapBaker";
 import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
 import { setLightmapStrength } from "./bake/lightmap";
-import { setLoading } from "./bake/loadingStore";
+import { setLoading, useLoading } from "./bake/loadingStore";
 import PostEffects from "./post/PostEffects";
+import Flowers from "./Flowers";
 import Footpath from "./Footpath";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
@@ -206,6 +208,8 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
  *   chunked, distance / frustum / occlusion culled and LOD'd.
  */
 export default function Scene({ view }: { view: ViewMode }) {
+  const ready = useLoading().stage === "ready";
+
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   // Defaults reproduce the original look (sun at [40, 32, 40], ACES @ 1).
   const {
@@ -429,8 +433,9 @@ export default function Scene({ view }: { view: ViewMode }) {
         return renderer;
       }}
     >
-      {/* Perf panel (FPS / ms), top-left. Draw calls + triangles: Controls → Perf. */}
-      <Stats />
+      {/* Perf panel (FPS / ms), under the view buttons — only once the preloader is gone.
+          Draw calls + triangles: Controls → Perf. */}
+      {ready && <Stats className="top-14! left-3!" />}
       <PerfProbe />
       <ToneMapping mode={TONE_MAPPINGS[toneMapping]} exposure={exposure} />
 
@@ -453,8 +458,10 @@ export default function Scene({ view }: { view: ViewMode }) {
 
         <InfiniteGrid />
         <Maze />
+        <Goat />
         <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} />
+        <Flowers pathWidth={footpath ? pathWidth : 0} />
         <PlayerController view={view} />
 
         <Readiness onPostReady={enablePost} />

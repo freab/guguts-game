@@ -7,11 +7,11 @@ import type { ViewMode } from "../character/CameraRig";
 import { regenerateMaze, setMazeConfig } from "../maze/mazeData";
 import LoadingOverlay from "../ui/LoadingOverlay";
 import Minimap from "../ui/Minimap";
-import { setLoading } from "./bake/loadingStore";
+import { setLoading, useLoading } from "./bake/loadingStore";
 
 const VIEWS: { id: ViewMode; label: string }[] = [
-  { id: "third", label: "Third person" },
   { id: "first", label: "First person" },
+  { id: "third", label: "Third person" },
 ];
 
 /** True while the user is typing in a field (e.g. a leva number input). */
@@ -34,7 +34,8 @@ const Scene = dynamic(() => import("./Scene"), {
 export default function SceneClient() {
   // Bumping runId remounts the scene (fresh maze / new dimensions).
   const [runId, setRunId] = useState(0);
-  const [view, setView] = useState<ViewMode>("third");
+  const [view, setView] = useState<ViewMode>("first");
+  const ready = useLoading().stage === "ready";
 
   // V toggles first / third person.
   useEffect(() => {
@@ -80,7 +81,8 @@ export default function SceneClient() {
   return (
     <div className="relative h-full w-full">
       {/* Leva control panel (collapsed by default, top-right). */}
-      <Leva collapsed titleBar={{ title: "Controls" }} />
+      {/* Hidden while the preloader is up: it shows just the story. */}
+      <Leva collapsed hidden={!ready} titleBar={{ title: "Controls" }} />
 
       <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
         <div className="flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur">

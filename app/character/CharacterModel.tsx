@@ -4,41 +4,10 @@ import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
-import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { CHARACTER_HEIGHT, MODEL_URL, RUN_CLIP_SPEED, WALK_CLIP_SPEED } from "./config";
+import { fitSkinnedModel } from "./fitSkinnedModel";
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
-
-/**
- * Clone the rigged model (own skeleton), make it cast/receive shadows, and fit
- * it: uniformly scaled to CHARACTER_HEIGHT with its feet on y = 0, measured
- * from its actual bounds rather than hard-coded numbers.
- */
-function prepareModel(source: THREE.Object3D) {
-  const animated = cloneSkinned(source);
-  animated.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (mesh.isMesh) {
-      // The sun's shadow map is baked (walls only); a moving character baked
-      // into it would leave a frozen "ghost" shadow — it uses BlobShadow instead.
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false; // skinned bounds don't follow the animation
-    }
-  });
-
-  const fit = new THREE.Group();
-  fit.add(animated);
-  fit.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(fit);
-  const scale = CHARACTER_HEIGHT / Math.max(box.max.y - box.min.y, 1e-3);
-  fit.scale.setScalar(scale);
-  fit.position.y = -box.min.y * scale;
-
-  const root = new THREE.Group();
-  root.add(fit);
-  return { root, animated };
-}
 
 /**
  * Locomotion blend space: idle, walk and run always play, weighted by ground
@@ -115,7 +84,7 @@ export default function CharacterModel({
   runSpeed: number;
 }) {
   const { scene, animations } = useGLTF(MODEL_URL);
-  const model = useMemo(() => prepareModel(scene), [scene]);
+  const model = useMemo(() => fitSkinnedModel(scene, CHARACTER_HEIGHT), [scene]);
   const rig = useMemo(() => new LocomotionRig(model.animated, animations), [model, animations]);
   useEffect(() => () => rig.dispose(), [rig]);
 
