@@ -11,8 +11,6 @@ import { playerStore } from "../character/playerStore";
 
 /** Petal LODs decoded from adey-abeba's petal2.drc (see flowers/adeyAbeba.ts). */
 const PETAL_LODS_URL = "/models/adey-abeba/petal-lods.json";
-/** The adey-abeba hero head is 1.7x as wide as the flower is tall; 0.4 of that suits a verge. */
-const BASE_HEAD_SCALE = 0.4;
 
 interface PetalLodsFile {
   lods: PetalLodData[];
@@ -22,10 +20,11 @@ interface PetalLodsFile {
 const stats = { drawn: 0 };
 
 /**
- * Adey Abeba (Meskel daisy) flowers growing in drifts along the grass verges.
- * The flower is baked once per LOD into a single vertex-coloured geometry and
- * instanced per chunk (flowers/FlowerField.ts); drawn only near the player and
- * in view, like the grass.
+ * Adey Abeba (Meskel daisy) flowers growing in drifts along the grass verges:
+ * small yellow heads held just above the grass, a few per plant. The head is
+ * baked once per LOD into a single vertex-coloured geometry and instanced per
+ * chunk (flowers/FlowerField.ts); drawn only near the player and in view, like
+ * the grass.
  */
 export default function Flowers({
   pathWidth,
@@ -36,9 +35,10 @@ export default function Flowers({
   const {
     enabled,
     density,
+    headsPerPlant,
     clumping,
-    size,
     headSize,
+    height,
     drawDistance,
     fadeWidth,
     occlusion,
@@ -49,15 +49,16 @@ export default function Flowers({
     Flowers: folder(
       {
         enabled: { value: true, label: "Show flowers" },
-        density: { value: 1.2, min: 0.05, max: 6, step: 0.05, label: "Flowers / m²" },
-        clumping: { value: 0.75, min: 0, max: 1, step: 0.05, label: "Clumping" },
-        size: { value: 0.5, min: 0.15, max: 1.5, step: 0.05, label: "Height (m)" },
-        headSize: { value: 1, min: 0.4, max: 2.5, step: 0.05, label: "Head size" },
+        density: { value: 3, min: 0.1, max: 10, step: 0.1, label: "Plants / m²" },
+        headsPerPlant: { value: 6, min: 2, max: 12, step: 1, label: "Heads / plant" },
+        clumping: { value: 0.7, min: 0, max: 1, step: 0.05, label: "Clumping" },
+        headSize: { value: 0.08, min: 0.02, max: 0.3, step: 0.005, label: "Head size (m)" },
+        height: { value: 0.55, min: 0.05, max: 1.2, step: 0.01, label: "Head height (m)" },
         drawDistance: { value: 18, min: 4, max: 80, step: 1, label: "Draw distance" },
         fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
         occlusion: { value: true, label: "Occlusion culling" },
-        windStrength: { value: 0.04, min: 0, max: 0.3, step: 0.01, label: "Wind sway" },
-        brightness: { value: 1.3, min: 0.3, max: 3, step: 0.05, label: "Brightness" },
+        windStrength: { value: 0.03, min: 0, max: 0.2, step: 0.005, label: "Wind sway" },
+        brightness: { value: 2.2, min: 0.3, max: 3, step: 0.05, label: "Brightness" },
         seed: { value: 7, min: 0, max: 9999, step: 1, label: "Seed" },
         Drawn: monitor(() => stats.drawn, { graph: false, interval: 300 }),
       },
@@ -69,13 +70,14 @@ export default function Flowers({
     loader.setResponseType("json")
   ) as unknown as PetalLodsFile;
 
-  // One baked flower per LOD (high -> low detail).
+  // One baked flower head per LOD (high -> low detail).
   const geometries = useMemo(
     () =>
-      FLOWER_DETAIL.map((detail) =>
-        bakeAdeyAbeba(petalGeometry(petals.lods[detail.petalLod]), detail, BASE_HEAD_SCALE * headSize)
-      ),
-    [petals, headSize]
+      FLOWER_DETAIL.map((detail) => {
+        const lod = petals.lods[detail.petalLod];
+        return bakeAdeyAbeba(lod ? petalGeometry(lod) : null, detail);
+      }),
+    [petals]
   );
   useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries]);
 
@@ -86,19 +88,20 @@ export default function Flowers({
     () =>
       new FlowerField(geometries, flowers.material, {
         density,
-        size,
+        headsPerPlant,
         headSize,
+        height,
         clumping,
         pathWidth,
         seed,
       }),
-    [geometries, flowers, density, size, headSize, clumping, pathWidth, seed]
+    [geometries, flowers, density, headsPerPlant, headSize, height, clumping, pathWidth, seed]
   );
   useEffect(() => () => field.dispose(), [field]);
 
   useEffect(() => {
-    flowers.setLook({ maxHeight: size * 1.25, windStrength, brightness });
-  }, [flowers, size, windStrength, brightness]);
+    flowers.setLook({ maxHeight: height * 1.3, windStrength, brightness });
+  }, [flowers, height, windStrength, brightness]);
 
   useFrame(({ camera }, delta) => {
     const { x, z } = playerStore;

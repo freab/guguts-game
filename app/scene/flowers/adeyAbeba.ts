@@ -3,16 +3,20 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 
 /**
  * Adey Abeba, the yellow Meskel daisy, ported from the adey-abeba project
- * (CC0, C:\2026\adey-abeba — src/components/Field.jsx). Its hero flower is
- * baked into one static, vertex-coloured geometry: eight petals deformed by a
- * CPU port of the hero petal's vertex shader, a centre disc and a tapered stem.
+ * (CC0, C:\2026\adey-abeba — src/components/Field.jsx). Only the flower head
+ * is kept: eight petals deformed by a CPU port of the hero petal's vertex
+ * shader plus a centre disc, baked into one static, vertex-coloured geometry.
+ * Real Meskel daisies are small heads held just above the grass, so there is
+ * no stem — the grass hides where it would be.
  *
- * Differences from the original, for instancing hundreds of them:
- * - The petal comes pre-decoded from petal2.drc with two meshoptimizer LODs
+ * Differences from the original, for instancing thousands of them:
+ * - The petal comes pre-decoded from petal2.drc as meshoptimizer LODs
  *   (public/models/adey-abeba/petal-lods.json), so no Draco decoder ships.
  * - The 56k-triangle sculpted core.glb is replaced by a small procedural dome
  *   with speckles baked into its vertex colours.
- * - The result is re-based so the stem's foot is at y = 0 and it is 1 unit tall.
+ * - The farthest LOD is a flat eight-pointed star, not petals at all.
+ * - Heads are normalised to 1 unit across, centred on the origin with the
+ *   petals at y ≈ 0: an instance's scale is its head diameter in metres.
  */
 
 /** One petal LOD as stored in petal-lods.json (flat arrays). */
@@ -22,20 +26,18 @@ export interface PetalLodData {
   index: number[];
 }
 
-/** Mesh detail for one flower LOD. */
+/** Mesh detail for one flower-head LOD. */
 export interface FlowerDetail {
-  /** Index into petal-lods.json (0 = full 339 tris, 1 = 59, 2 = 18). */
+  /** Index into petal-lods.json (0 = full 339 tris, 1 = 59, 2 = 18), or -1 for the star card. */
   petalLod: number;
-  stemSegments: number;
-  stemRadial: number;
   coreSegments: number;
 }
 
-/** High -> low detail, matching the grass LOD bands. */
+/** High -> low detail (≈540, ≈180 and 22 triangles). */
 export const FLOWER_DETAIL: FlowerDetail[] = [
-  { petalLod: 0, stemSegments: 12, stemRadial: 6, coreSegments: 12 },
-  { petalLod: 1, stemSegments: 6, stemRadial: 4, coreSegments: 8 },
-  { petalLod: 2, stemSegments: 3, stemRadial: 3, coreSegments: 6 },
+  { petalLod: 1, coreSegments: 8 },
+  { petalLod: 2, coreSegments: 5 },
+  { petalLod: -1, coreSegments: 0 },
 ];
 
 /* ---------- hero-flower defaults (mirror adey-abeba's bloming.jsx) ---------- */
@@ -52,14 +54,14 @@ const PP = {
 const CORE = { px: 0, py: 0.028, pz: -0.12, rx: -1.571, scale: 0.877 };
 /** Half-extents of the original core mesh (its disc radius and dome height). */
 const CORE_RADIUS = 0.31;
-/** Height where the stem meets the underside of the head (and the head-scale pivot). */
-const STEM_TOP = 0.1;
 const CORE_HALF_HEIGHT = 0.115;
+/** Star card: petal tips and notches, as fractions of the head radius. */
+const STAR_NOTCH = 0.35;
+const STAR_CORE = 0.18;
 const PETAL_C1 = new THREE.Color("#ffd400");
 const PETAL_C2 = new THREE.Color("#f6a800");
 const CORE_RIM = new THREE.Color("#c77104");
 const CORE_TOP = new THREE.Color("#6e3702");
-const STEM_COLOR = new THREE.Color("#3f9d4a");
 
 function rot(x: number, y: number, a: number): [number, number] {
   const s = Math.sin(a);
@@ -83,21 +85,12 @@ export function petalGeometry(data: PetalLodData): THREE.BufferGeometry {
   return g;
 }
 
-/** Non-indexed position + colour (flat fill unless the geometry has colours). */
-function toPosColor(geo: THREE.BufferGeometry, fill?: THREE.Color): THREE.BufferGeometry {
+/** Non-indexed position + colour only (what the merge needs). */
+function toPosColor(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
-  const pos = g.getAttribute("position");
   const out = new THREE.BufferGeometry();
-  out.setAttribute("position", pos.clone());
-  const existing = g.getAttribute("color");
-  if (existing) {
-    out.setAttribute("color", existing.clone());
-  } else {
-    const c = fill ?? new THREE.Color(1, 1, 1);
-    const arr = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) c.toArray(arr, i * 3);
-    out.setAttribute("color", new THREE.BufferAttribute(arr, 3));
-  }
+  out.setAttribute("position", g.getAttribute("position").clone());
+  out.setAttribute("color", g.getAttribute("color").clone());
   return out;
 }
 
@@ -160,89 +153,82 @@ function buildCore(segments: number): THREE.BufferGeometry {
 }
 
 /**
- * Short tapered stem tube (the hero's construction, shortened for a field).
- * It runs up into the core; the original stopped 0.25 short of the head.
+ * Far LOD: a flat eight-pointed star (radius 0.5, facing up) with a dark
+ * centre — 16 petal triangles plus a 6-triangle disc.
  */
-function buildStemTube(segments: number, radial: number): THREE.BufferGeometry {
-  const len = 1.6;
-  const depth = STEM_TOP;
-  const to = new THREE.Vector3(0, CORE.py, depth);
-  const leanRad = (8 * Math.PI) / 180;
-  const from = new THREE.Vector3(to.x + Math.sin(leanRad) * len, to.y, to.z - Math.cos(leanRad) * len);
-  const bend = new THREE.Vector3(0.4, 0, 0);
-  const curve = new THREE.CatmullRomCurve3(
-    [from, from.clone().lerp(to, 0.25).add(bend), from.clone().lerp(to, 0.75).add(bend), to],
-    false,
-    "centripetal"
-  );
-  const geo = new THREE.TubeGeometry(curve, segments, 0.09, radial, false);
-  const taper = 0.25;
-  const flare = 0.6;
-  const pos = geo.getAttribute("position");
-  const p = new THREE.Vector3();
-  const per = radial + 1;
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    curve.getPointAt(t, p);
-    const sc = 1 - (1 - taper) * t + flare * (1 - t) ** 3;
-    for (let j = 0; j <= radial; j++) {
-      const idx = i * per + j;
-      pos.setXYZ(
-        idx,
-        p.x + (pos.getX(idx) - p.x) * sc,
-        p.y + (pos.getY(idx) - p.y) * sc,
-        p.z + (pos.getZ(idx) - p.z) * sc
-      );
-    }
+function buildStarHead(): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const push = (x: number, y: number, z: number, c: THREE.Color) => {
+    positions.push(x, y, z);
+    colors.push(c.r, c.g, c.b);
+  };
+  const ring = (i: number, r: number): [number, number] => {
+    const a = (i / 16) * Math.PI * 2;
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  };
+  for (let i = 0; i < 16; i++) {
+    const r0 = (i % 2 === 0 ? 1 : STAR_NOTCH) * 0.5;
+    const r1 = (i % 2 === 0 ? STAR_NOTCH : 1) * 0.5;
+    const [ax, az] = ring(i, r0);
+    const [bx, bz] = ring(i + 1, r1);
+    push(0, 0, 0, PETAL_C2);
+    push(bx, 0, bz, i % 2 === 0 ? PETAL_C2 : PETAL_C1);
+    push(ax, 0, az, i % 2 === 0 ? PETAL_C1 : PETAL_C2);
   }
-  return geo;
+  for (let i = 0; i < 6; i++) {
+    const a0 = (i / 6) * Math.PI * 2;
+    const a1 = ((i + 1) / 6) * Math.PI * 2;
+    const r = STAR_CORE;
+    push(0, 0.02, 0, CORE_TOP);
+    push(Math.cos(a1) * r, 0.01, Math.sin(a1) * r, CORE_RIM);
+    push(Math.cos(a0) * r, 0.01, Math.sin(a0) * r, CORE_RIM);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return g;
 }
 
 /**
- * Bake one whole flower (petals + core + stem) into a single geometry, upright
- * (head facing up), stem foot at the origin. Attributes: position, normal, color.
- * `headScale` shrinks the head about the top of the stem: the hero flower's
- * head is 1.7x as wide as it is tall, a lot for a maze verge.
+ * Bake one flower head (petals + core) into a single geometry, facing up,
+ * 1 unit across, centred on the origin. Attributes: position, normal, color.
  */
-export function bakeAdeyAbeba(
-  petalBase: THREE.BufferGeometry,
-  detail: FlowerDetail,
-  headScale = 1
-): THREE.BufferGeometry {
-  const mPetals = new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(0, 0.03, 0);
-  const mFlip = new THREE.Matrix4().makeRotationX(Math.PI);
-  const mRoot = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-  const mCore = new THREE.Matrix4().compose(
-    new THREE.Vector3(CORE.px, CORE.py, CORE.pz),
-    new THREE.Quaternion().setFromEuler(new THREE.Euler(CORE.rx, 0, 0)),
-    new THREE.Vector3(CORE.scale, CORE.scale, CORE.scale)
-  );
-  const mHead = new THREE.Matrix4()
-    .makeTranslation(0, STEM_TOP, 0)
-    .multiply(new THREE.Matrix4().makeScale(headScale, headScale, headScale))
-    .multiply(new THREE.Matrix4().makeTranslation(0, -STEM_TOP, 0));
+export function bakeAdeyAbeba(petalBase: THREE.BufferGeometry | null, detail: FlowerDetail): THREE.BufferGeometry {
+  let merged: THREE.BufferGeometry;
+  if (!petalBase || detail.petalLod < 0) {
+    merged = buildStarHead();
+  } else {
+    const mPetals = new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(0, 0.03, 0);
+    const mFlip = new THREE.Matrix4().makeRotationX(Math.PI);
+    const mRoot = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+    const mCore = new THREE.Matrix4().compose(
+      new THREE.Vector3(CORE.px, CORE.py, CORE.pz),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(CORE.rx, 0, 0)),
+      new THREE.Vector3(CORE.scale, CORE.scale, CORE.scale)
+    );
 
-  const parts: THREE.BufferGeometry[] = [];
-  for (const petal of bakePetals(petalBase)) {
-    const g = toPosColor(petal);
-    g.applyMatrix4(mPetals).applyMatrix4(mFlip).applyMatrix4(mRoot).applyMatrix4(mHead);
-    parts.push(g);
+    const parts: THREE.BufferGeometry[] = [];
+    for (const petal of bakePetals(petalBase)) {
+      const g = toPosColor(petal);
+      g.applyMatrix4(mPetals).applyMatrix4(mFlip).applyMatrix4(mRoot);
+      parts.push(g);
+    }
+    const core = toPosColor(buildCore(detail.coreSegments));
+    core.applyMatrix4(mCore).applyMatrix4(mFlip).applyMatrix4(mRoot);
+    parts.push(core);
+
+    const joined = mergeGeometries(parts, false);
+    if (!joined) throw new Error("adey abeba: failed to merge flower parts");
+    merged = joined;
+
+    // Centre on the head, petals at y ≈ 0, 1 unit across.
+    merged.computeBoundingBox();
+    const { min, max } = merged.boundingBox!;
+    const unit = 1 / Math.max(max.x - min.x, max.z - min.z);
+    merged.translate(-(min.x + max.x) / 2, -min.y, -(min.z + max.z) / 2);
+    merged.scale(unit, unit, unit);
   }
-  const core = toPosColor(buildCore(detail.coreSegments));
-  core.applyMatrix4(mCore).applyMatrix4(mFlip).applyMatrix4(mRoot).applyMatrix4(mHead);
-  parts.push(core);
-  const stem = toPosColor(buildStemTube(detail.stemSegments, detail.stemRadial), STEM_COLOR);
-  stem.applyMatrix4(mRoot);
-  parts.push(stem);
-
-  const merged = mergeGeometries(parts, false);
-  if (!merged) throw new Error("adey abeba: failed to merge flower parts");
-  // Foot at the origin, 1 unit tall: an instance's scale is its height in metres.
-  merged.computeBoundingBox();
-  const { min, max } = merged.boundingBox!;
-  const unit = 1 / (max.y - min.y);
-  merged.translate(0, -min.y, 0);
-  merged.scale(unit, unit, unit);
   merged.computeVertexNormals();
   merged.computeBoundingBox();
   merged.computeBoundingSphere();

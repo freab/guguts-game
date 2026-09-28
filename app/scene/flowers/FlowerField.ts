@@ -12,23 +12,25 @@ import {
 import { ChunkCuller, type CullableChunk } from "../grass/ChunkCuller";
 import { ChunkState } from "../grass/grassMapStore";
 
-/** Hard cap on flowers, whatever the maze size or density. */
-const MAX_FLOWERS = 6000;
+/** Hard cap on flower heads, whatever the maze size or density. */
+const MAX_HEADS = 30000;
 /** Auto-LOD bands, as fractions of the draw distance (camera to chunk edge). */
 const LOD_FULL_BAND = 0.25;
 const LOD_MEDIUM_BAND = 0.6;
-/** Chunk side in metres (flowers are sparse, so bigger than the grass chunks). */
+/** Chunk side in metres. */
 const CHUNK_SIZE = 6;
-/** Head radius as a fraction of flower height, at head size 1 (see adeyAbeba.ts). */
-const HEAD_RADIUS = 0.41;
+/** Radius a plant's heads spread over, in metres. */
+const PLANT_RADIUS = 0.14;
 
 export interface FlowerFieldOptions {
-  /** Flowers per square metre of verge, before clumping. */
+  /** Plants per square metre of verge, before clumping. */
   density: number;
-  /** Mean flower height in metres. */
-  size: number;
-  /** Head size the geometry was baked with (for wall clearance). */
+  /** Most heads on one plant (each has 2..this many). */
+  headsPerPlant: number;
+  /** Mean head diameter in metres. */
   headSize: number;
+  /** Mean height of the heads above the ground, in metres. */
+  height: number;
   /** 0 = evenly scattered, 1 = tight clumps with bare stretches between. */
   clumping: number;
   /** Footpath half-width in world units; flowers stay off it. 0 = no footpath. */
@@ -76,9 +78,10 @@ const smoothstep = (e0: number, e1: number, x: number) => {
 };
 
 /**
- * Adey Abeba flowers scattered along the grass: on the verges inside the maze,
- * off the footpath and clear of the walls, in drifts shaped by domain-warped
- * value noise (like the adey-abeba field). Bucketed into chunks with one
+ * Adey Abeba flowers along the grass, grown like the real thing: small yellow
+ * heads held just above the grass, a few per plant, plants gathered in drifts
+ * (domain-warped value noise, as in the adey-abeba field) on the verges inside
+ * the maze — off the footpath and clear of the walls. Bucketed into chunks with one
  * instanced mesh per LOD, culled like the grass (distance, frustum, walls).
  */
 export class FlowerField {
@@ -91,9 +94,9 @@ export class FlowerField {
   constructor(
     geometries: THREE.BufferGeometry[],
     material: THREE.Material,
-    { density, size, headSize, clumping, pathWidth, seed }: FlowerFieldOptions
+    { density, headsPerPlant, headSize, height, clumping, pathWidth, seed }: FlowerFieldOptions
   ) {
-    this.culler = new ChunkCuller(size * 1.2);
+    this.culler = new ChunkCuller(height);
     const rng = mulberry32(seed);
 
     // Per-cell wall-slab footprint (0 = open cell) for O(1) rejection.
@@ -105,7 +108,7 @@ export class FlowerField {
     }
 
     // Heads must clear the wall faces.
-    const margin = size * HEAD_RADIUS * headSize;
+    const margin = PLANT_RADIUS + headSize;
     const inset = (CELL * WALL_THICKNESS_RATIO) / 2 + margin;
     const [x0, z0] = cellToWorld(0, 0);
     const [x1, z1] = cellToWorld(ROWS - 1, COLS - 1);
@@ -125,11 +128,11 @@ export class FlowerField {
     const verge = pathWidth > 0 ? pathWidth + Math.max(0.3, pathWidth * 0.8) * 0.6 : 0;
     const noiseOffset = rng() * 1000;
 
-    const samples = Math.min(Math.round(w * d * density), MAX_FLOWERS * 4);
+    const samples = Math.round(w * d * density);
     const dummy = new THREE.Object3D();
     const tint = new THREE.Color();
     let total = 0;
-    for (let i = 0; i < samples && total < MAX_FLOWERS; i++) {
+    for (let i = 0; i < samples && total < MAX_HEADS; i++) {
       const x = minX + rng() * w;
       const z = minZ + rng() * d;
 
@@ -137,7 +140,7 @@ export class FlowerField {
       const nxw = x * 0.18 + noiseOffset + (valueNoise(x * 0.1 + 11, z * 0.1 + 3) - 0.5) * 2;
       const nzw = z * 0.18 + (valueNoise(x * 0.1 + 7, z * 0.1 + 23) - 0.5) * 2;
       const patch = valueNoise(nxw, nzw);
-      const keep = THREE.MathUtils.lerp(1, smoothstep(0.45, 0.75, patch), clumping);
+      const keep = THREE.MathUtils.lerp(1, smoothstep(0.35, 0.7, patch), clumping);
       if (rng() > keep) continue;
 
       const [r, c] = worldToCell(x, z);
@@ -150,32 +153,41 @@ export class FlowerField {
       }
       if (verge > 0 && distanceToPath(x, z) < verge) continue; // off the footpath
 
-      const s = size * (0.75 + rng() * 0.5);
-      dummy.position.set(x, 0, z);
-      dummy.rotation.set((rng() - 0.5) * 0.3, rng() * Math.PI * 2, (rng() - 0.5) * 0.3);
-      dummy.scale.setScalar(s);
-      dummy.updateMatrix();
-      // Slight per-flower tint so a drift isn't one flat yellow.
-      tint.setRGB(0.85 + rng() * 0.2, 0.8 + rng() * 0.25, 0.85 + rng() * 0.2);
-
+      // One plant: a few heads on hidden stems, splayed out from its centre,
+      // at slightly different heights, each nodding a little outwards.
       const ix = Math.min(nx - 1, Math.floor((x - minX) / CHUNK_SIZE));
       const iz = Math.min(nz - 1, Math.floor((z - minZ) / CHUNK_SIZE));
       const bucket = buckets[iz * nx + ix];
-      for (let e = 0; e < 16; e++) bucket.matrices.push(dummy.matrix.elements[e]);
-      bucket.colors.push(tint.r, tint.g, tint.b);
-      total++;
+      const plantHeight = height * (0.8 + rng() * 0.4);
+      const heads = 2 + Math.floor(rng() * Math.max(1, headsPerPlant - 1));
+      for (let h = 0; h < heads; h++) {
+        const a = rng() * Math.PI * 2;
+        const r = PLANT_RADIUS * Math.sqrt(rng());
+        const lean = 0.15 + (r / PLANT_RADIUS) * 0.35;
+        dummy.position.set(x + Math.cos(a) * r, plantHeight * (0.85 + rng() * 0.3), z + Math.sin(a) * r);
+        // Tilt about the horizontal axis perpendicular to the lean direction.
+        dummy.rotation.set(Math.sin(a) * lean, rng() * Math.PI * 2, -Math.cos(a) * lean, "XZY"); // spin first, then tilt
+        dummy.scale.setScalar(headSize * (0.8 + rng() * 0.4));
+        dummy.updateMatrix();
+        // Slight per-head tint so a drift isn't one flat yellow.
+        tint.setRGB(0.85 + rng() * 0.2, 0.8 + rng() * 0.25, 0.85 + rng() * 0.2);
+
+        for (let e = 0; e < 16; e++) bucket.matrices.push(dummy.matrix.elements[e]);
+        bucket.colors.push(tint.r, tint.g, tint.b);
+        total++;
+      }
     }
     this.total = total;
 
-    // Covers the chunk diagonal plus the tallest flower and its sway.
-    const radius = CHUNK_SIZE * 0.75 + size * 1.5;
+    // Covers the chunk diagonal plus the highest heads and their sway.
+    const radius = CHUNK_SIZE * 0.75 + height * 1.5;
 
     buckets.forEach(({ matrices, colors }, bi) => {
       const count = matrices.length / 16;
       if (count === 0) return;
       const ix = bi % nx;
       const iz = Math.floor(bi / nx);
-      const center = new THREE.Vector3(minX + (ix + 0.5) * CHUNK_SIZE, size * 0.5, minZ + (iz + 0.5) * CHUNK_SIZE);
+      const center = new THREE.Vector3(minX + (ix + 0.5) * CHUNK_SIZE, height, minZ + (iz + 0.5) * CHUNK_SIZE);
       const sphere = new THREE.Sphere(center.clone(), radius);
       const instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(matrices), 16);
       const instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(colors), 3);

@@ -16,7 +16,7 @@ import { lightmapFactor } from "../bake/lightmap";
 
 /** Live-tunable flower look (no shader rebuild needed). */
 export interface FlowerLook {
-  /** Tallest flower in metres (sway reference, and how far faded ones sink). */
+  /** Highest head in metres (sway reference, and how far faded ones sink). */
   maxHeight: number;
   windStrength: number;
   brightness: number;
@@ -24,7 +24,7 @@ export interface FlowerLook {
 
 /**
  * Adey Abeba flowers as a WebGPU node material (TSL). Colour comes from the
- * baked vertex colours (petals, core, stem) times the per-instance tint, lit
+ * baked vertex colours (petals, core) times the per-instance tint, lit
  * like the grass: a straight-up normal so the field shades evenly, darkened
  * only by the baked wall shadows / AO. Heads nod in the wind, and flowers
  * sink into the ground at the draw distance so culled chunks never pop.
@@ -47,8 +47,8 @@ export function createFlowerMaterial() {
     smoothstep(uniforms.fadeStart, uniforms.fadeEnd, length(positionLocal.xz.sub(uniforms.fadeCenter)))
   );
 
-  // Sway grows with the square of height (stem foot anchored, head nods most);
-  // each flower gets its own phase so the field doesn't move in lockstep.
+  // Heads nod on their (hidden) stems: sway grows with height above the
+  // ground; each head gets its own phase so a drift doesn't move in lockstep.
   const bend = positionLocal.y.div(uniforms.maxHeight).clamp(0, 1).pow(2);
   const phase = hash(instanceIndex).mul(6.283).add(uniforms.time.mul(1.7));
   const swayX = sin(phase).mul(uniforms.windStrength).mul(bend);
