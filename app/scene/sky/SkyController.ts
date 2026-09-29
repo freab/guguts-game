@@ -1,5 +1,17 @@
 import * as THREE from "three/webgpu";
-import { uniform, vec4 } from "three/tsl";
+import {
+  cameraPosition,
+  cubeTexture,
+  fog,
+  max,
+  normalize,
+  positionWorld,
+  rangeFogFactor,
+  uniform,
+  vec3,
+  vec4,
+  vertexStage,
+} from "three/tsl";
 import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
 import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
 
@@ -35,6 +47,12 @@ const BACKGROUND_CUBE_SIZE = 768;
 /** Band-0 SH basis constant: a uniform radiance L has coefficient 0 = L / Y00. */
 const SH_Y00 = 0.282095;
 
+/** The sky colour behind this vertex: the view ray, lifted to at least the horizon. */
+function skyBehind(cube: THREE.CubeTexture) {
+  const view = normalize(positionWorld.sub(cameraPosition));
+  return cubeTexture(cube, normalize(vec3(view.x, max(view.y, 0.03), view.z))).rgb;
+}
+
 /**
  * Rescale a baked sky probe to an average radiance of 1 (keeping its colour
  * and its sky-above / ground-below gradient). The sky shader's raw output is
@@ -68,6 +86,10 @@ function normalizeProbe(sh: THREE.SphericalHarmonics3): void {
  * Baked background: a third SkyMesh is rendered once into a cube texture used
  * as `scene.background`, so the per-pixel sky + cloud shader doesn't run every
  * frame (the clouds hold still). `sky` is only for the optional live clouds.
+ *
+ * View-distance fog (`fogNode`): objects fade into the colour of the sky
+ * right behind them, so the world ends at the view distance without a visible
+ * fog wall and the sky above stays clear. See fogNode below.
  */
 export class SkyController {
   readonly sky = new SkyMesh();
@@ -90,6 +112,26 @@ export class SkyController {
 
   private bakeId = 0;
   private disposed = false;
+
+  private readonly fogNear = uniform(6);
+  private readonly fogFar = uniform(15);
+
+  /**
+   * Distance fog in the colour of the sky behind each object — atmospheric fog
+   * / aerial perspective. The colour comes from the probe cube (sun disc
+   * hidden, so a wall in front of the sun doesn't turn white-hot), scaled by
+   * the same brightness as the visible sky, looked up along the view ray with
+   * the ray lifted to the horizon (objects dissolve into the horizon colour,
+   * not into the sky's dark underside). The lookup runs per vertex (a varying)
+   * rather than per fragment: the colour changes slowly across a surface, and
+   * the grass has heavy overdraw. The factor is linear in view depth between
+   * near and far, matching the camera's far-plane cut at `far`.
+   * Assign to `scene.fogNode`.
+   */
+  readonly fogNode = fog(
+    vertexStage(skyBehind(this.cubeTarget.texture).mul(this.brightness)),
+    rangeFogFactor(this.fogNear, this.fogFar)
+  );
 
   constructor() {
     for (const s of [this.sky, this.bgSky]) {
@@ -116,6 +158,12 @@ export class SkyController {
   bakeBackground(renderer: THREE.WebGPURenderer): THREE.Texture {
     this.bgCamera.update(renderer, this.bgScene);
     return this.bgTarget.texture;
+  }
+
+  /** Fog starts at `near` and is total at `far` (view depth, metres). */
+  setFogRange(near: number, far: number) {
+    this.fogNear.value = near;
+    this.fogFar.value = far;
   }
 
   setProbeIntensity(intensity: number) {

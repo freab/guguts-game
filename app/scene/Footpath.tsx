@@ -2,44 +2,39 @@
 
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
-import {
-  abs,
-  float,
-  length,
-  mix,
-  mx_noise_float,
-  positionWorld,
-  smoothstep,
-  uniform,
-  uv,
-} from "three/tsl";
+import { abs, float, length, mix, mx_noise_float, positionWorld, smoothstep, uv } from "three/tsl";
 import { CELL, pathNetwork, type PathLink } from "../maze/mazeData";
 import { lightmapFactor } from "./bake/lightmap";
+import { pbrSurface, usePbrSet, type PbrSet } from "./textures/pbrTextures";
 import { useDisposable } from "../hooks/useDisposable";
 
 /** Height above the ground plane (top at y = 0), clear of z-fighting. */
 const PATH_Y = 0.015;
 /** The ragged alpha edge lands at ~this fraction of each quad's half-width. */
 const EDGE = 0.78;
+/** Metres per dirt texture repeat. */
+const DIRT_TILE = 2;
 
 /**
- * Worn-dirt material for the footpath quads. `radial` shapes a round joint
- * (fading from the centre); otherwise a straight link fading across its width.
- * World-space noise roughens the edge and mottles the colour, so the path
- * reads as trodden earth rather than a painted stripe. Opaque alpha-clip.
+ * Worn-dirt PBR material for the footpath quads (Poly Haven park_dirt, CC0;
+ * KTX2), tiled in world space so links and joints join seamlessly. `radial`
+ * shapes a round joint (fading from the centre); otherwise a straight link
+ * fading across its width. World-space noise roughens the edge and mottles
+ * the colour, so the path reads as trodden earth rather than a painted
+ * stripe. Opaque alpha-clip.
  */
-function makeDirtMaterial(radial: boolean) {
+function makeDirtMaterial(set: PbrSet, radial: boolean) {
   const edgeNoise = mx_noise_float(positionWorld.xz.mul(2.5));
   const mottle = mx_noise_float(positionWorld.xz.mul(0.9)).mul(0.5).add(0.5);
   const centred = uv().mul(2).sub(1);
   const edge = radial ? length(centred) : abs(centred.y);
+  const s = pbrSurface(set, positionWorld.xz.div(DIRT_TILE));
 
-  const material = new THREE.MeshLambertNodeMaterial();
-  material.colorNode = mix(
-    uniform(new THREE.Color("#7b6647")),
-    uniform(new THREE.Color("#5b4a33")),
-    mottle
-  ).mul(lightmapFactor); // baked wall shadows + AO
+  const material = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
+  material.colorNode = s.color.mul(mix(float(0.85), float(1.08), mottle)).mul(lightmapFactor); // + baked shadows / AO
+  material.normalNode = s.normal;
+  material.roughnessNode = s.roughness;
+  material.aoNode = s.ao;
   material.opacityNode = float(1).sub(smoothstep(0.55, 1, edge.add(edgeNoise.mul(0.3))));
   material.alphaTest = 0.5;
   return material;
@@ -95,8 +90,9 @@ export default function Footpath({
 
   const network = useMemo(() => pathNetwork(), []);
   const geometry = useDisposable(() => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), []);
-  const linkMaterial = useDisposable(() => makeDirtMaterial(false), []);
-  const jointMaterial = useDisposable(() => makeDirtMaterial(true), []);
+  const dirt = usePbrSet("path");
+  const linkMaterial = useDisposable(() => makeDirtMaterial(dirt, false), [dirt]);
+  const jointMaterial = useDisposable(() => makeDirtMaterial(dirt, true), [dirt]);
 
   useLayoutEffect(() => {
     if (linksRef.current && jointsRef.current) {

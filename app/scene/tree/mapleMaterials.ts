@@ -6,25 +6,33 @@ import {
   color,
   cos,
   float,
+  floor,
   fract,
   hash,
   instanceIndex,
   inverseSqrt,
   length,
   mix,
+  mod,
   mx_noise_float,
+  normalMap,
   normalize,
   positionLocal,
   positionWorld,
   rotate,
   sin,
   smoothstep,
+  texture,
   transformNormalToView,
   uniform,
+  uv,
+  vec2,
   vec3,
   vertexColor,
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
+import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
+import { LEAF_ATLAS } from "./treeGeometry";
 import type { MapleTreeLayout } from "./mapleTree";
 
 /** Live-tunable tree look. */
@@ -52,15 +60,21 @@ export function leafLodFraction(lod: LeafLod, d: number): number {
 }
 
 /**
- * The maple's node materials (TSL), sharing one wind clock:
- * - bark: streaky procedural bark, mossy at the foot;
- * - leaves: per-instance colour, shaded as one soft crown (normals point out
- *   from the canopy centre), swaying in gusts and fluttering;
- * - fallen leaves: flat on the ground, darkened by the baked lightmap;
+ * The maple's node materials (TSL), sharing one wind clock. Bark and leaves
+ * are PBR (MeshStandard) with KTX2 textures:
+ * - bark: Poly Haven bark_brown_02 (colour / normal / AO-roughness), mossy at
+ *   the foot;
+ * - leaves: cut-out cards from the maple leaf atlas (ambientCG LeafSet027),
+ *   per-instance tint, the leaf's own normal map blended with one soft crown
+ *   shape (normals out from the canopy centre), swaying and fluttering;
+ * - fallen leaves: autumn cards flat on the ground, darkened by the lightmap;
  * - falling leaves: spawn in the crown and spin down, all in the shader;
  * - lantern: a warm emissive pane that blooms.
  */
-export function createMapleMaterials(tree: MapleTreeLayout) {
+export function createMapleMaterials(
+  tree: MapleTreeLayout,
+  textures: { bark: PbrSet; leaves: { map: THREE.Texture; normalMap: THREE.Texture } }
+) {
   const uniforms = {
     time: uniform(0),
     wind: uniform(1),
@@ -74,16 +88,28 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
   const crownBottom = tree.trunkTop;
   const crownTop = tree.canopyTop;
 
-  // Bark: dark grey-brown streaks running along the wood, moss at the foot.
-  const bark = new THREE.MeshLambertNodeMaterial();
-  const streak = mx_noise_float(positionWorld.mul(vec3(3.2, 0.7, 3.2))).mul(0.5).add(0.5);
+  // Bark: textured wood (UVs in metres along each branch), moss at the foot.
+  const bark = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
+  const barkSurface = pbrSurface(textures.bark, uv());
   const moss = smoothstep(0.9, 0.1, positionWorld.y).mul(
     smoothstep(0.45, 0.7, mx_noise_float(positionWorld.mul(2.5)).mul(0.5).add(0.5))
   );
-  bark.colorNode = mix(mix(color("#2a2420"), color("#6b5f55"), streak), color("#4d5a2c"), moss.mul(0.8));
+  bark.colorNode = mix(barkSurface.color, color("#4d5a2c"), moss.mul(0.6));
+  bark.normalNode = barkSurface.normal;
+  bark.roughnessNode = barkSurface.roughness;
+  bark.aoNode = barkSurface.ao;
+
+  // Leaf atlas lookup: this card's cell (per-instance "leafCell") and UV in it.
+  const cell = attribute<"float">("leafCell", "float");
+  const atlasUv = uv()
+    .add(vec2(mod(cell, LEAF_ATLAS.cols), floor(cell.div(LEAF_ATLAS.cols))))
+    .div(vec2(LEAF_ATLAS.cols, LEAF_ATLAS.rows));
+  const leafTexel = texture(textures.leaves.map, atlasUv);
+  // NormalMapNode is a vec3 node; its typings just don't say so.
+  const leafNormal = normalMap(texture(textures.leaves.normalMap, atlasUv)) as unknown as THREE.Node<"vec3">;
 
   // Leaves (instanced; positionLocal is world-space after instancing).
-  const leaves = new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide });
+  const leaves = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.6 });
   const height = smoothstep(crownBottom, crownTop, positionLocal.y);
   const gust = sin(
     uniforms.time.mul(0.8).add(positionLocal.x.mul(0.3)).add(positionLocal.z.mul(0.22))
@@ -100,20 +126,26 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
       uniforms.wind
     )
   );
-  leaves.colorNode = vec3(uniforms.leafBrightness);
-  // One soft, rounded crown: normals from the canopy centre, tipped upward.
-  leaves.normalNode = transformNormalToView(
+  leaves.colorNode = leafTexel.rgb.mul(uniforms.leafBrightness);
+  leaves.opacityNode = leafTexel.a;
+  leaves.alphaTest = 0.5;
+  // One soft, rounded crown (normals from the canopy centre, tipped upward),
+  // with each leaf's own veins and ridges from its normal map mixed in.
+  const crownNormal = transformNormalToView(
     normalize(normalize(positionWorld.sub(uniforms.canopyCenter)).add(vec3(0, 0.7, 0)))
   );
+  leaves.normalNode = normalize(mix(leafNormal, crownNormal, 0.55));
 
-  // Fallen leaves: lawn-lit like the grass, shaded by the baked lightmap.
-  const fallen = new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide });
-  fallen.colorNode = vec3(uniforms.leafBrightness).mul(lightmapFactor);
+  // Fallen leaves: autumn cards, lawn-lit like the grass, shaded by the lightmap.
+  const fallen = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.8 });
+  fallen.colorNode = leafTexel.rgb.mul(uniforms.leafBrightness).mul(lightmapFactor);
+  fallen.opacityNode = leafTexel.a;
+  fallen.alphaTest = 0.5;
   fallen.normalNode = transformNormalToView(vec3(0, 1, 0));
 
   // Falling leaves: each spins down from its spawn point over its period,
   // drifting with the wind, and shrinks away as it lands.
-  const falling = new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide });
+  const falling = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.6 });
   const spawn = attribute<"vec4">("fallSpawn", "vec4");
   const period = attribute<"float">("fallPeriod", "float");
   const t = fract(uniforms.time.div(period).add(spawn.w));
@@ -126,7 +158,11 @@ export function createMapleMaterials(tree: MapleTreeLayout) {
     cos(t.mul(7).add(spawn.w.mul(13))).mul(0.45)
   );
   falling.positionNode = spawn.xyz.add(drift).add(local.mul(land));
-  falling.colorNode = vertexColor().mul(uniforms.leafBrightness);
+  // Falling leaves bake their atlas UVs into the geometry.
+  const fallingTexel = texture(textures.leaves.map, uv());
+  falling.colorNode = fallingTexel.rgb.mul(vertexColor()).mul(uniforms.leafBrightness);
+  falling.opacityNode = fallingTexel.a;
+  falling.alphaTest = 0.5;
   falling.normalNode = transformNormalToView(vec3(0, 1, 0));
 
   // Lantern: dark wooden frame, warm glowing panes (HDR, so bloom picks it up).

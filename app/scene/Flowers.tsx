@@ -29,9 +29,12 @@ const stats = { drawn: 0 };
  */
 export default function Flowers({
   pathWidth,
+  maxDistance,
 }: {
   /** Footpath half-width in world units; flowers stay off it. 0 = no footpath. */
   pathWidth: number;
+  /** The scene's view distance: flowers are never drawn beyond it. */
+  maxDistance: number;
 }) {
   const {
     enabled,
@@ -104,9 +107,10 @@ export default function Flowers({
 
   useFrame(({ camera }, delta) => {
     const { x, z } = playerStore;
-    flowers.setFade(x, z, Math.max(0, drawDistance - fadeWidth), drawDistance);
+    const distance = Math.min(drawDistance, maxDistance);
+    flowers.setFade(x, z, Math.max(0, distance - fadeWidth), distance);
     flowers.advance(delta);
-    field.updateVisibility(camera, x, z, enabled ? drawDistance : -1, occlusion);
+    field.updateVisibility(camera, x, z, enabled ? distance : -1, occlusion);
     stats.drawn = field.drawn;
   });
 

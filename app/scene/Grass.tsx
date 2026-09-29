@@ -37,11 +37,14 @@ class FrameThrottle {
 export default function Grass({
   pathWidth,
   pathGrass,
+  drawDistance,
 }: {
   /** Footpath half-width in world units; 0 = no footpath. */
   pathWidth: number;
   /** Grass height on the path centreline, as a fraction of full height. */
   pathGrass: number;
+  /** Radius around the player that grass is drawn in (the scene's view distance). */
+  drawDistance: number;
 }) {
   const {
     enabled,
@@ -49,7 +52,6 @@ export default function Grass({
     tuftSize,
     height,
     lod,
-    drawDistance,
     fadeWidth,
     occlusion,
     shadows,
@@ -68,7 +70,6 @@ export default function Grass({
         tuftSize: { value: 2.6, min: 1, max: 5, step: 0.1, label: "Tuft size" },
         height: { value: 0.2, min: 0, max: 2, step: 0.05, label: "Fluff height" },
         lod: { value: "Auto", options: ["Auto", "High", "Medium", "Low"], label: "LOD" },
-        drawDistance: { value: 15, min: 4, max: 80, step: 1, label: "Draw distance" },
         fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
         occlusion: { value: true, label: "Occlusion culling" },
         shadows: { value: true, label: "Wall shadows (baked)" },

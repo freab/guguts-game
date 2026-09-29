@@ -33,7 +33,8 @@ const _viewProjection = new THREE.Matrix4();
  * 3. Distance LOD — visible sectors draw only a prefix of their (shuffled)
  *    leaves as they get further away; the shader scales those up to match.
  * The fallen-leaf carpet is culled on its own at ground level: hidden from
- * nearly everywhere outside the clearing.
+ * nearly everywhere outside the clearing. Both are also culled beyond the
+ * scene's view distance (where the fog has swallowed them anyway).
  */
 export class TreeCuller {
   private readonly crownCuller: ChunkCuller;
@@ -79,6 +80,7 @@ export class TreeCuller {
     enabled: boolean,
     occlusion: boolean,
     lod: LeafLod,
+    viewDistance: number,
     groundDistance: number
   ) {
     const s = this.stats;
@@ -94,7 +96,7 @@ export class TreeCuller {
 
     this.crownCuller.begin(camera);
     s.treeVisible =
-      this.crownCuller.classify(this.crown, playerX, playerZ, Infinity, occlusion) === ChunkState.Drawn;
+      this.crownCuller.classify(this.crown, playerX, playerZ, viewDistance, occlusion) === ChunkState.Drawn;
     this.setVisible(this.tree, s.treeVisible);
 
     this.groundCuller.begin(camera);

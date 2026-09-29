@@ -17,7 +17,7 @@ import { useEffect } from "react";
  * visit only records the version (nothing stale to correct); a returning visit
  * reloads once per bump.
  */
-const DEFAULTS_VERSION = 5;
+const DEFAULTS_VERSION = 9;
 const KEY = "gugut.levaDefaultsVersion";
 
 export function useDefaultsVersion() {

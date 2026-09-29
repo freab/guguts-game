@@ -7,6 +7,7 @@ import * as THREE from "three/webgpu";
 import { treeSeed } from "../maze/mazeData";
 import { playerStore } from "../character/playerStore";
 import { useDisposable } from "../hooks/useDisposable";
+import { useLeafAtlas, usePbrSet } from "./textures/pbrTextures";
 import { useLoading } from "./bake/loadingStore";
 import { createMapleMaterials } from "./tree/mapleMaterials";
 import { mapleTreeLayout, type MapleTreeLayout } from "./tree/mapleTree";
@@ -65,18 +66,17 @@ function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleM
     (sector) => {
       const geometry = leaf.clone();
       geometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(sector.origins, 3));
+      geometry.setAttribute("leafCell", new THREE.InstancedBufferAttribute(sector.cells, 1));
       sectorGeometries.push(geometry);
       return { mesh: instanced(geometry, mats.leaves, sector, true), total: sector.count };
     }
   );
 
   const area = fallenLeafArea(layout);
-  const ground = instanced(
-    leaf,
-    mats.fallen,
-    fallenLeaves(layout, treeSeed, Math.round(FALLEN_LEAVES * layout.scale ** 2)),
-    false
-  );
+  const litter = fallenLeaves(layout, treeSeed, Math.round(FALLEN_LEAVES * layout.scale ** 2));
+  const groundGeometry = leaf.clone();
+  groundGeometry.setAttribute("leafCell", new THREE.InstancedBufferAttribute(litter.cells, 1));
+  const ground = instanced(groundGeometry, mats.fallen, litter, false);
 
   // Falling leaves: the shader moves them, so bound their whole fall by hand.
   const fallingGeometry = fallingLeaves(layout, treeSeed, FALLING_LEAVES);
@@ -98,6 +98,7 @@ function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleM
     dispose() {
       leaf.dispose();
       for (const g of sectorGeometries) g.dispose();
+      groundGeometry.dispose();
       bark.geometry.dispose();
       fallingGeometry.dispose();
       for (const s of sectors) s.mesh.dispose();
@@ -166,7 +167,12 @@ function Lantern({
  * a carpet of fallen leaves, leaves drifting down and a lantern hanging from
  * its long limb. It towers over the walls — a landmark to steer by.
  */
-export default function MapleTree() {
+export default function MapleTree({
+  viewDistance,
+}: {
+  /** The scene's view distance: the tree shows only once you are this close to its crown. */
+  viewDistance: number;
+}) {
   const { show, leafBrightness, wind, lanternGlow, culling, occlusion, lodNear, lodMin, groundDistance } =
     useControls("Game", {
       Tree: folder(
@@ -191,7 +197,9 @@ export default function MapleTree() {
   const ready = useLoading().stage === "ready";
 
   const tree = useMemo(() => mapleTreeLayout(), []);
-  const mats = useDisposable(() => createMapleMaterials(tree), [tree]);
+  const bark = usePbrSet("bark");
+  const leafAtlas = useLeafAtlas();
+  const mats = useDisposable(() => createMapleMaterials(tree, { bark, leaves: leafAtlas }), [tree, bark, leafAtlas]);
   const built = useDisposable(() => buildTree(tree, mats), [tree, mats]);
 
   useEffect(() => {
@@ -207,7 +215,7 @@ export default function MapleTree() {
   useFrame(({ camera }, delta) => {
     mats.advance(delta);
     const { x, z } = playerStore;
-    built.culler.update(camera, x, z, lod.enabled, occlusion, lod, groundDistance);
+    built.culler.update(camera, x, z, lod.enabled, occlusion, lod, viewDistance, Math.min(groundDistance, viewDistance));
     const s = built.culler.stats;
     stats.leaves = `${s.leavesDrawn} / ${s.leavesTotal} · ${s.sectorsDrawn} sectors`;
     stats.tree = `tree ${s.treeVisible ? "drawn" : "hidden"} · ground ${s.groundVisible ? "drawn" : "hidden"}`;

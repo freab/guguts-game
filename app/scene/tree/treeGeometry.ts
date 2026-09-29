@@ -8,24 +8,28 @@ const palette = (entries: [string, number][]): Palette => ({
   weights: entries.map(([, w]) => w),
 });
 
-/** Summer maple crown: [colour, weight]. Deep to fresh greens, a little yellow-green. */
+/**
+ * Tints over the textured leaves (the colour comes from the maple leaf atlas):
+ * slight shifts so neighbouring leaves don't match exactly.
+ */
 const CROWN = palette([
-  ["#3f7a2a", 0.28],
-  ["#4f8f33", 0.24],
-  ["#2f6423", 0.18],
-  ["#6aa33e", 0.15],
-  ["#86b84a", 0.1],
-  ["#a8c25a", 0.05],
+  ["#ffffff", 0.4],
+  ["#e8f2da", 0.25],
+  ["#f4f1dc", 0.15],
+  ["#d6e6c6", 0.2],
 ]);
 
-/** Leaf litter under it: dry ochres and browns, some still green. */
+/** Litter tints: some leaves more weathered / browner than others. */
 const LITTER = palette([
-  ["#8a6a2c", 0.3],
-  ["#6e4f24", 0.25],
-  ["#a8843a", 0.15],
-  ["#5a7a2c", 0.2],
-  ["#4a3a22", 0.1],
+  ["#ffffff", 0.45],
+  ["#ddcdb4", 0.3],
+  ["#b9a68e", 0.25],
 ]);
+
+/** The leaf atlas is 4 × 2 cells: top row green crown leaves, bottom row autumn litter. */
+export const LEAF_ATLAS = { cols: 4, rows: 2, crownCells: [0, 1, 2, 3], litterCells: [4, 5, 6, 7] };
+/** Bark texture repeat, metres (around × along the branch). */
+const BARK_TILE = 0.9;
 
 function mulberry32(seed: number) {
   let a = seed | 0;
@@ -77,7 +81,16 @@ export function barkGeometry(tree: MapleTreeLayout): THREE.BufferGeometry {
         );
       }
     }
-    geo.deleteAttribute("uv");
+    // UVs in metres: whole wraps around (no seam) × length along the branch,
+    // so the bark texture keeps one scale from the trunk to the twigs.
+    const wraps = Math.max(1, Math.round((Math.PI * (b.r0 + b.r1)) / BARK_TILE));
+    const along = curve.getLength() / BARK_TILE;
+    const uvs = geo.getAttribute("uv");
+    for (let i = 0; i <= segments; i++) {
+      for (let j = 0; j <= radial; j++) {
+        uvs.setXY(i * (radial + 1) + j, (j / radial) * wraps, (i / segments) * along);
+      }
+    }
     return geo;
   });
   const merged = mergeGeometries(parts, false);
@@ -87,43 +100,24 @@ export function barkGeometry(tree: MapleTreeLayout): THREE.BufferGeometry {
 }
 
 /**
- * A small maple leaf, 1 unit across, lying flat and facing up: a five-lobed
- * star (long middle lobe, short lower ones) as a 10-triangle fan.
+ * A leaf card: a quad lying flat and facing up, UVs spanning one atlas cell
+ * (the leaf's shape comes from the atlas alpha). The leaf fills ~3/4 of its
+ * cell, so the quad is 1.35 wide to keep the leaf itself ~1 unit across.
  */
 export function mapleLeafGeometry(): THREE.BufferGeometry {
-  // Lobe tips (angle from +Z, radius) with notches between them.
-  const lobes: [number, number][] = [
-    [0, 0.55],
-    [1.15, 0.46],
-    [2.3, 0.3],
-    [-2.3, 0.3],
-    [-1.15, 0.46],
-  ];
-  const ring: [number, number][] = [];
-  const sorted = [...lobes].sort((a, b) => a[0] - b[0]);
-  sorted.forEach(([angle, r], i) => {
-    ring.push([Math.sin(angle) * r, Math.cos(angle) * r]);
-    const next = sorted[(i + 1) % sorted.length];
-    let mid = (angle + next[0]) / 2;
-    if (i === sorted.length - 1) mid += Math.PI; // wrap-around notch at the stem
-    const notch = i === sorted.length - 1 ? 0.12 : 0.2;
-    ring.push([Math.sin(mid) * notch, Math.cos(mid) * notch]);
-  });
-  const positions: number[] = [];
-  for (let i = 0; i < ring.length; i++) {
-    const [ax, az] = ring[i];
-    const [bx, bz] = ring[(i + 1) % ring.length];
-    positions.push(0, 0, 0, bx, 0, bz, ax, 0, az);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.computeVertexNormals();
-  return geo;
+  return new THREE.PlaneGeometry(1.35, 1.35).rotateX(-Math.PI / 2);
+}
+
+/** A random atlas cell from `cells`. */
+function pickCell(rng: () => number, cells: number[]): number {
+  return cells[Math.min(cells.length - 1, Math.floor(rng() * cells.length))];
 }
 
 export interface LeafInstances {
   matrices: Float32Array;
   colors: Float32Array;
+  /** Leaf atlas cell per leaf (see LEAF_ATLAS). */
+  cells: Float32Array;
   count: number;
 }
 
@@ -157,6 +151,7 @@ export function canopySectors(
     matrices: [] as number[],
     colors: [] as number[],
     origins: [] as number[],
+    cells: [] as number[],
   }));
   const dummy = new THREE.Object3D();
   const dir = new THREE.Vector3();
@@ -188,6 +183,7 @@ export function canopySectors(
       const shade = (0.55 + 0.45 * depth) * (0.72 + 0.28 * height);
       pickColor(rng, color).multiplyScalar(shade);
       bucket.colors.push(color.r, color.g, color.b);
+      bucket.cells.push(pickCell(rng, LEAF_ATLAS.crownCells));
     }
   }
 
@@ -198,6 +194,7 @@ export function canopySectors(
       const matrices = new Float32Array(count * 16);
       const colors = new Float32Array(count * 3);
       const origins = new Float32Array(count * 3);
+      const cells = new Float32Array(count);
       // Fisher–Yates order, then gather: any prefix is a uniform subset.
       const order = Array.from({ length: count }, (_, i) => i);
       for (let i = count - 1; i > 0; i--) {
@@ -205,13 +202,14 @@ export function canopySectors(
         [order[i], order[j]] = [order[j], order[i]];
       }
       order.forEach((from, to) => {
+        cells[to] = b.cells[from];
         for (let e = 0; e < 16; e++) matrices[to * 16 + e] = b.matrices[from * 16 + e];
         for (let e = 0; e < 3; e++) {
           colors[to * 3 + e] = b.colors[from * 3 + e];
           origins[to * 3 + e] = b.origins[from * 3 + e];
         }
       });
-      return { matrices, colors, origins, count };
+      return { matrices, colors, origins, cells, count };
     });
 }
 
@@ -233,6 +231,7 @@ export function fallenLeaves(tree: MapleTreeLayout, seed: number, count: number)
   const reach = area.radius;
   const matrices = new Float32Array(count * 16);
   const colors = new Float32Array(count * 3);
+  const cells = new Float32Array(count);
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
   let n = 0;
@@ -250,9 +249,15 @@ export function fallenLeaves(tree: MapleTreeLayout, seed: number, count: number)
     // Dry litter, varied in brightness.
     pickColor(rng, color, LITTER).multiplyScalar(0.7 + rng() * 0.3);
     color.toArray(colors, n * 3);
+    cells[n] = pickCell(rng, LEAF_ATLAS.litterCells);
     n++;
   }
-  return { matrices: matrices.subarray(0, n * 16), colors: colors.subarray(0, n * 3), count: n };
+  return {
+    matrices: matrices.subarray(0, n * 16),
+    colors: colors.subarray(0, n * 3),
+    cells: cells.subarray(0, n),
+    count: n,
+  };
 }
 
 /**
@@ -262,11 +267,13 @@ export function fallenLeaves(tree: MapleTreeLayout, seed: number, count: number)
  */
 export function fallingLeaves(tree: MapleTreeLayout, seed: number, count: number): THREE.BufferGeometry {
   const rng = mulberry32(seed ^ 0x7f4a7c15);
-  const leaf = mapleLeafGeometry();
+  const leaf = mapleLeafGeometry().toNonIndexed();
   const leafPos = leaf.getAttribute("position");
+  const leafUv = leaf.getAttribute("uv");
   const size = 0.24 * tree.scale;
   const positions: number[] = [];
   const colors: number[] = [];
+  const uvs: number[] = [];
   const spawn: number[] = [];
   const period: number[] = [];
   const color = new THREE.Color();
@@ -279,8 +286,13 @@ export function fallingLeaves(tree: MapleTreeLayout, seed: number, count: number
     const phase = rng();
     const seconds = 9 + rng() * 7;
     pickColor(rng, color);
+    // Mostly fresh green leaves, a few already turned.
+    const cell = pickCell(rng, rng() < 0.8 ? LEAF_ATLAS.crownCells : LEAF_ATLAS.litterCells);
+    const col = cell % LEAF_ATLAS.cols;
+    const row = Math.floor(cell / LEAF_ATLAS.cols);
     for (let v = 0; v < leafPos.count; v++) {
       positions.push(leafPos.getX(v) * size, leafPos.getY(v) * size, leafPos.getZ(v) * size);
+      uvs.push((leafUv.getX(v) + col) / LEAF_ATLAS.cols, (leafUv.getY(v) + row) / LEAF_ATLAS.rows);
       colors.push(color.r, color.g, color.b);
       spawn.push(x, y, z, phase);
       period.push(seconds);
@@ -290,6 +302,7 @@ export function fallingLeaves(tree: MapleTreeLayout, seed: number, count: number
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("normal", new THREE.Float32BufferAttribute(new Array(positions.length).fill(0).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setAttribute("fallSpawn", new THREE.Float32BufferAttribute(spawn, 4));
   geo.setAttribute("fallPeriod", new THREE.Float32BufferAttribute(period, 1));
   leaf.dispose();

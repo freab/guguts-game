@@ -18,6 +18,8 @@ import PostEffects from "./post/PostEffects";
 import Flowers from "./Flowers";
 import Footpath from "./Footpath";
 import MapleTree from "./MapleTree";
+import MazeGround from "./MazeGround";
+import Vines from "./Vines";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
 import SkyEnvironment from "./SkyEnvironment";
@@ -183,6 +185,25 @@ function applyToneMapping(gl: THREE.WebGPURenderer, mode: THREE.ToneMapping, exp
   gl.toneMappingExposure = exposure;
 }
 
+function applyCameraFar(camera: THREE.Camera, far: number) {
+  const cam = camera as THREE.PerspectiveCamera;
+  cam.far = far;
+  cam.updateProjectionMatrix();
+}
+
+/**
+ * The draw-distance cut: the camera's far plane sits just past the end of the
+ * view-distance fog, so nothing further away is rasterised at all (the GPU
+ * clips it) and nothing pops — it is already fully fogged by then. The sky is
+ * unaffected: both the baked background and the live SkyMesh pin themselves
+ * to the far plane.
+ */
+function CameraFar({ far }: { far: number }) {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => applyCameraFar(camera, far), [camera, far]);
+  return null;
+}
+
 /** Tone mapping operator + exposure from leva. */
 function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: number }) {
   const gl = useThree((s) => s.gl);
@@ -242,8 +263,6 @@ export default function Scene({ view }: { view: ViewMode }) {
     clouds,
     cloudDensity,
     skyBrightness,
-    haze,
-    hazeColor,
     liveClouds,
     bakedShadow,
     bakedAO,
@@ -251,6 +270,9 @@ export default function Scene({ view }: { view: ViewMode }) {
     skyLightIntensity,
     toneMapping,
     exposure,
+    fogEnabled,
+    viewDistance,
+    fogStart,
   } = useControls({
     Lighting: folder(
       {
@@ -275,8 +297,6 @@ export default function Scene({ view }: { view: ViewMode }) {
         clouds: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
         cloudDensity: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud density" },
         skyBrightness: { value: 0.55, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
-        haze: { value: 0.003, min: 0, max: 0.03, step: 0.001, label: "Haze" },
-        hazeColor: { value: "#cfdcef", label: "Haze colour" },
         liveClouds: { value: false, label: "Live clouds (costly)" },
       },
       { collapsed: true }
@@ -306,6 +326,18 @@ export default function Scene({ view }: { view: ViewMode }) {
       },
       { collapsed: true }
     ),
+    // One circle for everything: the world fades into the sky colour from
+    // `fogStart × viewDistance` out to `viewDistance`, where the camera's far
+    // plane cuts it off; grass, flowers and the tree are CPU-culled at the same
+    // distance (see SkyController.fogNode and CameraFar).
+    View: folder(
+      {
+        fogEnabled: { value: true, label: "Fog" },
+        viewDistance: { value: 15, min: 5, max: 80, step: 1, label: "View distance" },
+        fogStart: { value: 0.4, min: 0, max: 0.95, step: 0.05, label: "Fog start" },
+      },
+      { collapsed: true }
+    ),
     Perf: folder(
       {
         "Draw calls": monitor(perfCalls, { graph: false, interval: 300 }),
@@ -328,7 +360,8 @@ export default function Scene({ view }: { view: ViewMode }) {
         raysDensity: { value: 6, min: 0, max: 20, step: 0.1, label: "Rays density" },
         raysMaxDensity: { value: 0.4, min: 0, max: 1, step: 0.01, label: "Rays max" },
         raysFalloff: { value: 0.5, min: 0, max: 3, step: 0.05, label: "Rays falloff" },
-        raysSteps: { value: 60, min: 8, max: 120, step: 1, label: "Rays steps" },
+        // The view distance keeps the rays' march short, so fewer steps do.
+        raysSteps: { value: 40, min: 8, max: 120, step: 1, label: "Rays steps" },
         raysResolution: {
           value: 0.5,
           options: { Quarter: 0.25, Half: 0.5, Full: 1 },
@@ -405,6 +438,11 @@ export default function Scene({ view }: { view: ViewMode }) {
     ),
   });
 
+  const viewFog = useMemo(
+    () => ({ near: viewDistance * fogStart, far: viewDistance }),
+    [viewDistance, fogStart]
+  );
+
   // One sun direction drives the sky, the sun light and its shadows.
   const sunDirection = useMemo(
     () =>
@@ -471,8 +509,10 @@ export default function Scene({ view }: { view: ViewMode }) {
           params={skyParams}
           skyLight={skyLight ? skyLightIntensity : 0}
           liveClouds={liveClouds}
+          fog={fogEnabled ? viewFog : null}
         />
-        {haze > 0 && <fogExp2 attach="fog" args={[hazeColor, haze]} />}
+        {/* Fog off: no fog, no draw-distance cut, the tree visible from anywhere. */}
+        <CameraFar far={fogEnabled ? viewDistance * 1.03 + 0.5 : 1000} />
 
         <ambientLight intensity={ambient} color={ambientColor} />
         <hemisphereLight args={[skyFill, groundFill, hemisphere]} />
@@ -480,12 +520,14 @@ export default function Scene({ view }: { view: ViewMode }) {
         <LightmapBaker sunDirection={sunDirection} />
 
         <InfiniteGrid />
+        <MazeGround />
         <Maze />
+        <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
-        <MapleTree />
+        <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
-        <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} />
-        <Flowers pathWidth={footpath ? pathWidth : 0} />
+        <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
+        <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
         <PlayerController view={view} />
 
         <Readiness onPostReady={enablePost} />

@@ -18,6 +18,7 @@ import {
   vertexStage,
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
+import { grassColors, setGrassColors } from "./grassColors";
 
 /** Live-tunable grass look (no shader rebuild needed). */
 export interface GrassLook {
@@ -56,10 +57,6 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     windSpeed: uniform(1),
     height: uniform(0.6),
     noiseScale: uniform(1.5),
-    brightness: uniform(1),
-    baseColor: uniform(new THREE.Color("#638332")),
-    tipColor1: uniform(new THREE.Color("#89c47b")),
-    tipColor2: uniform(new THREE.Color("#056535")),
     // Draw-distance fade around the player (world XZ centre, start/end radius).
     fadeCenter: uniform(new THREE.Vector2()),
     fadeStart: uniform(14),
@@ -120,11 +117,11 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
   );
 
   // Colour: base -> tip gradient, tip hue picked by the patch noise.
-  const tipColor = mix(uniforms.tipColor1, uniforms.tipColor2, vertexStage(patch));
+  const tipColor = mix(grassColors.tip1, grassColors.tip2, vertexStage(patch));
   // Baked wall shadows + AO: one lightmap fetch per fragment instead of
   // filtering the shadow map (the grass doesn't receive realtime shadows).
-  material.colorNode = mix(uniforms.baseColor, tipColor, tip)
-    .mul(uniforms.brightness)
+  material.colorNode = mix(grassColors.base, tipColor, tip)
+    .mul(grassColors.brightness)
     .mul(mix(float(1), lightmapFactor, uniforms.lightmapMix));
 
   // Blade silhouettes from the alpha mask (same UV flip as FluffyGrass),
@@ -141,10 +138,8 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     setLook(look: GrassLook) {
       uniforms.height.value = look.height;
       uniforms.windStrength.value = look.windStrength;
-      uniforms.brightness.value = look.brightness;
-      uniforms.baseColor.value.set(look.baseColor);
-      uniforms.tipColor1.value.set(look.tipColor1);
-      uniforms.tipColor2.value.set(look.tipColor2);
+      // Shared with the ivy (grass/grassColors.ts), so it always matches.
+      setGrassColors(look);
     },
     /** Centre and radii of the draw-distance fade (call every frame). */
     /** Whether the baked wall shadows / AO darken the grass. */

@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# texture sources (CC0; see public/textures/LICENSE.md — rebuild with npm run textures)
+/assets-src/
