@@ -33,13 +33,13 @@ export default function Vines({
         {
           show: { value: true, label: "Show ivy" },
           coverage: { value: 1, min: 0, max: 1, step: 0.05, label: "Faces with vines" },
-          leafDensity: { value: 14, min: 2, max: 30, step: 1, label: "Leaves / m" },
-          leafSize: { value: 1, min: 0.4, max: 2, step: 0.05, label: "Leaf size" },
+          leafDensity: { value: 24, min: 2, max: 30, step: 1, label: "Leaves / m" },
+          leafSize: { value: 1.95, min: 0.4, max: 2, step: 0.05, label: "Leaf size" },
           maxHeight: { value: 0.95, min: 0.2, max: 1, step: 0.05, label: "Max height" },
-          brightness: { value: 1.1, min: 0.3, max: 2.5, step: 0.05, label: "Brightness" },
-          wind: { value: 1, min: 0, max: 3, step: 0.1, label: "Flutter" },
+          brightness: { value: 1.25, min: 0.3, max: 2.5, step: 0.05, label: "Brightness" },
+          wind: { value: 0, min: 0, max: 3, step: 0.1, label: "Flutter" },
           occlusion: { value: true, label: "Occlusion culling" },
-          seed: { value: 1, min: 0, max: 9999, step: 1, label: "Seed" },
+          seed: { value: 9999, min: 0, max: 9999, step: 1, label: "Seed" },
           Drawn: monitor(() => stats.drawn, { graph: false, interval: 300 }),
         },
         { collapsed: true }

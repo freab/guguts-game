@@ -16,9 +16,10 @@ import {
   mix,
   positionWorld,
   smoothstep,
+  step,
   uniform,
 } from "three/tsl";
-import { CELL } from "../maze/mazeData";
+import { CELL, COLS, ROWS, cellToWorld } from "../maze/mazeData";
 import { lightmapFactor } from "./bake/lightmap";
 import { useDisposable } from "../hooks/useDisposable";
 
@@ -54,6 +55,9 @@ function createGridMaterial(fill: boolean) {
     fillColor: uniform(new THREE.Color("#3b3e44")),
     cellColor: uniform(new THREE.Color("#5a5e66")),
     sectionColor: uniform(new THREE.Color("#8a8f99")),
+    // Where the maze's own ground lies (minX, minZ, maxX, maxZ): cut out, so
+    // there is only ever one ground surface (no z-fighting between layers).
+    hole: uniform(new THREE.Vector4(0, 0, 0, 0)),
   };
 
   const p = positionWorld.xz.sub(u.offset);
@@ -73,16 +77,22 @@ function createGridMaterial(fill: boolean) {
   );
   const lines = max(cell, section).mul(fade);
   const lineColor = mix(u.cellColor, u.sectionColor, section);
+  const inHole = step(u.hole.x, positionWorld.x)
+    .mul(step(positionWorld.x, u.hole.z))
+    .mul(step(u.hole.y, positionWorld.z))
+    .mul(step(positionWorld.z, u.hole.w));
 
   let material: THREE.MeshLambertNodeMaterial | THREE.MeshBasicNodeMaterial;
   if (fill) {
     material = new THREE.MeshLambertNodeMaterial();
     // Wall shadows + AO come from the baked lightmap (no shadow-map sampling).
     material.colorNode = mix(u.fillColor, lineColor, lines).mul(lightmapFactor);
+    material.opacityNode = float(1).sub(inHole);
+    material.alphaTest = 0.5;
   } else {
     material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
     material.colorNode = lineColor;
-    material.opacityNode = lines;
+    material.opacityNode = lines.mul(float(1).sub(inHole));
   }
 
   return {
@@ -97,6 +107,10 @@ function createGridMaterial(fill: boolean) {
       u.fillColor.value.set(s.fillColor);
       u.cellColor.value.set(s.cellColor);
       u.sectionColor.value.set(s.sectionColor);
+    },
+    /** Cut out the maze's ground rectangle. */
+    setHole(minX: number, minZ: number, maxX: number, maxZ: number) {
+      u.hole.value.set(minX, minZ, maxX, maxZ);
     },
     dispose() {
       material.dispose();
@@ -166,6 +180,13 @@ export default function InfiniteGrid() {
     sectionColor,
     invalidate,
   ]);
+
+  // The maze's own ground (MazeGround) covers its footprint; the grid stops there.
+  useEffect(() => {
+    const [x0, z0] = cellToWorld(0, 0);
+    const [x1, z1] = cellToWorld(ROWS - 1, COLS - 1);
+    grid.setHole(x0 - CELL / 2, z0 - CELL / 2, x1 + CELL / 2, z1 + CELL / 2);
+  }, [grid]);
 
   useFrame(({ camera }) => {
     if (meshRef.current) followCamera(meshRef.current, camera);

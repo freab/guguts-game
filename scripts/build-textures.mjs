@@ -4,7 +4,7 @@
 //   node scripts/build-textures.mjs
 //
 // Sources (all CC0, downloaded once into assets-src/textures):
-//   Poly Haven  forrest_ground_01, park_dirt, bark_brown_02 (1K JPG: diff, nor_gl, arm)
+//   Poly Haven  forrest_ground_01 (ground + footpath), bark_brown_02 (1K JPG: diff, nor_gl, arm)
 //   ambientCG   LeafSet027 (1K JPG maple leaf atlas: Color, Opacity, NormalGL)
 //   ambientCG   LeafSet017 (1K JPG English ivy leaf atlas: Color, Opacity, NormalGL)
 //
@@ -256,8 +256,6 @@ await fs.mkdir(OUT, { recursive: true });
 let total = 0;
 console.log("ground (forrest_ground_01)");
 total += await pbrSet("forrest_ground_01", "ground");
-console.log("footpath (park_dirt)");
-total += await pbrSet("park_dirt", "path");
 console.log("bark (bark_brown_02)");
 total += await pbrSet("bark_brown_02", "bark");
 console.log("maple leaves (LeafSet027)");

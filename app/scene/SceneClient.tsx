@@ -9,7 +9,9 @@ import { useDefaultsVersion } from "../hooks/useDefaultsVersion";
 import { useHashRoute } from "../hooks/useHashRoute";
 import { LEVELS, type Level, type LevelId } from "../maze/levels";
 import { regenerateMaze, setMazeConfig } from "../maze/mazeData";
+import { audio } from "../audio/audioEngine";
 import LoadingOverlay from "../ui/LoadingOverlay";
+import MusicToggle from "../ui/MusicToggle";
 import Minimap from "../ui/Minimap";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
@@ -52,17 +54,36 @@ export default function SceneClient() {
   // `/#debug` route (toggles live when the hash changes).
   const debug = useHashRoute("debug");
 
+  // The ambience plays only once the game is running — after the preloader
+  // has gone — and fades out when leaving for the level chooser.
+  useEffect(() => {
+    audio.setActive(ready);
+  }, [ready]);
+
+  // Browsers only allow audio after a user gesture: set it up on the first
+  // click or key press anywhere (picking a level, clicking into the game…).
+  useEffect(() => {
+    const unlock = () => audio.unlock();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
   // Fetch the scene's code and models while the player reads the story, so
   // picking a level starts loading from a warm cache.
   useEffect(() => {
     void import("./Scene");
   }, []);
 
-  // V toggles first / third person.
+  // V toggles first / third person; M toggles the music.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== "KeyV" || e.repeat || isTyping(e.target)) return;
-      setView((v) => (v === "first" ? "third" : "first"));
+      if (e.repeat || isTyping(e.target)) return;
+      if (e.code === "KeyV") setView((v) => (v === "first" ? "third" : "first"));
+      else if (e.code === "KeyM") audio.toggleMusic();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -174,6 +195,10 @@ export default function SceneClient() {
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}
       <LoadingOverlay choosing={level === null} onChoose={chooseLevel} />
+
+      {/* Music on / off — always shown (above the title screen too); below the
+          leva panel on #debug. */}
+      <MusicToggle className={`absolute right-3 z-[60] ${debug ? "top-14" : "top-3"}`} />
     </div>
   );
 }

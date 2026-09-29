@@ -16,9 +16,9 @@ import { setLightmapStrength } from "./bake/lightmap";
 import { setLoading } from "./bake/loadingStore";
 import PostEffects from "./post/PostEffects";
 import Flowers from "./Flowers";
-import Footpath from "./Footpath";
 import MapleTree from "./MapleTree";
 import MazeGround from "./MazeGround";
+import Footsteps from "../audio/Footsteps";
 import Vines from "./Vines";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
@@ -425,14 +425,14 @@ export default function Scene({ view }: { view: ViewMode }) {
   const [postReady, setPostReady] = useState(false);
   const enablePost = useCallback(() => setPostReady(true), []);
 
-  // Footpath down the middle of every corridor: worn-down grass + dirt strip.
-  const { footpath, pathWidth, pathGrass, dirt } = useControls("Game", {
+  // Footpath down the middle of every corridor: the grass worn down to the
+  // forest floor beneath (the ground texture — see MazeGround).
+  const { footpath, pathWidth, pathGrass } = useControls("Game", {
     Footpath: folder(
       {
         footpath: { value: true, label: "Footpath" },
         pathWidth: { value: 0.45, min: 0.1, max: 1.2, step: 0.05, label: "Half-width" },
         pathGrass: { value: 0.15, min: 0, max: 1, step: 0.05, label: "Grass on path" },
-        dirt: { value: true, label: "Dirt" },
       },
       { collapsed: true }
     ),
@@ -525,10 +525,10 @@ export default function Scene({ view }: { view: ViewMode }) {
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
-        <Footpath halfWidth={pathWidth} visible={footpath && dirt} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
         <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
         <PlayerController view={view} />
+        <Footsteps />
 
         <Readiness onPostReady={enablePost} />
       </Suspense>

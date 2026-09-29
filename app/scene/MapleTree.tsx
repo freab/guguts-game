@@ -118,16 +118,21 @@ function Lantern({
   mats: ReturnType<typeof createMapleMaterials>;
 }) {
   const swing = useRef<THREE.Group>(null);
+  const hang = useRef<THREE.Group>(null);
+  const offset = useMemo(() => new THREE.Vector3(), []);
   useFrame(({ clock }) => {
     const g = swing.current;
-    if (!g) return;
+    const h = hang.current;
+    if (!g || !h) return;
     const t = clock.elapsedTime;
     g.rotation.z = Math.sin(t * 1.3) * 0.05;
     g.rotation.x = Math.sin(t * 0.9 + 1) * 0.035;
+    // Ride the limb it hangs from as the tree sways.
+    h.position.copy(anchor).add(mats.swayAt(anchor, offset));
   });
   const chain = 0.55;
   return (
-    <group position={anchor} scale={scale}>
+    <group ref={hang} position={anchor} scale={scale}>
       <group ref={swing}>
         <mesh position={[0, -chain / 2, 0]} material={mats.lanternFrame}>
           <cylinderGeometry args={[0.012, 0.012, chain, 5]} />

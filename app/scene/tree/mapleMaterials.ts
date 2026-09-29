@@ -35,6 +35,16 @@ import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
 import { LEAF_ATLAS } from "./treeGeometry";
 import type { MapleTreeLayout } from "./mapleTree";
 
+/**
+ * Wind on the tree — deliberately very slow: gusts take ~50 s to come and go
+ * (radians per second of the gust wave), with a small sway, and each leaf's
+ * own drift is slower still. Shared by the shader and its CPU twin (swayAt).
+ */
+const GUST_SPEED = 0.12;
+const SWAY_X = 0.07;
+const SWAY_Z = 0.035;
+const FLUTTER_SPEED = 0.7;
+
 /** Live-tunable tree look. */
 export interface MapleLook {
   leafBrightness: number;
@@ -85,8 +95,25 @@ export function createMapleMaterials(
     lodMin: uniform(0.2),
     lodEnabled: uniform(0),
   };
-  const crownBottom = tree.trunkTop;
   const crownTop = tree.canopyTop;
+  /** Below this the trunk is rigid; the sway grows from here to the crown top. */
+  const swayFrom = tree.trunkTop * 0.4;
+
+  /**
+   * The wind's push at world point `p`: nothing at the foot of the tree,
+   * growing (as height²) towards the top of the crown, in slow gusts with a
+   * little faster wobble on top. Wood and leaves both use it — a leaf is
+   * pushed by the push at the point it hangs from — so the whole tree moves
+   * as one and no leaf drifts off its branch. Very slow and gentle — a calm
+   * summer evening. See swayAt for the CPU twin.
+   */
+  const sway = (p: THREE.Node<"vec3">) => {
+    const bend = smoothstep(swayFrom, crownTop, p.y).pow(2);
+    const gust = sin(uniforms.time.mul(GUST_SPEED).add(p.x.mul(0.3)).add(p.z.mul(0.22))).add(
+      sin(uniforms.time.mul(GUST_SPEED * 2.4).add(p.x.mul(0.7))).mul(0.25)
+    );
+    return vec3(gust.mul(SWAY_X), float(0), gust.mul(SWAY_Z)).mul(bend).mul(uniforms.wind);
+  };
 
   // Bark: textured wood (UVs in metres along each branch), moss at the foot.
   const bark = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
@@ -95,6 +122,9 @@ export function createMapleMaterials(
     smoothstep(0.45, 0.7, mx_noise_float(positionWorld.mul(2.5)).mul(0.5).add(0.5))
   );
   bark.colorNode = mix(barkSurface.color, color("#4d5a2c"), moss.mul(0.6));
+  // The wood sways with the wind (the bark mesh sits at the origin, so its
+  // local positions are world positions).
+  bark.positionNode = positionLocal.add(sway(positionLocal));
   bark.normalNode = barkSurface.normal;
   bark.roughnessNode = barkSurface.roughness;
   bark.aoNode = barkSurface.ao;
@@ -110,22 +140,20 @@ export function createMapleMaterials(
 
   // Leaves (instanced; positionLocal is world-space after instancing).
   const leaves = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.6 });
-  const height = smoothstep(crownBottom, crownTop, positionLocal.y);
-  const gust = sin(
-    uniforms.time.mul(0.8).add(positionLocal.x.mul(0.3)).add(positionLocal.z.mul(0.22))
-  );
-  const flutter = sin(uniforms.time.mul(5.5).add(hash(instanceIndex).mul(6.283))).mul(0.018);
-  // Distance LOD: fewer, bigger leaves further away (grown about each leaf's
-  // own centre). Per leaf here, per sector on the CPU — close enough.
+  // Each leaf's origin is where it hangs off its twig.
   const origin = attribute<"vec3">("leafOrigin", "vec3");
+  // Distance LOD: fewer, bigger leaves further away (grown about each leaf's
+  // stalk). Per leaf here, per sector on the CPU — close enough.
   const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
   const grow = mix(float(1), inverseSqrt(keep), uniforms.lodEnabled);
   const leafPos = origin.add(positionLocal.sub(origin).mul(grow));
-  leaves.positionNode = leafPos.add(
-    vec3(gust.mul(0.1).mul(height).add(flutter), flutter.mul(0.5), gust.mul(0.05).mul(height).add(flutter)).mul(
-      uniforms.wind
-    )
-  );
+  // Carried with its branch (the sway at the leaf), plus a very slow, faint
+  // drift of its own that grows out from its centre.
+  const flutter = sin(uniforms.time.mul(FLUTTER_SPEED).add(hash(instanceIndex).mul(6.283)))
+    .mul(length(leafPos.sub(origin)))
+    .mul(0.08)
+    .mul(uniforms.wind);
+  leaves.positionNode = leafPos.add(sway(origin)).add(vec3(flutter.mul(0.3), flutter, flutter.mul(0.3)));
   leaves.colorNode = leafTexel.rgb.mul(uniforms.leafBrightness);
   leaves.opacityNode = leafTexel.a;
   leaves.alphaTest = 0.5;
@@ -193,6 +221,16 @@ export function createMapleMaterials(
     /** Advance the wind clock (clamped, so a long idle gap doesn't jump). */
     advance(delta: number) {
       uniforms.time.value += Math.min(delta, 0.1);
+    },
+    /** CPU twin of the shader's sway at `p` (for things hung on the tree, like the lantern). */
+    swayAt(p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+      const t = THREE.MathUtils.clamp((p.y - swayFrom) / (crownTop - swayFrom), 0, 1);
+      const bend = (t * t * (3 - 2 * t)) ** 2;
+      const time = uniforms.time.value;
+      const gust =
+        Math.sin(time * GUST_SPEED + p.x * 0.3 + p.z * 0.22) + 0.25 * Math.sin(time * GUST_SPEED * 2.4 + p.x * 0.7);
+      const k = bend * uniforms.wind.value;
+      return out.set(gust * SWAY_X * k, 0, gust * SWAY_Z * k);
     },
     dispose() {
       for (const m of all) m.dispose();

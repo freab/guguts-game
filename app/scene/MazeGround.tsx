@@ -14,18 +14,23 @@ const GROUND_TILE = 2.5;
 const GROUND_Y = 0.005;
 
 /**
- * Forest-floor PBR material (Poly Haven forrest_ground_01, CC0; KTX2):
- * albedo, normal, roughness and AO tiled in world space, a large-scale noise
- * tint to break up the repeat, and the baked lightmap (wall shadows + AO,
- * dappled shade under the maple) on top — the same bake as the grass, so the
- * two agree.
+ * The forest-floor surface (Poly Haven forrest_ground_01, CC0; KTX2): albedo,
+ * normal, roughness and AO tiled in world space, a large-scale noise tint to
+ * break up the repeat, and the baked lightmap (wall shadows + AO, dappled
+ * shade under the maple) on top — the same bake as the grass, so they agree.
+ * Shared with the footpath, which lies on the ground in the very same texture.
  */
-function createGroundMaterial(set: PbrSet) {
+export function groundSurface(set: PbrSet) {
   const uv = positionWorld.xz.div(GROUND_TILE);
   const s = pbrSurface(set, uv);
   const variation = mix(float(0.82), float(1.1), mx_noise_float(positionWorld.xz.mul(0.12)).mul(0.5).add(0.5));
+  return { ...s, color: s.color.mul(variation).mul(lightmapFactor) };
+}
+
+function createGroundMaterial(set: PbrSet) {
+  const s = groundSurface(set);
   const material = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
-  material.colorNode = s.color.mul(variation).mul(lightmapFactor);
+  material.colorNode = s.color;
   material.normalNode = s.normal;
   material.roughnessNode = s.roughness;
   material.aoNode = s.ao;
