@@ -3,7 +3,22 @@
 import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
-import { float, int, length, pass, screenUV, smoothstep, uniform, vec4 } from "three/tsl";
+import {
+  clamp,
+  dot,
+  float,
+  int,
+  length,
+  mix,
+  normalize,
+  pass,
+  pow,
+  reference,
+  screenUV,
+  smoothstep,
+  uniform,
+  vec4,
+} from "three/tsl";
 import { bilateralBlur } from "three/examples/jsm/tsl/display/BilateralBlurNode.js";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import { depthAwareBlend } from "three/examples/jsm/tsl/display/depthAwareBlend.js";
@@ -31,6 +46,8 @@ export interface PostParams {
   raysFalloff: number;
   raysSteps: number;
   raysColor: string;
+  /** How much of the rays remain looking directly away from the sun (0..1). */
+  raysAway: number;
   vignetteStrength: number;
 }
 
@@ -40,8 +57,19 @@ function createUniforms() {
     bloomRadius: uniform(0.4),
     bloomThreshold: uniform(0.9),
     raysColor: uniform(new THREE.Color("#ffe2a8")),
+    raysAway: uniform(0.12),
+    /** Direction towards the sun, in view space (updated every frame). */
+    sunView: uniform(new THREE.Vector3(0, 0, -1)),
     vignette: uniform(0.35),
   };
+}
+
+const _sunWorld = new THREE.Vector3();
+
+/** Point `sunView` at the sun as seen from the camera this frame. */
+function updateSunView(u: PostUniforms, light: THREE.DirectionalLight, camera: THREE.Camera) {
+  _sunWorld.subVectors(light.position, light.target.position).normalize();
+  u.sunView.value.copy(_sunWorld).transformDirection(camera.matrixWorldInverse);
 }
 type PostUniforms = ReturnType<typeof createUniforms>;
 
@@ -49,7 +77,8 @@ type PostUniforms = ReturnType<typeof createUniforms>;
  * The effect graph:
  *   scene pass (colour + depth)
  *   → godrays: raymarched through the sun's *baked* shadow map at reduced
- *     resolution, bilateral-blurred, composited with a depth-aware blend
+ *     resolution, bilateral-blurred, composited with a depth-aware blend and
+ *     weighted by a forward-scattering phase (see below)
  *   → + bloom (bright sky / sun only, via threshold)
  *   → vignette.
  * Tone mapping / colour space are applied by the pipeline's output transform.
@@ -73,13 +102,22 @@ function buildGraph(
     rays = godrays(depth, camera, light);
     rays.resolutionScale = t.raysResolution;
     const blurred = bilateralBlur(rays.getTextureNode());
-    output = vec4(
-      depthAwareBlend(color, blurred.getTextureNode(), depth, camera, {
-        blendColor: u.raysColor,
-        edgeRadius: int(2),
-        edgeStrength: float(2),
-      })
-    );
+    const withRays = depthAwareBlend(color, blurred.getTextureNode(), depth, camera, {
+      blendColor: u.raysColor,
+      edgeRadius: int(2),
+      edgeStrength: float(2),
+    });
+    // Forward scattering: sunlit haze glows towards the sun and barely at all
+    // away from it. Without this, every sky pixel (whose raymarch crosses all
+    // the lit air to the far plane) saturates at "Rays max" and the blend
+    // (mix towards the ray colour) paints a flat warm veil over the blue sky.
+    // mix(base, mix(base, rays, t), w) = mix(base, rays, t·w), so weighting the
+    // blended result is the same as weighting the rays.
+    const ndc = screenUV.mul(2).sub(1);
+    const viewRay = reference("projectionMatrixInverse", "mat4", camera).mul(vec4(ndc.x, ndc.y.negate(), 1, 1));
+    const towardsSun = clamp(dot(normalize(viewRay.xyz), u.sunView), 0, 1);
+    const phase = mix(u.raysAway, float(1), pow(towardsSun, 3));
+    output = vec4(mix(color, withRays, phase));
     disposables.push(rays, blurred);
   }
 
@@ -112,6 +150,7 @@ function applyParams(graph: PostGraph, u: PostUniforms, p: PostParams) {
   u.bloomRadius.value = p.bloomRadius;
   u.bloomThreshold.value = p.bloomThreshold;
   u.raysColor.value.set(p.raysColor);
+  u.raysAway.value = p.raysAway;
   u.vignette.value = p.vignetteStrength;
   if (graph.rays) {
     graph.rays.density.value = p.raysDensity;
@@ -159,6 +198,9 @@ export default function PostEffects({
     applyParams(graph, uniforms, params);
   }, [graph, uniforms, params]);
 
-  useFrame(() => pipeline.render(), 1);
+  useFrame(() => {
+    updateSunView(uniforms, light, camera);
+    pipeline.render();
+  }, 1);
   return null;
 }

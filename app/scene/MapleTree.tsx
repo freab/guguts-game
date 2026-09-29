@@ -161,8 +161,8 @@ function Lantern({
 }
 
 /**
- * The autumn maple in the maze's central clearing: a procedural tree
- * (tree/mapleTree.ts) with a gnarled trunk, a red crown of instanced leaves,
+ * The summer maple in the maze's central clearing: a procedural tree
+ * (tree/mapleTree.ts) with a gnarled trunk, a green crown of instanced leaves,
  * a carpet of fallen leaves, leaves drifting down and a lantern hanging from
  * its long limb. It towers over the walls — a landmark to steer by.
  */

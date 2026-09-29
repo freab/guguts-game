@@ -2,16 +2,30 @@ import * as THREE from "three/webgpu";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { MapleTreeLayout } from "./mapleTree";
 
-/** Autumn maple palette: [colour, weight]. Mostly reds, some orange, a few pale. */
-const PALETTE: [string, number][] = [
-  ["#d8261c", 0.32],
-  ["#f0401f", 0.24],
-  ["#ff6a2a", 0.18],
-  ["#a3161a", 0.14],
-  ["#f3c1b4", 0.07],
-  ["#ffd2a8", 0.05],
-];
-const PALETTE_COLORS = PALETTE.map(([hex]) => new THREE.Color(hex));
+type Palette = { colors: THREE.Color[]; weights: number[] };
+const palette = (entries: [string, number][]): Palette => ({
+  colors: entries.map(([hex]) => new THREE.Color(hex)),
+  weights: entries.map(([, w]) => w),
+});
+
+/** Summer maple crown: [colour, weight]. Deep to fresh greens, a little yellow-green. */
+const CROWN = palette([
+  ["#3f7a2a", 0.28],
+  ["#4f8f33", 0.24],
+  ["#2f6423", 0.18],
+  ["#6aa33e", 0.15],
+  ["#86b84a", 0.1],
+  ["#a8c25a", 0.05],
+]);
+
+/** Leaf litter under it: dry ochres and browns, some still green. */
+const LITTER = palette([
+  ["#8a6a2c", 0.3],
+  ["#6e4f24", 0.25],
+  ["#a8843a", 0.15],
+  ["#5a7a2c", 0.2],
+  ["#4a3a22", 0.1],
+]);
 
 function mulberry32(seed: number) {
   let a = seed | 0;
@@ -23,13 +37,13 @@ function mulberry32(seed: number) {
   };
 }
 
-function pickColor(rng: () => number, out: THREE.Color): THREE.Color {
+function pickColor(rng: () => number, out: THREE.Color, from: Palette = CROWN): THREE.Color {
   let u = rng();
-  for (let i = 0; i < PALETTE.length; i++) {
-    u -= PALETTE[i][1];
-    if (u <= 0) return out.copy(PALETTE_COLORS[i]);
+  for (let i = 0; i < from.colors.length; i++) {
+    u -= from.weights[i];
+    if (u <= 0) return out.copy(from.colors[i]);
   }
-  return out.copy(PALETTE_COLORS[0]);
+  return out.copy(from.colors[0]);
 }
 
 /**
@@ -233,9 +247,8 @@ export function fallenLeaves(tree: MapleTreeLayout, seed: number, count: number)
     dummy.scale.setScalar((0.2 + rng() * 0.1) * s);
     dummy.updateMatrix();
     dummy.matrix.toArray(matrices, n * 16);
-    // Fallen leaves are duller and browner.
-    pickColor(rng, color).multiplyScalar(0.62 + rng() * 0.25);
-    if (rng() < 0.18) color.set("#7a2a18");
+    // Dry litter, varied in brightness.
+    pickColor(rng, color, LITTER).multiplyScalar(0.7 + rng() * 0.3);
     color.toArray(colors, n * 3);
     n++;
   }

@@ -32,6 +32,25 @@ const PROBE_CUBE_SIZE = 32;
 /** Resolution (per face) of the baked sky background. */
 const BACKGROUND_CUBE_SIZE = 768;
 
+/** Band-0 SH basis constant: a uniform radiance L has coefficient 0 = L / Y00. */
+const SH_Y00 = 0.282095;
+
+/**
+ * Rescale a baked sky probe to an average radiance of 1 (keeping its colour
+ * and its sky-above / ground-below gradient). The sky shader's raw output is
+ * far brighter than the rest of the scene's lighting (it is meant to be tone
+ * mapped as a backdrop), so an unnormalised probe at "intensity 0.6" still
+ * flooded every surface with directionless light: walls clipped flat white and
+ * bloom smeared the white over everything. Normalised, the probe's intensity
+ * is simply "how much sky fill", on the same scale as the other lights.
+ */
+function normalizeProbe(sh: THREE.SphericalHarmonics3): void {
+  const c = sh.coefficients[0];
+  const luminance = (0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z) * SH_Y00;
+  if (luminance <= 1e-6) return;
+  sh.scale(1 / luminance);
+}
+
 /**
  * Owns the visible sky and the ambient "sky light" derived from it.
  *
@@ -42,8 +61,9 @@ const BACKGROUND_CUBE_SIZE = 768;
  *
  * The environment is a LightProbe: a second SkyMesh (sun disc hidden — the sun
  * is already a directional light) is rendered into a small cube and reduced to
- * spherical harmonics. Unlike an environment map, a probe lights Lambert
- * materials too, so every surface picks up sky-coloured ambient light.
+ * spherical harmonics (normalised — see normalizeProbe). Unlike an environment
+ * map, a probe lights Lambert materials too, so every surface picks up
+ * sky-coloured ambient light.
  *
  * Baked background: a third SkyMesh is rendered once into a cube texture used
  * as `scene.background`, so the per-pixel sky + cloud shader doesn't run every
@@ -121,6 +141,7 @@ export class SkyController {
     }
     if (this.disposed || id !== this.bakeId) return false;
     this.probe.sh.copy(baked.sh);
+    normalizeProbe(this.probe.sh);
     return true;
   }
 

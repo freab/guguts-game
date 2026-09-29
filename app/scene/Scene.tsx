@@ -93,10 +93,12 @@ function bakeShadows(light: THREE.DirectionalLight, direction: THREE.Vector3) {
 function SunLight({
   direction,
   intensity,
+  color,
   onLight,
 }: {
   direction: THREE.Vector3;
   intensity: number;
+  color: string;
   /** Receives the light object (the godrays pass needs it). */
   onLight: (light: THREE.DirectionalLight | null) => void;
 }) {
@@ -115,7 +117,7 @@ function SunLight({
     <directionalLight
       ref={setLight}
       intensity={intensity}
-      color="#fff4e0"
+      color={color}
       castShadow
       shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
       shadow-bias={-0.0004}
@@ -211,11 +213,26 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
 export default function Scene({ view }: { view: ViewMode }) {
 
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
-  // Defaults reproduce the original look (sun at [40, 32, 40], ACES @ 1).
+  //
+  // Look: a clear summer evening. A cloudless blue sky and a low (18°) golden
+  // sun — any lower and the whole sky turns peach — setting behind the maple as seen from the start corner (azimuth 45°), so
+  // the crown is backlit and the god rays rake through it and down the
+  // corridors; the shadow sides get a cool blue fill from the sky (hemisphere +
+  // the sky-light probe). Keep the directionless fill (ambient +
+  // hemisphere + sky light) well under the sun, or the walls lose their
+  // lit/shadow contrast and flatten to white.
+  //
+  // Editing a number here changes nothing in a page that is already open — leva
+  // keeps each control's current value. Bump DEFAULTS_VERSION in
+  // hooks/useDefaultsVersion.ts when one of these defaults changes.
   const {
     ambient,
+    ambientColor,
     directional,
+    sunColor,
     hemisphere,
+    skyFill,
+    groundFill,
     elevation,
     azimuth,
     turbidity,
@@ -226,6 +243,7 @@ export default function Scene({ view }: { view: ViewMode }) {
     cloudDensity,
     skyBrightness,
     haze,
+    hazeColor,
     liveClouds,
     bakedShadow,
     bakedAO,
@@ -236,25 +254,30 @@ export default function Scene({ view }: { view: ViewMode }) {
   } = useControls({
     Lighting: folder(
       {
-        ambient: { value: 1.55, min: 0, max: 3, step: 0.05 },
-        directional: { value: 3.3, min: 0, max: 5, step: 0.05 },
-        hemisphere: { value: 1.45, min: 0, max: 3, step: 0.05 },
+        ambient: { value: 0.2, min: 0, max: 3, step: 0.05 },
+        ambientColor: { value: "#ffd2a6", label: "ambient colour" },
+        directional: { value: 3.2, min: 0, max: 6, step: 0.05, label: "sun" },
+        sunColor: { value: "#ffc27a", label: "sun colour" },
+        hemisphere: { value: 0.8, min: 0, max: 3, step: 0.05 },
+        skyFill: { value: "#8d9fd8", label: "sky fill" },
+        groundFill: { value: "#7a5434", label: "ground fill" },
       },
       { collapsed: true }
     ),
     "Sun & Sky": folder(
       {
-        elevation: { value: 24.5, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
-        azimuth: { value: 68, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
-        turbidity: { value: 1, min: 1, max: 20, step: 0.1, label: "Turbidity" },
+        elevation: { value: 18, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
+        azimuth: { value: 45, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
+        turbidity: { value: 1.8, min: 1, max: 20, step: 0.1, label: "Turbidity" },
         rayleigh: { value: 1.2, min: 0, max: 4, step: 0.05, label: "Rayleigh" },
-        mieCoefficient: { value: 0, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
-        mieDirectionalG: { value: 0.83, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
-        clouds: { value: 0.35, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
-        cloudDensity: { value: 0.5, min: 0, max: 1, step: 0.01, label: "Cloud density" },
-        skyBrightness: { value: 0.5, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
-        haze: { value: 0.01, min: 0, max: 0.03, step: 0.001, label: "Haze" },
-        liveClouds: { value: true, label: "Live clouds (costly)" },
+        mieCoefficient: { value: 0.002, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
+        mieDirectionalG: { value: 0.8, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
+        clouds: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
+        cloudDensity: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud density" },
+        skyBrightness: { value: 0.55, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
+        haze: { value: 0.003, min: 0, max: 0.03, step: 0.001, label: "Haze" },
+        hazeColor: { value: "#cfdcef", label: "Haze colour" },
+        liveClouds: { value: false, label: "Live clouds (costly)" },
       },
       { collapsed: true }
     ),
@@ -268,18 +291,18 @@ export default function Scene({ view }: { view: ViewMode }) {
     Environment: folder(
       {
         skyLight: { value: true, label: "Sky light" },
-        skyLightIntensity: { value: 3, min: 0, max: 3, step: 0.05, label: "Intensity" },
+        skyLightIntensity: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Intensity" },
       },
       { collapsed: true }
     ),
     "Tone mapping": folder(
       {
         toneMapping: {
-          value: "Neutral" as ToneMappingName,
+          value: "ACES" as ToneMappingName,
           options: Object.keys(TONE_MAPPINGS) as ToneMappingName[],
           label: "Operator",
         },
-        exposure: { value: 0.48, min: 0.1, max: 3, step: 0.01, label: "Exposure" },
+        exposure: { value: 1, min: 0.1, max: 3, step: 0.01, label: "Exposure" },
       },
       { collapsed: true }
     ),
@@ -303,7 +326,7 @@ export default function Scene({ view }: { view: ViewMode }) {
         // Density is per 100 m of lit air; our rays cross ~10–30 m, so it needs
         // to be high to show. Falloff dims rays far from the light (node default 2).
         raysDensity: { value: 6, min: 0, max: 20, step: 0.1, label: "Rays density" },
-        raysMaxDensity: { value: 0.55, min: 0, max: 1, step: 0.01, label: "Rays max" },
+        raysMaxDensity: { value: 0.4, min: 0, max: 1, step: 0.01, label: "Rays max" },
         raysFalloff: { value: 0.5, min: 0, max: 3, step: 0.05, label: "Rays falloff" },
         raysSteps: { value: 60, min: 8, max: 120, step: 1, label: "Rays steps" },
         raysResolution: {
@@ -311,13 +334,14 @@ export default function Scene({ view }: { view: ViewMode }) {
           options: { Quarter: 0.25, Half: 0.5, Full: 1 },
           label: "Rays resolution",
         },
-        raysColor: { value: "#ffe2a8", label: "Rays colour" },
+        raysColor: { value: "#ffcf8a", label: "Rays colour" },
+        raysAway: { value: 0.12, min: 0, max: 1, step: 0.01, label: "Rays away from sun" },
         bloom: { value: true, label: "Bloom" },
-        bloomStrength: { value: 0.3, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
+        bloomStrength: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
         bloomRadius: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Bloom radius" },
         bloomThreshold: { value: 0.9, min: 0, max: 2, step: 0.01, label: "Bloom threshold" },
         vignette: { value: true, label: "Vignette" },
-        vignetteStrength: { value: 0.35, min: 0, max: 1, step: 0.05, label: "Vignette strength" },
+        vignetteStrength: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Vignette strength" },
       },
       { collapsed: true }
     ),
@@ -341,6 +365,7 @@ export default function Scene({ view }: { view: ViewMode }) {
       raysFalloff: post.raysFalloff,
       raysSteps: post.raysSteps,
       raysColor: post.raysColor,
+      raysAway: post.raysAway,
       vignetteStrength: post.vignetteStrength,
     }),
     [
@@ -352,6 +377,7 @@ export default function Scene({ view }: { view: ViewMode }) {
       post.raysFalloff,
       post.raysSteps,
       post.raysColor,
+      post.raysAway,
       post.vignetteStrength,
     ]
   );
@@ -446,11 +472,11 @@ export default function Scene({ view }: { view: ViewMode }) {
           skyLight={skyLight ? skyLightIntensity : 0}
           liveClouds={liveClouds}
         />
-        {haze > 0 && <fogExp2 attach="fog" args={["#c3d3e3", haze]} />}
+        {haze > 0 && <fogExp2 attach="fog" args={[hazeColor, haze]} />}
 
-        <ambientLight intensity={ambient} />
-        <hemisphereLight args={["#bcd4ff", "#5a5442", hemisphere]} />
-        <SunLight direction={sunDirection} intensity={directional} onLight={setSun} />
+        <ambientLight intensity={ambient} color={ambientColor} />
+        <hemisphereLight args={[skyFill, groundFill, hemisphere]} />
+        <SunLight direction={sunDirection} intensity={directional} color={sunColor} onLight={setSun} />
         <LightmapBaker sunDirection={sunDirection} />
 
         <InfiniteGrid />

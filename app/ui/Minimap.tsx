@@ -56,7 +56,7 @@ export default function Minimap() {
     const tree = mapleTreeLayout();
     const px = (x: number) => (x / CELL + (COLS - 1) / 2 + 0.5) * cw;
     const py = (z: number) => (z / CELL + (ROWS - 1) / 2 + 0.5) * ch;
-    ctx.fillStyle = "rgba(226, 64, 40, 0.35)";
+    ctx.fillStyle = "rgba(90, 160, 60, 0.4)";
     ctx.beginPath();
     ctx.arc(px(tree.canopyCenter.x), py(tree.canopyCenter.z), (tree.canopySpread * cw) / CELL, 0, Math.PI * 2);
     ctx.fill();

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Stats } from "@react-three/drei";
 import { Leva, useControls, button, folder } from "leva";
 import type { ViewMode } from "../character/CameraRig";
+import { useDefaultsVersion } from "../hooks/useDefaultsVersion";
+import { useHashRoute } from "../hooks/useHashRoute";
 import { LEVELS, type Level, type LevelId } from "../maze/levels";
 import { regenerateMaze, setMazeConfig } from "../maze/mazeData";
 import LoadingOverlay from "../ui/LoadingOverlay";
@@ -34,12 +36,21 @@ const Scene = dynamic(() => import("./Scene"), {
 });
 
 export default function SceneClient() {
+  // leva only ever applies a default value on a fresh load, so a page that has
+  // been open across an edit keeps rendering the old ones (see the hook): this
+  // reloads it once, here on the title screen rather than mid-bake.
+  useDefaultsVersion();
+
   // Bumping runId remounts the scene (fresh maze / new dimensions).
   const [runId, setRunId] = useState(0);
   const [view, setView] = useState<ViewMode>("first");
   // null = on the title screen, choosing a level (no scene mounted).
   const [level, setLevel] = useState<LevelId | null>(null);
   const ready = useLoading().stage === "ready" && level !== null;
+  // The game shows no UI over the view. The dev/debug UI — leva controls,
+  // minimap, FPS meter, view / maze buttons and the key hints — lives on the
+  // `/#debug` route (toggles live when the hash changes).
+  const debug = useHashRoute("debug");
 
   // Fetch the scene's code and models while the player reads the story, so
   // picking a level starts loading from a warm cache.
@@ -104,56 +115,60 @@ export default function SceneClient() {
 
   return (
     <div className="relative h-full w-full">
-      {/* Leva control panel (collapsed by default, top-right). */}
-      {/* Hidden while the preloader is up: it shows just the story. */}
-      <Leva collapsed hidden={!ready} titleBar={{ title: "Controls" }} />
+      {/* Leva control panel (collapsed by default, top-right): #debug only,
+          and hidden while the preloader is up (it shows just the story). */}
+      <Leva collapsed hidden={!ready || !debug} titleBar={{ title: "Controls" }} />
 
-      <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
-        <div className="flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                view === v.id ? "bg-white text-black" : "text-zinc-300 hover:bg-white/10"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
+      {debug && (
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+          <div className="flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                  view === v.id ? "bg-white text-black" : "text-zinc-300 hover:bg-white/10"
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setLevel(null)}
+            className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
+          >
+            {LEVELS.find((l) => l.id === level)?.label ?? "Level"} · Change
+          </button>
+          <button
+            onClick={restart}
+            className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
+          >
+            New maze
+          </button>
         </div>
-        <button
-          onClick={() => setLevel(null)}
-          className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
-        >
-          {LEVELS.find((l) => l.id === level)?.label ?? "Level"} · Change
-        </button>
-        <button
-          onClick={restart}
-          className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
-        >
-          New maze
-        </button>
-      </div>
+      )}
 
       {/* Controls hint. */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-zinc-300 backdrop-blur">
-        <div>
-          <b className="text-zinc-100">Click</b> to look around · <b className="text-zinc-100">Esc</b> to release
+      {debug && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-zinc-300 backdrop-blur">
+          <div>
+            <b className="text-zinc-100">Click</b> to look around · <b className="text-zinc-100">Esc</b> to release
+          </div>
+          <div>
+            <b className="text-zinc-100">WASD / Arrows</b> move · <b className="text-zinc-100">Shift</b> run ·{" "}
+            <b className="text-zinc-100">V</b> switch view · <b className="text-zinc-100">Scroll</b> zoom
+          </div>
         </div>
-        <div>
-          <b className="text-zinc-100">WASD / Arrows</b> move · <b className="text-zinc-100">Shift</b> run ·{" "}
-          <b className="text-zinc-100">V</b> switch view · <b className="text-zinc-100">Scroll</b> zoom
-        </div>
-      </div>
+      )}
 
       {/* Perf panel (FPS / ms), under the view buttons, while playing. It lives
           out here rather than in the Canvas so it's reliably removed from
           <body> when the scene unmounts. Draw calls + triangles: Controls → Perf. */}
-      {ready && <Stats className="top-14! left-3!" />}
+      {ready && debug && <Stats className="top-14! left-3!" />}
 
       {/* The game: mounted once a level is picked; remounted on restart / resize. */}
-      {level && minimap && <Minimap key={`minimap-${runId}`} />}
+      {level && debug && minimap && <Minimap key={`minimap-${runId}`} />}
       {level && <Scene key={`scene-${runId}`} view={view} />}
 
       {/* Title screen (story + level chooser), then the preloader: covers
