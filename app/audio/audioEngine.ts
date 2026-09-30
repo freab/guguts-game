@@ -10,7 +10,7 @@
  *   buffers and looped gaplessly on the audio clock, each loudness-matched
  *   (measured RMS) before mixing. The wind breathes: slow gusts in level and
  *   brightness (a moving low-pass) and a drift across the stereo field; the
- *   birds wander gently. It sits well under the footsteps.
+ *   birds wander gently. The footsteps sit just under it.
  * - Footsteps on grass: real recorded steps (public/audio/footsteps.webm, cut
  *   by scripts/build-audio.mjs) — slow steps walking, quick ones running —
  *   never the same one twice in a row, each slightly re-pitched, alternating
@@ -33,10 +33,15 @@ const TRACKS = [
 ];
 /** Level both tracks are matched to before the bus (dBFS RMS). */
 const TRACK_TARGET_DB = -24;
-/** Bus levels (dB): the ambience sits well under the footsteps. */
+/**
+ * Bus levels (dB). The footsteps sit under the birds and wind (≈ -36 dBFS
+ * together): a step is ≈ -39 dBFS while it sounds, audible but in the
+ * background. The reverb send moves with the footsteps, so the echo off the
+ * walls stays in proportion to the step.
+ */
 const AMBIENCE_DB = -13;
-const FOOTSTEPS_DB = -3;
-const REVERB_SEND_DB = -17;
+const FOOTSTEPS_DB = -18;
+const REVERB_SEND_DB = -32;
 const FADE_IN = 4;
 /** Recorded footsteps: the sprite, and where each step is in it ([start, duration] s). */
 const FOOTSTEPS_SRC = "/audio/footsteps.webm";
