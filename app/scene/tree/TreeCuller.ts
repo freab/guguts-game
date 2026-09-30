@@ -27,11 +27,10 @@ const _viewProjection = new THREE.Matrix4();
  *    when walls block every line of sight to the top of its crown. Sight to a
  *    lower point at the same spot is only ever more blocked, so testing the
  *    top is conservative. From most corridors the crown is behind a wall.
- * 2. Frustum — each crown sector is its own instanced mesh with tight bounds,
- *    so three.js skips the sectors outside the view (standing in the clearing
- *    looking up, most of them).
- * 3. Distance LOD — visible sectors draw only a prefix of their (shuffled)
- *    leaves as they get further away; the shader scales those up to match.
+ * 2. Frustum — the crown is one instanced mesh (one draw); three.js skips
+ *    it when out of view.
+ * 3. Distance LOD — per leaf, in the shader (mapleMaterials): fewer, bigger
+ *    leaves further away. The count here is only the readout's estimate.
  * The fallen-leaf carpet is culled on its own at ground level: hidden from
  * nearly everywhere outside the clearing. Both are also culled beyond the
  * scene's view distance (where the fog has swallowed them anyway).
@@ -115,9 +114,10 @@ export class TreeCuller {
       const sphere = mesh.boundingSphere!;
       if (!_frustum.intersectsSphere(sphere)) continue; // three.js skips it too
       const d = Math.max(0, eye.distanceTo(sphere.center) - sphere.radius * 0.5);
-      const count = Math.max(1, Math.ceil(total * leafLodFraction(lod, d)));
-      if (mesh.count !== count) mesh.count = count;
-      s.leavesDrawn += count;
+      if (mesh.count !== total) mesh.count = total;
+      const drawn = Math.max(1, Math.ceil(total * leafLodFraction(lod, d)));
+      mesh.userData.drawnInstances = drawn; // for the #debug triangle readout
+      s.leavesDrawn += drawn;
       s.sectorsDrawn++;
     }
   }

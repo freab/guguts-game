@@ -90,7 +90,7 @@ export default function CharacterModel({
 
   useFrame((_, dt) => rig.update(Math.min(dt, 0.1), motor.speed, walkSpeed, runSpeed));
 
-  return <primitive object={model.root} visible={visible} />;
+  return <primitive object={model.root} name="Player" visible={visible} />;
 }
 
 useGLTF.preload(MODEL_URL);

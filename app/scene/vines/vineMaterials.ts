@@ -1,14 +1,18 @@
 import * as THREE from "three/webgpu";
 import {
   attribute,
+  cameraPosition,
+  clamp,
   dot,
   float,
   floor,
   hash,
-  instanceIndex,
+  inverseSqrt,
+  length,
   mod,
   normalMap,
   positionLocal,
+  select,
   sin,
   texture,
   uniform,
@@ -17,6 +21,7 @@ import {
   vec3,
 } from "three/tsl";
 import { grassAlbedo } from "../grass/grassColors";
+import { LEAF_LOD_MIN, LEAF_LOD_NEAR } from "./VineField";
 import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
 import { IVY_COLS, IVY_ROWS, grassTinted, ivyLook } from "./ivySurface";
 
@@ -36,6 +41,8 @@ export function createVineMaterials(ivy: { map: THREE.Texture; normalMap: THREE.
   const uniforms = {
     time: uniform(0),
     wind: uniform(1),
+    lodNear: uniform(LEAF_LOD_NEAR),
+    lodMin: uniform(LEAF_LOD_MIN),
   };
 
   const cell = attribute<"float">("leafCell", "float");
@@ -45,17 +52,30 @@ export function createVineMaterials(ivy: { map: THREE.Texture; normalMap: THREE.
   const texel = texture(ivy.map, atlasUv);
 
   const leaves = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.38 });
-  leaves.colorNode = grassTinted(texel.rgb, hash(instanceIndex.add(7))).mul(ivyLook.brightness);
+  // Each leaf's fixed random rank (VineField): stable however leaves are packed.
+  const rank = attribute<"float">("leafRank", "float");
+  leaves.colorNode = grassTinted(texel.rgb, hash(rank.mul(9973))).mul(ivyLook.brightness);
   leaves.opacityNode = texel.a;
   leaves.alphaTest = 0.5;
   leaves.normalNode = normalMap(texture(ivy.normalMap, atlasUv));
   // Flutter: the stem end is pinned, the tip (uv.y → 0 at the tip) moves.
   const tipWeight = uv().y.oneMinus();
-  const flutter = sin(uniforms.time.mul(4.3).add(hash(instanceIndex).mul(6.283)))
+  const flutter = sin(uniforms.time.mul(4.3).add(hash(rank.mul(7919)).mul(6.283)))
     .mul(0.006)
     .mul(tipWeight)
     .mul(uniforms.wind);
-  leaves.positionNode = positionLocal.add(vec3(flutter, flutter.mul(0.4), flutter.mul(0.7)));
+  // Distance LOD, per leaf: beyond lodNear only near/distance of the leaves
+  // are drawn (those whose rank is under it; the rest collapse to their stalk
+  // point — no area, never rasterised), each grown about its stalk by
+  // 1/sqrt of that, so the wall stays as covered.
+  const origin = attribute<"vec3">("leafOrigin", "vec3");
+  const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
+  const grown = origin.add(positionLocal.sub(origin).mul(inverseSqrt(keep)));
+  leaves.positionNode = select(
+    rank.greaterThanEqual(keep),
+    origin,
+    grown.add(vec3(flutter, flutter.mul(0.4), flutter.mul(0.7)))
+  );
 
   const stems = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
   const s = pbrSurface(bark, uv());

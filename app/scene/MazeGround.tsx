@@ -56,7 +56,7 @@ export default function MazeGround() {
   }, []);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={center} material={material}>
+    <mesh name="Ground" rotation={[-Math.PI / 2, 0, 0]} position={center} material={material}>
       <planeGeometry args={size} />
     </mesh>
   );

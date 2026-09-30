@@ -1,5 +1,8 @@
 import * as THREE from "three/webgpu";
 import {
+  abs,
+  attribute,
+  cameraPosition,
   dot,
   exp,
   float,
@@ -14,6 +17,7 @@ import {
   uniform,
   uv,
   vec2,
+  select,
   vec3,
   vertexStage,
 } from "three/tsl";
@@ -63,6 +67,11 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     fadeEnd: uniform(18),
     // 0..1: how much the baked lightmap (wall shadows + AO) darkens the grass.
     lightmapMix: uniform(1),
+    // LOD: full detail within lodNear of the camera, medium to lodFar, then
+    // low; lodForced >= 0 pins one LOD.
+    lodNear: uniform(5),
+    lodFar: uniform(10),
+    lodForced: uniform(-1),
   };
 
   // 0 at the blade base, 1 at the tip (the GLB has uv.y = 1 at the base).
@@ -110,10 +119,19 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
   const material = new THREE.MeshLambertNodeMaterial({
     side: THREE.DoubleSide,
   });
-  material.positionNode = vec3(
-    positionLocal.x.add(sway),
-    lifted,
-    positionLocal.z.add(sway)
+  // One draw for all the grass (GrassField): the mesh holds all three LOD
+  // tufts, each vertex tagged with its LOD. Each tuft keeps the LOD for its
+  // distance; the other LODs' vertices collapse onto the tuft's base, so their
+  // triangles have no area and are never rasterised.
+  const origin = attribute<"vec3">("tuftOrigin", "vec3");
+  const distance = length(origin.sub(cameraPosition));
+  const autoLod = select(distance.lessThan(uniforms.lodNear), float(0), select(distance.lessThan(uniforms.lodFar), float(1), float(2)));
+  const wantLod = select(uniforms.lodForced.greaterThanEqual(0), uniforms.lodForced, autoLod);
+  const inLod = abs(attribute<"float">("grassLod", "float").sub(wantLod)).lessThan(0.5);
+  material.positionNode = select(
+    inLod,
+    vec3(positionLocal.x.add(sway), lifted, positionLocal.z.add(sway)),
+    origin
   );
 
   // Colour: base -> tip gradient, tip hue picked by the patch noise.
@@ -150,6 +168,12 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
       uniforms.fadeCenter.value.set(x, z);
       uniforms.fadeStart.value = start;
       uniforms.fadeEnd.value = end;
+    },
+    /** LOD distances (camera to tuft), and a forced LOD (0-2) or -1 for auto. */
+    setLod(near: number, far: number, forced: number) {
+      uniforms.lodNear.value = near;
+      uniforms.lodFar.value = far;
+      uniforms.lodForced.value = forced;
     },
     /** Advance the wind clock (clamped, so a long idle gap doesn't jump). */
     advance(delta: number) {

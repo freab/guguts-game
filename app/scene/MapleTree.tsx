@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { treeSeed } from "../maze/mazeData";
 import { playerStore } from "../character/playerStore";
 import { useDisposable } from "../hooks/useDisposable";
@@ -26,7 +27,7 @@ import {
 const LEAVES_PER_CLUSTER = 320;
 const FALLEN_LEAVES = 2600;
 const FALLING_LEAVES = 70;
-/** Crown sectors (wedges around the trunk), each frustum-culled on its own. */
+/** Crown sectors (wedges around the trunk) the leaves are grown in. */
 const CANOPY_SECTORS = 8;
 
 /** Written every frame, read by the leva monitors. */
@@ -58,19 +59,32 @@ function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleM
   bark.castShadow = true;
   bark.receiveShadow = true;
 
-  // The crown, in sectors. It casts into the (baked) sun shadow map: shade on
-  // the walls and shafts of light through it in the god rays. Each sector's
-  // leaf geometry carries its leaves' centres, for the distance-LOD scale-up.
-  const sectorGeometries: THREE.BufferGeometry[] = [];
-  const sectors: CanopySectorMesh[] = canopySectors(layout, treeSeed, LEAVES_PER_CLUSTER, CANOPY_SECTORS).map(
-    (sector) => {
-      const geometry = leaf.clone();
-      geometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(sector.origins, 3));
-      geometry.setAttribute("leafCell", new THREE.InstancedBufferAttribute(sector.cells, 1));
-      sectorGeometries.push(geometry);
-      return { mesh: instanced(geometry, mats.leaves, sector, true), total: sector.count };
+  // The crown: every leaf in one instanced mesh (one draw); the shader thins
+  // it with distance (mapleMaterials). It casts into the (baked) sun shadow
+  // map: shade on the walls and shafts of light through it in the god rays.
+  // The leaf geometry carries each leaf's stalk point, for the LOD scale-up.
+  const parts = canopySectors(layout, treeSeed, LEAVES_PER_CLUSTER, CANOPY_SECTORS);
+  const join = (pick: (p: (typeof parts)[number]) => Float32Array) => {
+    const out = new Float32Array(parts.reduce((n, p) => n + pick(p).length, 0));
+    let at = 0;
+    for (const p of parts) {
+      out.set(pick(p), at);
+      at += pick(p).length;
     }
-  );
+    return out;
+  };
+  const crownLeaves: LeafInstances = {
+    count: parts.reduce((n, p) => n + p.count, 0),
+    matrices: join((p) => p.matrices),
+    colors: join((p) => p.colors),
+    cells: join((p) => p.cells),
+  };
+  const crownGeometry = leaf.clone();
+  crownGeometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(join((p) => p.origins), 3));
+  crownGeometry.setAttribute("leafCell", new THREE.InstancedBufferAttribute(crownLeaves.cells, 1));
+  const crown = instanced(crownGeometry, mats.leaves, crownLeaves, true);
+  crown.name = "Tree crown";
+  const sectors: CanopySectorMesh[] = [{ mesh: crown, total: crownLeaves.count }];
 
   const area = fallenLeafArea(layout);
   const litter = fallenLeaves(layout, treeSeed, Math.round(FALLEN_LEAVES * layout.scale ** 2));
@@ -97,7 +111,7 @@ function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleM
     culler: new TreeCuller(layout, tree, sectors, ground, area.center, area.radius),
     dispose() {
       leaf.dispose();
-      for (const g of sectorGeometries) g.dispose();
+      crownGeometry.dispose();
       groundGeometry.dispose();
       bark.geometry.dispose();
       fallingGeometry.dispose();
@@ -130,40 +144,45 @@ function Lantern({
     // Ride the limb it hangs from as the tree sways.
     h.position.copy(anchor).add(mats.swayAt(anchor, offset));
   });
-  const chain = 0.55;
+  const frame = useDisposable(() => lanternFrameGeometry(), []);
   return (
     <group ref={hang} position={anchor} scale={scale}>
       <group ref={swing}>
-        <mesh position={[0, -chain / 2, 0]} material={mats.lanternFrame}>
-          <cylinderGeometry args={[0.012, 0.012, chain, 5]} />
+        {/* Chain, roof, corner posts and base: one mesh (one draw). */}
+        <mesh geometry={frame} material={mats.lanternFrame} castShadow />
+        {/* Glowing core */}
+        <mesh position={[0, -LANTERN_CHAIN - 0.22, 0]} material={mats.lanternGlow}>
+          <boxGeometry args={[0.2, 0.3, 0.2]} />
         </mesh>
-        <group position={[0, -chain - 0.22, 0]}>
-          {/* Roof */}
-          <mesh position={[0, 0.22, 0]} rotation={[0, Math.PI / 4, 0]} material={mats.lanternFrame} castShadow>
-            <coneGeometry args={[0.24, 0.14, 4]} />
-          </mesh>
-          {/* Glowing core */}
-          <mesh material={mats.lanternGlow}>
-            <boxGeometry args={[0.2, 0.3, 0.2]} />
-          </mesh>
-          {/* Corner posts + base */}
-          {[
-            [1, 1],
-            [1, -1],
-            [-1, 1],
-            [-1, -1],
-          ].map(([sx, sz]) => (
-            <mesh key={`${sx}${sz}`} position={[sx * 0.11, 0, sz * 0.11]} material={mats.lanternFrame}>
-              <boxGeometry args={[0.03, 0.34, 0.03]} />
-            </mesh>
-          ))}
-          <mesh position={[0, -0.17, 0]} material={mats.lanternFrame}>
-            <boxGeometry args={[0.26, 0.03, 0.26]} />
-          </mesh>
-        </group>
       </group>
     </group>
   );
+}
+
+/** Length of the lantern's chain. */
+const LANTERN_CHAIN = 0.55;
+
+/**
+ * The lantern's frame — chain, roof, four corner posts and base — merged into
+ * one geometry in the swinging group's space (the parts never move apart).
+ */
+function lanternFrameGeometry(): THREE.BufferGeometry {
+  const body = -LANTERN_CHAIN - 0.22; // centre of the lamp body
+  const parts = [
+    new THREE.CylinderGeometry(0.012, 0.012, LANTERN_CHAIN, 5).translate(0, -LANTERN_CHAIN / 2, 0),
+    new THREE.ConeGeometry(0.24, 0.14, 4).rotateY(Math.PI / 4).translate(0, body + 0.22, 0),
+    ...[
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
+    ].map(([sx, sz]) => new THREE.BoxGeometry(0.03, 0.34, 0.03).translate(sx * 0.11, body, sz * 0.11)),
+    new THREE.BoxGeometry(0.26, 0.03, 0.26).translate(0, body - 0.17, 0),
+  ];
+  const merged = mergeGeometries(parts);
+  for (const p of parts) p.dispose();
+  if (!merged) throw new Error("lantern frame: incompatible parts");
+  return merged;
 }
 
 /**
@@ -228,7 +247,7 @@ export default function MapleTree({
 
   if (!show) return null;
   return (
-    <primitive object={built.root}>
+    <primitive object={built.root} name="Tree">
       {/* Inside the tree group, so it hides with the tree. */}
       <primitive object={built.tree}>
         <Lantern anchor={tree.lanternAnchor} scale={tree.scale} mats={mats} />

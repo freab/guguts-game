@@ -13,6 +13,7 @@ import { audio } from "../audio/audioEngine";
 import LoadingOverlay from "../ui/LoadingOverlay";
 import MusicToggle from "../ui/MusicToggle";
 import Minimap from "../ui/Minimap";
+import PerfReadout from "../ui/PerfReadout";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
 const VIEWS: { id: ViewMode; label: string }[] = [
@@ -187,6 +188,7 @@ export default function SceneClient() {
           out here rather than in the Canvas so it's reliably removed from
           <body> when the scene unmounts. Draw calls + triangles: Controls → Perf. */}
       {ready && debug && <Stats className="top-14! left-3!" />}
+      {ready && debug && <PerfReadout className="absolute bottom-3 left-3 z-10" />}
 
       {/* The game: mounted once a level is picked; remounted on restart / resize. */}
       {level && debug && minimap && <Minimap key={`minimap-${runId}`} />}

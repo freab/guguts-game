@@ -1,8 +1,7 @@
 import * as THREE from "three/webgpu";
 import {
+  attribute,
   float,
-  hash,
-  instanceIndex,
   length,
   positionLocal,
   sin,
@@ -50,7 +49,8 @@ export function createFlowerMaterial() {
   // Heads nod on their (hidden) stems: sway grows with height above the
   // ground; each head gets its own phase so a drift doesn't move in lockstep.
   const bend = positionLocal.y.div(uniforms.maxHeight).clamp(0, 1).pow(2);
-  const phase = hash(instanceIndex).mul(6.283).add(uniforms.time.mul(1.7));
+  // (A fixed random phase per head, packed with it — see FlowerField.)
+  const phase = attribute<"float">("headPhase", "float").mul(6.283).add(uniforms.time.mul(1.7));
   const swayX = sin(phase).mul(uniforms.windStrength).mul(bend);
   const swayZ = sin(phase.mul(0.77).add(1.3)).mul(uniforms.windStrength).mul(bend).mul(0.6);
 

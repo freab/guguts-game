@@ -45,6 +45,7 @@ export default function Flowers({
     height,
     drawDistance,
     fadeWidth,
+    fullDetail,
     occlusion,
     windStrength,
     brightness,
@@ -60,6 +61,9 @@ export default function Flowers({
         height: { value: 0.28, min: 0.05, max: 1.2, step: 0.01, label: "Head height (m)" },
         drawDistance: { value: 8, min: 4, max: 80, step: 1, label: "Draw distance" },
         fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
+        // Full petals (536 triangles a head) only this close: further out a head
+        // is a few dozen pixels and the lighter petals look the same.
+        fullDetail: { value: 1, min: 0, max: 8, step: 0.25, label: "Full detail within (m)" },
         occlusion: { value: true, label: "Occlusion culling" },
         windStrength: { value: 0.03, min: 0, max: 0.2, step: 0.005, label: "Wind sway" },
         brightness: { value: 2.2, min: 0.3, max: 3, step: 0.05, label: "Brightness" },
@@ -110,9 +114,9 @@ export default function Flowers({
     const distance = Math.min(drawDistance, maxDistance);
     flowers.setFade(x, z, Math.max(0, distance - fadeWidth), distance);
     flowers.advance(delta);
-    field.updateVisibility(camera, x, z, enabled ? distance : -1, occlusion);
+    field.updateVisibility(camera, x, z, enabled ? distance : -1, occlusion, fullDetail);
     stats.drawn = field.drawn;
   });
 
-  return enabled ? <primitive object={field.group} /> : null;
+  return enabled ? <primitive object={field.group} name="Flowers" /> : null;
 }

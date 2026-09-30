@@ -15,11 +15,12 @@ import { ChunkState } from "../grass/grassMapStore";
 
 /** Hard cap on flower heads, whatever the maze size or density. */
 const MAX_HEADS = 120000;
-/** Auto-LOD bands, as fractions of the draw distance (camera to chunk edge). */
-const LOD_FULL_BAND = 0.25;
+/** Beyond this fraction of the draw distance (camera to head), the star-card LOD. */
 const LOD_MEDIUM_BAND = 0.6;
 /** Chunk side in metres. */
-const CHUNK_SIZE = 6;
+const CHUNK_SIZE = 3;
+/** Re-sort a near chunk's heads into LODs after the camera moves this far (m). */
+const RESPLIT_DISTANCE = 0.15;
 /** Radius a plant's heads spread over, in metres. */
 const PLANT_RADIUS = 0.14;
 
@@ -40,8 +41,14 @@ export interface FlowerFieldOptions {
 }
 
 interface Chunk extends CullableChunk {
-  /** One mesh per LOD, sharing one instance-matrix and colour buffer. */
-  meshes: THREE.InstancedMesh[];
+  /** Every head's matrix, colour, sway phase (0..1) and position (x, y, z). */
+  matrices: Float32Array;
+  colors: Float32Array;
+  phases: Float32Array;
+  positions: Float32Array;
+  count: number;
+  /** The LOD drawn last frame: 0-2 for the whole chunk, -1 split per head. */
+  lod: number;
 }
 
 /* ---------- deterministic rng + value noise (from adey-abeba's Field.jsx) ---------- */
@@ -84,6 +91,12 @@ const smoothstep = (e0: number, e1: number, x: number) => {
  * (domain-warped value noise, as in the adey-abeba field) on the verges inside
  * the maze — off the footpath and clear of the walls. Bucketed into chunks with one
  * instanced mesh per LOD, culled like the grass (distance, frustum, walls).
+ *
+ * LOD is per head, as in open-world foliage: a far chunk draws all its heads
+ * at one LOD, but a chunk near the camera sorts its heads by each head's own
+ * distance, so only the heads right by you get the full petals (a whole chunk
+ * of them was ~80% of the frame's triangles). All drawn heads are packed into
+ * one mesh per LOD, so every flower is three draws.
  */
 export class FlowerField {
   readonly group = new THREE.Group();
@@ -194,52 +207,164 @@ export class FlowerField {
       const iz = Math.floor(bi / nx);
       const center = new THREE.Vector3(minX + (ix + 0.5) * CHUNK_SIZE, height, minZ + (iz + 0.5) * CHUNK_SIZE);
       const sphere = new THREE.Sphere(center.clone(), radius);
-      const instanceMatrix = new THREE.InstancedBufferAttribute(new Float32Array(matrices), 16);
-      const instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(colors), 3);
+      const allMatrices = new Float32Array(matrices);
+      const allColors = new Float32Array(colors);
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = allMatrices[i * 16 + 12];
+        positions[i * 3 + 1] = allMatrices[i * 16 + 13];
+        positions[i * 3 + 2] = allMatrices[i * 16 + 14];
+      }
 
-      const meshes = geometries.map((geometry) => {
-        const mesh = new THREE.InstancedMesh(geometry, material, count);
-        mesh.instanceMatrix = instanceMatrix; // one GPU buffer shared by all LODs
-        mesh.instanceColor = instanceColor;
-        mesh.boundingSphere = sphere;
-        mesh.castShadow = false; // the sun's shadow map is baked without them
-        mesh.visible = false; // updateVisibility() picks one per chunk
-        this.group.add(mesh);
-        return mesh;
+      const phases = new Float32Array(count);
+      for (let i = 0; i < count; i++) phases[i] = rng();
+      this.chunks.push({
+        center,
+        half: CHUNK_SIZE / 2,
+        sphere,
+        lastSeen: -Infinity,
+        matrices: allMatrices,
+        colors: allColors,
+        phases,
+        positions,
+        count,
+        lod: -2,
       });
-      this.chunks.push({ center, half: CHUNK_SIZE / 2, sphere, meshes, lastSeen: -Infinity });
+    });
+
+    // One mesh per LOD (three draws for every flower): the drawn heads are
+    // packed into them each time the picture changes (see pack()).
+    this.meshes = geometries.map((geometry, lod) => {
+      const g = geometry.clone();
+      g.setAttribute("headPhase", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, total)), 1));
+      const mesh = new THREE.InstancedMesh(g, material, Math.max(1, total));
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, total) * 3), 3);
+      mesh.count = 0;
+      mesh.frustumCulled = false; // the chunks are culled before packing
+      mesh.castShadow = false; // the sun's shadow map is baked without them
+      mesh.name = "Flowers";
+      mesh.userData.lod = lod;
+      this.group.add(mesh);
+      return mesh;
     });
   }
 
+  /** The shared per-LOD meshes (full petals, light petals, star card). */
+  private readonly meshes: THREE.InstancedMesh[];
+  /** The camera position the near chunks were last split for. */
+  private readonly packedAt = new THREE.Vector3(Infinity, 0, 0);
+  private readonly drawnChunks: Chunk[] = [];
+  private readonly drawnLods: number[] = [];
+  private packedChunks: Chunk[] = [];
+  private packedLods: number[] = [];
+
   /**
-   * Per-frame culling (see ChunkCuller); drawn chunks pick a LOD by distance.
-   * Pass drawDistance < 0 to hide everything.
+   * Per-frame culling (see ChunkCuller); drawn heads pick a LOD by distance:
+   * full petals within `fullDetail` metres, lighter petals to 60% of the draw
+   * distance, a star card beyond. Pass drawDistance < 0 to hide everything.
    */
   updateVisibility(
     camera: THREE.Camera,
     playerX: number,
     playerZ: number,
     drawDistance: number,
-    occlusion: boolean
+    occlusion: boolean,
+    fullDetail: number
   ) {
     this.culler.begin(camera);
+    camera.getWorldPosition(this.eye);
+    const medium = drawDistance * LOD_MEDIUM_BAND;
+    const full = Math.min(fullDetail, medium);
+    const chunks = this.drawnChunks;
+    const lods = this.drawnLods;
+    chunks.length = 0;
+    lods.length = 0;
     let drawn = 0;
+    let split = false;
     for (const ch of this.chunks) {
-      let lod = -1; // hide every LOD mesh
-      if (this.culler.classify(ch, playerX, playerZ, drawDistance, occlusion) === ChunkState.Drawn) {
-        drawn += ch.meshes[0].count;
-        const dist = this.culler.distanceTo(ch);
-        lod = dist < drawDistance * LOD_FULL_BAND ? 0 : dist < drawDistance * LOD_MEDIUM_BAND ? 1 : 2;
-      }
-      for (let i = 0; i < ch.meshes.length; i++) {
-        const visible = i === lod;
-        if (ch.meshes[i].visible !== visible) ch.meshes[i].visible = visible;
-      }
+      if (this.culler.classify(ch, playerX, playerZ, drawDistance, occlusion) !== ChunkState.Drawn) continue;
+      drawn += ch.count;
+      const dist = this.culler.distanceTo(ch);
+      // Near chunks: every head at its own LOD (-1); far: the whole chunk at one.
+      const lod = dist < full ? -1 : dist < medium ? 1 : 2;
+      if (lod === -1) split = true;
+      chunks.push(ch);
+      lods.push(lod);
     }
     this.drawn = drawn;
+
+    // Repack when the drawn chunks or their LODs change, or (with near chunks
+    // split per head) once the camera has moved enough to re-sort their heads.
+    const changed =
+      chunks.length !== this.packedChunks.length ||
+      chunks.some((ch, i) => ch !== this.packedChunks[i] || lods[i] !== this.packedLods[i]);
+    if (changed || (split && this.packedAt.distanceToSquared(this.eye) > RESPLIT_DISTANCE ** 2)) {
+      this.pack(chunks, lods, full, medium);
+    }
+  }
+
+  private readonly eye = new THREE.Vector3();
+  private readonly lodCounts = [0, 0, 0];
+
+  /**
+   * Copy the drawn chunks' heads into the per-LOD meshes: a whole chunk into
+   * its LOD's mesh, or a near chunk head by head, each by its own distance.
+   */
+  private pack(chunks: Chunk[], lods: number[], full: number, medium: number) {
+    const counts = this.lodCounts;
+    counts.fill(0);
+    const meshes = this.meshes;
+    const { x: ex, y: ey, z: ez } = this.eye;
+    const put = (ch: Chunk, i: number, lod: number) => {
+      const mesh = meshes[lod];
+      const k = counts[lod]++;
+      (mesh.instanceMatrix.array as Float32Array).set(ch.matrices.subarray(i * 16, i * 16 + 16), k * 16);
+      (mesh.instanceColor!.array as Float32Array).set(ch.colors.subarray(i * 3, i * 3 + 3), k * 3);
+      (mesh.geometry.getAttribute("headPhase").array as Float32Array)[k] = ch.phases[i];
+    };
+    chunks.forEach((ch, c) => {
+      const lod = lods[c];
+      if (lod >= 0) {
+        const mesh = meshes[lod];
+        const k = counts[lod];
+        (mesh.instanceMatrix.array as Float32Array).set(ch.matrices, k * 16);
+        (mesh.instanceColor!.array as Float32Array).set(ch.colors, k * 3);
+        (mesh.geometry.getAttribute("headPhase").array as Float32Array).set(ch.phases, k);
+        counts[lod] += ch.count;
+        return;
+      }
+      for (let i = 0; i < ch.count; i++) {
+        const dx = ch.positions[i * 3] - ex;
+        const dy = ch.positions[i * 3 + 1] - ey;
+        const dz = ch.positions[i * 3 + 2] - ez;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        put(ch, i, d < full ? 0 : d < medium ? 1 : 2);
+      }
+    });
+    meshes.forEach((mesh, lod) => {
+      const n = counts[lod];
+      mesh.count = n;
+      mesh.visible = n > 0;
+      if (n === 0) return;
+      for (const attr of [
+        mesh.instanceMatrix,
+        mesh.instanceColor!,
+        mesh.geometry.getAttribute("headPhase") as THREE.InstancedBufferAttribute,
+      ]) {
+        attr.clearUpdateRanges();
+        attr.addUpdateRange(0, n * attr.itemSize);
+        attr.needsUpdate = true;
+      }
+    });
+    this.packedChunks = chunks.slice();
+    this.packedLods = lods.slice();
+    this.packedAt.copy(this.eye);
   }
 
   dispose() {
-    for (const ch of this.chunks) for (const m of ch.meshes) m.dispose();
+    for (const m of this.meshes) {
+      m.geometry.dispose();
+      m.dispose();
+    }
   }
 }

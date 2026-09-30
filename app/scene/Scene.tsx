@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
 import { KeyboardControls } from "@react-three/drei";
-import { useControls, folder, monitor } from "leva";
+import { useControls, folder, monitor, button } from "leva";
 import * as THREE from "three/webgpu";
 import type { ViewMode } from "../character/CameraRig";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
@@ -15,6 +15,8 @@ import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
 import { setLightmapStrength } from "./bake/lightmap";
 import { setLoading } from "./bake/loadingStore";
 import PostEffects from "./post/PostEffects";
+import GpuProfiler from "./perf/GpuProfiler";
+import { requestProfile } from "./perf/perfStore";
 import Flowers from "./Flowers";
 import MapleTree from "./MapleTree";
 import MazeGround from "./MazeGround";
@@ -342,6 +344,8 @@ export default function Scene({ view }: { view: ViewMode }) {
       {
         "Draw calls": monitor(perfCalls, { graph: false, interval: 300 }),
         Triangles: monitor(perfTris, { graph: false, interval: 300 }),
+        // Switches each feature off in turn and times the frame (stand still).
+        "Profile frame": button(() => requestProfile()),
       },
       { collapsed: true }
     ),
@@ -354,6 +358,9 @@ export default function Scene({ view }: { view: ViewMode }) {
     "Post-processing": folder(
       {
         postEnabled: { value: true, label: "Enabled" },
+        // Multisampling of the scene pass (geometric edges; alpha-tested foliage
+        // edges are not smoothed by it).
+        msaa: { value: 4, options: { Off: 0, "2×": 2, "4×": 4 }, label: "MSAA" },
         godrays: { value: true, label: "God rays" },
         // Density is per 100 m of lit air; our rays cross ~10–30 m, so it needs
         // to be high to show. Falloff dims rays far from the light (node default 2).
@@ -385,8 +392,9 @@ export default function Scene({ view }: { view: ViewMode }) {
       godrays: post.godrays,
       vignette: post.vignette,
       raysResolution: post.raysResolution,
+      msaa: post.msaa,
     }),
-    [post.bloom, post.godrays, post.vignette, post.raysResolution]
+    [post.bloom, post.godrays, post.vignette, post.raysResolution, post.msaa]
   );
   const postParams = useMemo(
     () => ({
@@ -487,6 +495,8 @@ export default function Scene({ view }: { view: ViewMode }) {
           antialias: true,
           forceWebGL: false,
           powerPreference: "high-performance",
+          // GPU timer queries, for the #debug frame readout / profiler only.
+          trackTimestamp: window.location.hash === "#debug",
         });
         await renderer.init();
         const backend = renderer.backend as { isWebGPUBackend?: boolean };
@@ -498,6 +508,7 @@ export default function Scene({ view }: { view: ViewMode }) {
       }}
     >
       <PerfProbe />
+      <GpuProfiler />
       <ToneMapping mode={TONE_MAPPINGS[toneMapping]} exposure={exposure} />
 
       {/* One Suspense boundary for the whole world: nothing shows until every

@@ -68,5 +68,5 @@ export default function Vines({
     stats.drawn = `${field.leavesDrawn} / ${field.leavesBuilt} leaves · ${field.chunksDrawn} drawn / ${field.chunksBuilt} built chunks`;
   });
 
-  return show ? <primitive object={field.group} /> : null;
+  return show ? <primitive object={field.group} name="Ivy" /> : null;
 }

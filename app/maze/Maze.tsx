@@ -59,6 +59,7 @@ export default function Maze() {
     <>
       {/* All walls in one instanced draw call. */}
       <instancedMesh
+        name="Walls"
         key={walls.length}
         ref={wallsRef}
         args={[undefined, wallMaterial, walls.length]}

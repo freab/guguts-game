@@ -18,9 +18,9 @@ import { ChunkState, grassMapStore, type GrassChunkInfo } from "./grassMapStore"
 export const LOD_NAMES = ["LOD00", "LOD01", "LOD02"] as const;
 /** Hard cap on tufts, whatever the maze size or density. */
 const MAX_TUFTS = 80000;
-/** Auto-LOD bands, as fractions of the draw distance (camera to chunk edge). */
-const LOD_FULL_BAND = 0.35;
-const LOD_MEDIUM_BAND = 0.7;
+/** Auto-LOD bands, as fractions of the draw distance (camera to tuft). */
+export const LOD_FULL_BAND = 0.35;
+export const LOD_MEDIUM_BAND = 0.7;
 /** Keep blade bases this far from wall faces. */
 const WALL_MARGIN = 0.08;
 /** Occlusion sample height: grass-tip height. */
@@ -38,8 +38,9 @@ export interface GrassFieldOptions {
 }
 
 interface Chunk extends CullableChunk {
-  /** One mesh per LOD, sharing a single instance-matrix buffer; one is visible. */
-  meshes: THREE.InstancedMesh[];
+  /** The chunk's tufts: instance matrices and base positions (x, y, z). */
+  matrices: Float32Array;
+  origins: Float32Array;
   /** Shared with the minimap via grassMapStore. */
   info: GrassChunkInfo;
 }
@@ -63,17 +64,62 @@ export function lodGeometries(scene: THREE.Object3D): THREE.BufferGeometry[] {
 }
 
 /**
+ * The three LOD tufts as one geometry, each vertex tagged with its LOD
+ * (`grassLod`): the shader keeps one LOD per tuft and collapses the others'
+ * vertices to a point, so all the grass is one draw (grassNodeMaterial).
+ */
+function combinedTuft(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const names = ["position", "normal", "uv"] as const;
+  const counts = geometries.map((g) => g.getAttribute("position").count);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const out = new THREE.BufferGeometry();
+  for (const name of names) {
+    const size = geometries[0].getAttribute(name).itemSize;
+    const data = new Float32Array(total * size);
+    let offset = 0;
+    for (const g of geometries) {
+      const a = g.getAttribute(name);
+      for (let v = 0; v < a.count; v++) for (let c = 0; c < size; c++) data[offset++] = a.getComponent(v, c);
+    }
+    out.setAttribute(name, new THREE.BufferAttribute(data, size));
+  }
+  // Indices (kept indexed, so shared vertices are still shaded once each).
+  const indexCount = geometries.reduce((n, g, k) => n + (g.index ? g.index.count : counts[k]), 0);
+  const index = new Uint32Array(indexCount);
+  let at = 0;
+  let base = 0;
+  geometries.forEach((g, k) => {
+    if (g.index) for (let t = 0; t < g.index.count; t++) index[at++] = base + g.index.getX(t);
+    else for (let t = 0; t < counts[k]; t++) index[at++] = base + t;
+    base += counts[k];
+  });
+  out.setIndex(new THREE.BufferAttribute(index, 1));
+  const lod = new Float32Array(total);
+  let v = 0;
+  counts.forEach((c, level) => lod.fill(level, v, (v += c)));
+  out.setAttribute("grassLod", new THREE.BufferAttribute(lod, 1));
+  return out;
+}
+
+/**
  * The grass inside the maze: tufts scattered over the interior (between the
  * border walls' inner faces), never on a wall slab, and worn down along a
  * footpath down the middle of every corridor — shorter, smaller and sparser the
- * closer they are to the centreline. Tufts are bucketed into square chunks, each
- * its own instanced mesh with a tight bounding sphere, so off-screen chunks are
- * frustum-culled and each chunk picks its own LOD.
+ * closer they are to the centreline. Tufts are bucketed into square chunks,
+ * culled per chunk (distance, frustum, walls); the drawn chunks' tufts are
+ * packed into one instanced mesh, so all the grass is a single draw, and each
+ * tuft picks its own LOD in the shader.
  */
 export class GrassField {
   readonly group = new THREE.Group();
   private readonly chunks: Chunk[] = [];
   private readonly culler = new ChunkCuller(OCCLUSION_SAMPLE_Y);
+  /** All drawn grass: the visible chunks' tufts, packed. */
+  private readonly mesh: THREE.InstancedMesh;
+  private readonly tuft: THREE.BufferGeometry;
+  /** The chunks packed into the mesh last time (repack only when it changes). */
+  private packed: Chunk[] = [];
+  private readonly drawn: Chunk[] = [];
 
   constructor(
     geometries: THREE.BufferGeometry[],
@@ -167,18 +213,14 @@ export class GrassField {
         0.4,
         minZ + (iz + 0.5) * chunkSize
       );
-      const matrices = new THREE.InstancedBufferAttribute(new Float32Array(data), 16);
+      const matrices = new Float32Array(data);
+      const origins = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        origins[i * 3] = matrices[i * 16 + 12];
+        origins[i * 3 + 1] = matrices[i * 16 + 13];
+        origins[i * 3 + 2] = matrices[i * 16 + 14];
+      }
       const sphere = new THREE.Sphere(center.clone(), radius);
-
-      const meshes = geometries.map((geometry) => {
-        const mesh = new THREE.InstancedMesh(geometry, material, count);
-        mesh.instanceMatrix = matrices; // one GPU buffer shared by all LODs
-        mesh.boundingSphere = sphere;
-        mesh.castShadow = false; // grass never needs to cast
-        mesh.visible = false; // updateVisibility() picks one per chunk
-        this.group.add(mesh);
-        return mesh;
-      });
       const info: GrassChunkInfo = {
         x: center.x,
         z: center.z,
@@ -186,8 +228,24 @@ export class GrassField {
         tufts: count,
         state: ChunkState.OutOfRange,
       };
-      this.chunks.push({ center, half: chunkSize / 2, sphere, meshes, info, lastSeen: -Infinity });
+      this.chunks.push({ center, half: chunkSize / 2, sphere, matrices, origins, info, lastSeen: -Infinity });
     });
+
+    // One mesh for all of it, sized for every tuft; updateVisibility packs the
+    // drawn chunks into it. The chunks are culled here, so three mustn't.
+    const total = this.chunks.reduce((n, ch) => n + ch.info.tufts, 0);
+    this.tuft = combinedTuft(geometries);
+    this.tuft.setAttribute("tuftOrigin", new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3));
+    this.mesh = new THREE.InstancedMesh(this.tuft, material, total);
+    this.mesh.count = 0;
+    this.mesh.frustumCulled = false;
+    this.mesh.castShadow = false; // grass never needs to cast
+    this.mesh.name = "Grass";
+    // For the #debug readout: triangles a tuft actually rasterises (at most
+    // the full-detail LOD — the other LODs' collapse to nothing).
+    const lod0 = geometries[0];
+    this.mesh.userData.trianglesPerInstance = (lod0.index ? lod0.index.count : lod0.getAttribute("position").count) / 3;
+    this.group.add(this.mesh);
 
     grassMapStore.chunks = this.chunks.map((ch) => ch.info);
     grassMapStore.totalTufts = this.chunks.reduce((n, ch) => n + ch.info.tufts, 0);
@@ -195,51 +253,65 @@ export class GrassField {
 
   /**
    * Per-frame culling (distance, frustum, then wall occlusion when `occlusion`
-   * is on — see ChunkCuller); each chunk ends up drawn (one LOD mesh visible)
-   * or culled (all hidden). The shader fades blades out before the draw
-   * distance, so switching a chunk off there is invisible.
-   * Drawn chunks pick a LOD: forced (0-2), or -1 for bands relative to the draw
-   * distance. Pass drawDistance < 0 to hide everything (grass disabled).
-   * Each chunk's result is published to grassMapStore for the minimap.
+   * is on — see ChunkCuller); the drawn chunks' tufts are packed into the one
+   * grass mesh (only when the set changes). The shader fades blades out before
+   * the draw distance, so dropping a chunk there is invisible, and picks each
+   * tuft's LOD (grassNodeMaterial). Pass drawDistance < 0 to hide everything
+   * (grass disabled). Each chunk's result is published to grassMapStore for
+   * the minimap.
    */
   updateVisibility(
     camera: THREE.Camera,
     playerX: number,
     playerZ: number,
     drawDistance: number,
-    forced: number,
     occlusion: boolean
   ) {
     this.culler.begin(camera);
 
-    let drawnChunks = 0;
+    const drawn = this.drawn;
+    drawn.length = 0;
     let drawnTufts = 0;
     for (const ch of this.chunks) {
       const state = this.culler.classify(ch, playerX, playerZ, drawDistance, occlusion);
       ch.info.state = state;
-
-      let lod = -2; // hide every LOD mesh
       if (state === ChunkState.Drawn) {
-        drawnChunks++;
+        drawn.push(ch);
         drawnTufts += ch.info.tufts;
-        lod = forced;
-        if (lod === -1) {
-          const dist = this.culler.distanceTo(ch);
-          lod = dist < drawDistance * LOD_FULL_BAND ? 0 : dist < drawDistance * LOD_MEDIUM_BAND ? 1 : 2;
-        }
-      }
-      for (let i = 0; i < ch.meshes.length; i++) {
-        const visible = i === lod;
-        if (ch.meshes[i].visible !== visible) ch.meshes[i].visible = visible;
       }
     }
+    if (drawn.length !== this.packed.length || drawn.some((ch, i) => ch !== this.packed[i])) this.pack(drawn);
+
     grassMapStore.drawDistance = Math.max(0, drawDistance);
-    grassMapStore.drawnChunks = drawnChunks;
+    grassMapStore.drawnChunks = drawn.length;
     grassMapStore.drawnTufts = drawnTufts;
   }
 
+  /** Copy these chunks' tufts, back to back, into the grass mesh. */
+  private pack(chunks: Chunk[]) {
+    const matrices = this.mesh.instanceMatrix;
+    const origins = this.tuft.getAttribute("tuftOrigin") as THREE.InstancedBufferAttribute;
+    let n = 0;
+    for (const ch of chunks) {
+      (matrices.array as Float32Array).set(ch.matrices, n * 16);
+      (origins.array as Float32Array).set(ch.origins, n * 3);
+      n += ch.info.tufts;
+    }
+    this.mesh.count = n;
+    for (const [attr, size] of [
+      [matrices, 16],
+      [origins, 3],
+    ] as const) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, Math.max(1, n) * size);
+      attr.needsUpdate = true;
+    }
+    this.packed = chunks.slice();
+  }
+
   dispose() {
-    for (const ch of this.chunks) for (const m of ch.meshes) m.dispose();
+    this.mesh.dispose();
+    this.tuft.dispose();
     if (grassMapStore.chunks[0] === this.chunks[0]?.info) {
       grassMapStore.chunks = [];
       grassMapStore.totalTufts = 0;

@@ -6,7 +6,7 @@ import { useControls, folder } from "leva";
 import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createGrassMaterial } from "./grass/grassNodeMaterial";
-import { GrassField, lodGeometries } from "./grass/GrassField";
+import { GrassField, LOD_FULL_BAND, LOD_MEDIUM_BAND, lodGeometries } from "./grass/GrassField";
 import { playerStore } from "../character/playerStore";
 import { useDisposable } from "../hooks/useDisposable";
 
@@ -122,7 +122,8 @@ export default function Grass({
   useFrame(({ camera }) => {
     const { x, z } = playerStore;
     grass.setFade(x, z, Math.max(0, drawDistance - fadeWidth), drawDistance);
-    field.updateVisibility(camera, x, z, enabled ? drawDistance : -1, forcedLod, occlusion);
+    grass.setLod(drawDistance * LOD_FULL_BAND, drawDistance * LOD_MEDIUM_BAND, forcedLod);
+    field.updateVisibility(camera, x, z, enabled ? drawDistance : -1, occlusion);
   });
 
   // Wind clock. The canvas renders on demand, so while wind is on we request
@@ -138,5 +139,5 @@ export default function Grass({
     return () => throttle.cancel();
   }, [enabled, wind, windFps, invalidate, throttle]);
 
-  return enabled ? <primitive object={field.group} /> : null;
+  return enabled ? <primitive object={field.group} name="Grass" /> : null;
 }

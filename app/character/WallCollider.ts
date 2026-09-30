@@ -43,28 +43,29 @@ function pushOut(p: THREE.Vector3, r: number, b: WallBox): boolean {
   return true;
 }
 
+const _range = { tMin: 0, tMax: 0 };
+
 /** Slab-method ray vs wall box (0..WALL_HEIGHT tall). Distance, or Infinity. */
 function rayBox(o: THREE.Vector3, d: THREE.Vector3, b: WallBox, maxDist: number): number {
-  let tMin = 0;
-  let tMax = maxDist;
-  const axes: [number, number, number, number][] = [
-    [o.x, d.x, b.minX, b.maxX],
-    [o.y, d.y, 0, WALL_HEIGHT],
-    [o.z, d.z, b.minZ, b.maxZ],
-  ];
-  for (const [origin, dir, lo, hi] of axes) {
-    if (Math.abs(dir) < 1e-9) {
-      if (origin < lo || origin > hi) return Infinity;
-      continue;
-    }
-    let t1 = (lo - origin) / dir;
-    let t2 = (hi - origin) / dir;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tMin = Math.max(tMin, t1);
-    tMax = Math.min(tMax, t2);
-    if (tMin > tMax) return Infinity;
-  }
-  return tMin;
+  // (Allocation-free: this runs for many rays every frame.)
+  const range = _range;
+  range.tMin = 0;
+  range.tMax = maxDist;
+  if (!slab(o.x, d.x, b.minX, b.maxX, range)) return Infinity;
+  if (!slab(o.y, d.y, 0, WALL_HEIGHT, range)) return Infinity;
+  if (!slab(o.z, d.z, b.minZ, b.maxZ, range)) return Infinity;
+  return range.tMin;
+}
+
+/** Clip the ray's [tMin, tMax] to one axis' slab; false if it misses. */
+function slab(origin: number, dir: number, lo: number, hi: number, range: { tMin: number; tMax: number }) {
+  if (Math.abs(dir) < 1e-9) return origin >= lo && origin <= hi;
+  let t1 = (lo - origin) / dir;
+  let t2 = (hi - origin) / dir;
+  if (t1 > t2) [t1, t2] = [t2, t1];
+  range.tMin = Math.max(range.tMin, t1);
+  range.tMax = Math.min(range.tMax, t2);
+  return range.tMin <= range.tMax;
 }
 
 /**

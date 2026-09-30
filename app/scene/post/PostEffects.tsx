@@ -22,8 +22,8 @@ import {
 import { bilateralBlur } from "three/examples/jsm/tsl/display/BilateralBlurNode.js";
 import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import { depthAwareBlend } from "three/examples/jsm/tsl/display/depthAwareBlend.js";
-import { godrays } from "three/examples/jsm/tsl/display/GodraysNode.js";
-import type GodraysNode from "three/examples/jsm/tsl/display/GodraysNode.js";
+import { godrays } from "./godrays/GodraysNode.js";
+import type GodraysNode from "./godrays/GodraysNode.js";
 import { useDisposable } from "../../hooks/useDisposable";
 
 /** Structural options — changing these rebuilds the effect graph. */
@@ -33,6 +33,8 @@ export interface PostToggles {
   vignette: boolean;
   /** Godrays render-target scale (0.25 / 0.5 / 1). */
   raysResolution: number;
+  /** MSAA samples of the scene pass (0 = off). */
+  msaa: number;
 }
 
 /** Live-tunable parameters (uniforms only). */
@@ -90,7 +92,7 @@ function buildGraph(
   t: PostToggles,
   u: PostUniforms
 ) {
-  const scenePass = pass(scene, camera);
+  const scenePass = pass(scene, camera, { samples: t.msaa });
   const color = scenePass.getTextureNode("output");
   const depth = scenePass.getTextureNode("depth");
   const disposables: { dispose(): void }[] = [scenePass];
@@ -184,11 +186,11 @@ export default function PostEffects({
   );
 
   const uniforms = useMemo(() => createUniforms(), []);
-  const { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution } = toggles;
+  const { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa } = toggles;
   const graph = useDisposable(
     () =>
-      buildGraph(scene, camera, light, { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution }, uniforms),
-    [scene, camera, light, bloomOn, raysOn, vignetteOn, raysResolution, uniforms]
+      buildGraph(scene, camera, light, { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa }, uniforms),
+    [scene, camera, light, bloomOn, raysOn, vignetteOn, raysResolution, msaa, uniforms]
   );
   useEffect(() => {
     setPipelineOutput(pipeline, graph.output);

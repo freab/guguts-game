@@ -29,6 +29,7 @@ import {
   vec2,
   vec3,
   vertexColor,
+  select,
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
 import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
@@ -53,9 +54,10 @@ export interface MapleLook {
 }
 
 /**
- * Canopy distance LOD: at distance d only `clamp(near / d, min, 1)` of each
- * sector's leaves are drawn (TreeCuller sets the instance count); the shader
- * scales the survivors up by 1/sqrt of that so the crown stays just as full.
+ * Canopy distance LOD: at distance d only `clamp(near / d, min, 1)` of the
+ * leaves there are drawn — the shader drops each leaf whose random rank is
+ * above that (collapsing it to a point, so the whole crown stays one draw)
+ * and scales the survivors up by 1/sqrt of it so the crown stays just as full.
  */
 export interface LeafLod {
   near: number;
@@ -142,10 +144,12 @@ export function createMapleMaterials(
   const leaves = new THREE.MeshStandardNodeMaterial({ side: THREE.DoubleSide, metalness: 0, roughness: 0.6 });
   // Each leaf's origin is where it hangs off its twig.
   const origin = attribute<"vec3">("leafOrigin", "vec3");
-  // Distance LOD: fewer, bigger leaves further away (grown about each leaf's
-  // stalk). Per leaf here, per sector on the CPU — close enough.
+  // Distance LOD, per leaf: fewer, bigger leaves further away. A leaf is
+  // drawn while its random rank is under the kept fraction (else collapsed to
+  // its stalk: no area, never rasterised), grown about its stalk to make up.
   const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
   const grow = mix(float(1), inverseSqrt(keep), uniforms.lodEnabled);
+  const dropped = hash(instanceIndex.add(7919)).greaterThanEqual(keep).and(uniforms.lodEnabled.greaterThan(0.5));
   const leafPos = origin.add(positionLocal.sub(origin).mul(grow));
   // Carried with its branch (the sway at the leaf), plus a very slow, faint
   // drift of its own that grows out from its centre.
@@ -153,7 +157,11 @@ export function createMapleMaterials(
     .mul(length(leafPos.sub(origin)))
     .mul(0.08)
     .mul(uniforms.wind);
-  leaves.positionNode = leafPos.add(sway(origin)).add(vec3(flutter.mul(0.3), flutter, flutter.mul(0.3)));
+  leaves.positionNode = select(
+    dropped,
+    origin,
+    leafPos.add(sway(origin)).add(vec3(flutter.mul(0.3), flutter, flutter.mul(0.3)))
+  );
   leaves.colorNode = leafTexel.rgb.mul(uniforms.leafBrightness);
   leaves.opacityNode = leafTexel.a;
   leaves.alphaTest = 0.5;
