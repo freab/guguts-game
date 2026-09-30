@@ -237,13 +237,12 @@ export default function Scene({ view }: { view: ViewMode }) {
 
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   //
-  // Look: a clear summer evening. A cloudless blue sky and a low (18°) golden
-  // sun — any lower and the whole sky turns peach — setting behind the maple as seen from the start corner (azimuth 45°), so
-  // the crown is backlit and the god rays rake through it and down the
-  // corridors; the shadow sides get a cool blue fill from the sky (hemisphere +
-  // the sky-light probe). Keep the directionless fill (ambient +
-  // hemisphere + sky light) well under the sun, or the walls lose their
-  // lit/shadow contrast and flatten to white.
+  // Look: a summer sunset. A very low (7°) sun behind the maple as seen from
+  // the start corner (azimuth 47°), in a deep blue sky (Rayleigh 4, no Mie
+  // haze) with soft clouds, so the crown is backlit and strong, warm-brown god
+  // rays rake through it and down the corridors, even looking away from the
+  // sun. Cineon tone mapping, and only a faint sky-light fill (0.1), so the
+  // walls keep their lit/shadow contrast rather than flattening to white.
   //
   // Editing a number here changes nothing in a page that is already open — leva
   // keeps each control's current value. Bump DEFAULTS_VERSION in
@@ -290,14 +289,14 @@ export default function Scene({ view }: { view: ViewMode }) {
     ),
     "Sun & Sky": folder(
       {
-        elevation: { value: 18, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
-        azimuth: { value: 45, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
-        turbidity: { value: 1.8, min: 1, max: 20, step: 0.1, label: "Turbidity" },
-        rayleigh: { value: 1.2, min: 0, max: 4, step: 0.05, label: "Rayleigh" },
-        mieCoefficient: { value: 0.002, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
-        mieDirectionalG: { value: 0.8, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
-        clouds: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
-        cloudDensity: { value: 0, min: 0, max: 1, step: 0.01, label: "Cloud density" },
+        elevation: { value: 7, min: 1, max: 89, step: 0.5, label: "Sun elevation°" },
+        azimuth: { value: 47, min: 0, max: 360, step: 1, label: "Sun azimuth°" },
+        turbidity: { value: 3, min: 1, max: 20, step: 0.1, label: "Turbidity" },
+        rayleigh: { value: 4, min: 0, max: 4, step: 0.05, label: "Rayleigh" },
+        mieCoefficient: { value: 0, min: 0, max: 0.1, step: 0.001, label: "Mie coeff." },
+        mieDirectionalG: { value: 0.89, min: 0, max: 0.999, step: 0.01, label: "Mie direct. G" },
+        clouds: { value: 0.49, min: 0, max: 1, step: 0.01, label: "Cloud cover" },
+        cloudDensity: { value: 1, min: 0, max: 1, step: 0.01, label: "Cloud density" },
         skyBrightness: { value: 0.55, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
         liveClouds: { value: false, label: "Live clouds (costly)" },
       },
@@ -313,14 +312,14 @@ export default function Scene({ view }: { view: ViewMode }) {
     Environment: folder(
       {
         skyLight: { value: true, label: "Sky light" },
-        skyLightIntensity: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Intensity" },
+        skyLightIntensity: { value: 0.1, min: 0, max: 2, step: 0.05, label: "Intensity" },
       },
       { collapsed: true }
     ),
     "Tone mapping": folder(
       {
         toneMapping: {
-          value: "ACES" as ToneMappingName,
+          value: "Cineon" as ToneMappingName,
           options: Object.keys(TONE_MAPPINGS) as ToneMappingName[],
           label: "Operator",
         },
@@ -364,7 +363,7 @@ export default function Scene({ view }: { view: ViewMode }) {
         godrays: { value: true, label: "God rays" },
         // Density is per 100 m of lit air; our rays cross ~10–30 m, so it needs
         // to be high to show. Falloff dims rays far from the light (node default 2).
-        raysDensity: { value: 6, min: 0, max: 20, step: 0.1, label: "Rays density" },
+        raysDensity: { value: 13, min: 0, max: 20, step: 0.1, label: "Rays density" },
         raysMaxDensity: { value: 0.4, min: 0, max: 1, step: 0.01, label: "Rays max" },
         raysFalloff: { value: 0.5, min: 0, max: 3, step: 0.05, label: "Rays falloff" },
         // The view distance keeps the rays' march short, so fewer steps do.
@@ -374,8 +373,8 @@ export default function Scene({ view }: { view: ViewMode }) {
           options: { Quarter: 0.25, Half: 0.5, Full: 1 },
           label: "Rays resolution",
         },
-        raysColor: { value: "#ffcf8a", label: "Rays colour" },
-        raysAway: { value: 0.12, min: 0, max: 1, step: 0.01, label: "Rays away from sun" },
+        raysColor: { value: "#896f4a", label: "Rays colour" },
+        raysAway: { value: 0.83, min: 0, max: 1, step: 0.01, label: "Rays away from sun" },
         bloom: { value: true, label: "Bloom" },
         bloomStrength: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
         bloomRadius: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Bloom radius" },
