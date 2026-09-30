@@ -10,10 +10,11 @@ import BlobShadow from "./BlobShadow";
 import CharacterModel from "./CharacterModel";
 import { CameraRig, type ViewMode } from "./CameraRig";
 import { LookInput } from "./LookInput";
-import { PlayerMotor, facingForYaw } from "./PlayerMotor";
+import { PlayerMotor, facingForYaw, type MoveKeys } from "./PlayerMotor";
 import { WallCollider } from "./WallCollider";
 import { MAX_DELTA } from "./config";
 import { writePlayerStore } from "./playerStore";
+import { touchInput } from "./touchInput";
 
 export type Control = "forward" | "backward" | "left" | "right" | "run";
 
@@ -71,6 +72,16 @@ export default function PlayerController({ view }: { view: ViewMode }) {
   }, [look]);
   const rig = useMemo(() => new CameraRig(), []);
   const body = useRef<THREE.Group>(null);
+  /** Keys + touch stick, merged each frame (reused, no per-frame allocation). */
+  const input = useRef<MoveKeys>({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    run: false,
+    stickX: 0,
+    stickY: 0,
+  });
 
   useEffect(() => look.attach(gl.domElement), [look, gl]);
   useEffect(() => {
@@ -79,7 +90,15 @@ export default function PlayerController({ view }: { view: ViewMode }) {
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, MAX_DELTA);
-    motor.update(dt, getKeys(), look.yaw, collider, { walkSpeed, runSpeed });
+    // Touch: apply the look drag since last frame, and the move stick.
+    if (touchInput.lookDX || touchInput.lookDY) {
+      look.addDrag(touchInput.lookDX, touchInput.lookDY);
+      touchInput.lookDX = touchInput.lookDY = 0;
+    }
+    const keys = Object.assign(input.current, getKeys());
+    keys.stickX = touchInput.moveX;
+    keys.stickY = touchInput.moveY;
+    motor.update(dt, keys, look.yaw, collider, { walkSpeed, runSpeed });
     // In first person the (hidden) body turns with the view, so switching to
     // third person shows it facing where you were looking.
     if (view === "first") motor.faceCamera(look.yaw);

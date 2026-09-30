@@ -14,6 +14,7 @@ import LoadingOverlay from "../ui/LoadingOverlay";
 import MusicToggle from "../ui/MusicToggle";
 import Minimap from "../ui/Minimap";
 import PerfReadout from "../ui/PerfReadout";
+import TouchControls, { useIsTouch } from "../ui/TouchControls";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
 const VIEWS: { id: ViewMode; label: string }[] = [
@@ -54,6 +55,8 @@ export default function SceneClient() {
   // minimap, FPS meter, view / maze buttons and the key hints — lives on the
   // `/#debug` route (toggles live when the hash changes).
   const debug = useHashRoute("debug");
+  // Phones and tablets get on-screen controls (stick, look drag, view button).
+  const touch = useIsTouch();
 
   // The ambience plays only once the game is running — after the preloader
   // has gone — and fades out when leaving for the level chooser.
@@ -193,6 +196,11 @@ export default function SceneClient() {
       {/* The game: mounted once a level is picked; remounted on restart / resize. */}
       {level && debug && minimap && <Minimap key={`minimap-${runId}`} />}
       {level && <Scene key={`scene-${runId}`} view={view} />}
+
+      {/* Touch controls, while playing on a touch device. */}
+      {ready && touch && (
+        <TouchControls onToggleView={() => setView((v) => (v === "first" ? "third" : "first"))} />
+      )}
 
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}

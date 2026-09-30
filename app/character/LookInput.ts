@@ -2,6 +2,9 @@ import { LOOK_RADIANS_PER_PIXEL, ZOOM_RANGE } from "./config";
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
+/** Touch look turns this much more per pixel than the mouse. */
+const TOUCH_LOOK_SCALE = 2.2;
+
 /**
  * Mouse look for both camera views. Click the canvas to capture the mouse
  * (pointer lock — Esc releases it); while not captured, dragging also looks
@@ -30,6 +33,16 @@ export class LookInput {
 
   clampPitch([min, max]: [number, number]): void {
     this.pitch = clamp(this.pitch, min, max);
+  }
+
+  /**
+   * Look by a touch drag of (dx, dy) screen pixels (TouchControls). Touch
+   * needs more turn per pixel than a mouse: a thumb sweeps far fewer pixels.
+   */
+  addDrag(dx: number, dy: number): void {
+    const k = LOOK_RADIANS_PER_PIXEL * TOUCH_LOOK_SCALE * this.sensitivity;
+    this.yaw -= dx * k;
+    this.pitch -= dy * k * (this.invertY ? -1 : 1);
   }
 
   /** Start listening on the canvas; returns the cleanup function. */

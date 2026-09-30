@@ -8,14 +8,22 @@ import {
 } from "./config";
 import type { WallCollider } from "./WallCollider";
 
-/** Held movement keys (WASD / arrows, Shift). */
+/** Held movement keys (WASD / arrows, Shift), and an optional analog stick. */
 export interface MoveKeys {
   forward: boolean;
   backward: boolean;
   left: boolean;
   right: boolean;
   run: boolean;
+  /** Touch stick, -1..1 (x = right, y = forward); overrides the keys while pushed. */
+  stickX?: number;
+  stickY?: number;
 }
+
+/** Stick push below this is ignored (thumb resting on it). */
+const STICK_DEADZONE = 0.12;
+/** Stick push at which walking turns into running (full push = run speed). */
+const STICK_RUN_FROM = 0.8;
 
 export interface MoveSettings {
   walkSpeed: number;
@@ -68,9 +76,13 @@ export class PlayerMotor {
   ): void {
     if (dt <= 0) return;
 
-    // Input -> world direction, relative to where the camera looks.
-    const ix = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    const iz = (keys.forward ? 1 : 0) - (keys.backward ? 1 : 0);
+    // Input -> world direction, relative to where the camera looks. A pushed
+    // touch stick wins over the keys and also sets the pace: a small push
+    // walks slowly, up to walking speed at STICK_RUN_FROM, running at full push.
+    const stick = Math.min(1, Math.hypot(keys.stickX ?? 0, keys.stickY ?? 0));
+    const useStick = stick > STICK_DEADZONE;
+    const ix = useStick ? keys.stickX! : (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const iz = useStick ? keys.stickY! : (keys.forward ? 1 : 0) - (keys.backward ? 1 : 0);
     const len = Math.hypot(ix, iz);
     let wx = 0;
     let wz = 0;
@@ -84,7 +96,15 @@ export class PlayerMotor {
       wz = -cos * f - sin * s;
     }
 
-    const targetSpeed = len > 0 ? (keys.run ? settings.runSpeed : settings.walkSpeed) : 0;
+    let targetSpeed = len > 0 ? (keys.run ? settings.runSpeed : settings.walkSpeed) : 0;
+    if (useStick) {
+      const push = (stick - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+      const walkUpTo = (STICK_RUN_FROM - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+      targetSpeed =
+        push < walkUpTo
+          ? settings.walkSpeed * Math.max(0.35, push / walkUpTo)
+          : settings.walkSpeed + (settings.runSpeed - settings.walkSpeed) * ((push - walkUpTo) / (1 - walkUpTo));
+    }
     const k = 1 - Math.exp(-(len > 0 ? ACCELERATION : DECELERATION) * dt);
     this.velocity.x += (wx * targetSpeed - this.velocity.x) * k;
     this.velocity.z += (wz * targetSpeed - this.velocity.z) * k;
