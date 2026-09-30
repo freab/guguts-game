@@ -6,14 +6,16 @@
  *   footsteps ─ dry ─────────── footstep bus ──────────┼─ master ─ compressor ─ out
  *              └─ wet ─ short "maze walls" reverb ─────┘
  *
- * - Ambience: the birds and wind recordings (public/audio), decoded to
+ * - Ambience: evening birdsong and wind recordings (public/audio), decoded to
  *   buffers and looped gaplessly on the audio clock, each loudness-matched
  *   (measured RMS) before mixing. The wind breathes: slow gusts in level and
  *   brightness (a moving low-pass) and a drift across the stereo field; the
  *   birds wander gently. It sits well under the footsteps.
- * - Footsteps on grass, synthesised: a swish of filtered noise (the blades),
- *   a soft low thud (the foot) and a faint rustle tail, randomised every step,
- *   alternating left/right, with a touch of short reverb off the maze walls.
+ * - Footsteps on grass: real recorded steps (public/audio/footsteps.webm, cut
+ *   by scripts/build-audio.mjs) — slow steps walking, quick ones running —
+ *   never the same one twice in a row, each slightly re-pitched, alternating
+ *   left/right, with a touch of short reverb off the maze walls. Until they
+ *   load, steps are synthesised (filtered noise: swish, thud, rustle).
  * - A gentle compressor on the master glues the mix and prevents clipping.
  *
  * The ambience plays only while the game is running (after the preloader) and
@@ -26,7 +28,7 @@ const MUSIC_KEY = "gugut.music";
 
 /** Ambience tracks, with the RMS they were measured at (dBFS) for loudness matching. */
 const TRACKS = [
-  { src: "/audio/birds.webm", rmsDb: -24.8, trim: 0 },
+  { src: "/audio/birds.webm", rmsDb: -28.8, trim: 0 },
   { src: "/audio/wind.webm", rmsDb: -20.1, trim: -2 },
 ];
 /** Level both tracks are matched to before the bus (dBFS RMS). */
@@ -36,6 +38,13 @@ const AMBIENCE_DB = -13;
 const FOOTSTEPS_DB = -3;
 const REVERB_SEND_DB = -17;
 const FADE_IN = 4;
+/** Recorded footsteps: the sprite, and where each step is in it ([start, duration] s). */
+const FOOTSTEPS_SRC = "/audio/footsteps.webm";
+const FOOTSTEPS_INDEX = "/audio/footsteps.json";
+/** Level of a recorded step (they are cut at about -3 dBFS peak). */
+const STEP_GAIN = 0.8;
+/** Above this intensity the running steps are used. */
+const RUN_INTENSITY = 0.75;
 const FADE_OUT = 1.2;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
@@ -57,6 +66,8 @@ class AudioEngine {
   private reverbSend: GainNode | null = null;
   private tracks: Track[] = [];
   private noise: AudioBuffer | null = null;
+  private steps: { buffer: AudioBuffer; walk: [number, number][]; run: [number, number][] } | null = null;
+  private lastStep = -1;
   private drift: ReturnType<typeof setInterval> | null = null;
   private foot = 1;
 
@@ -155,6 +166,7 @@ class AudioEngine {
     this.noise = noise;
 
     void this.loadTracks(ctx);
+    void this.loadSteps(ctx);
 
     // A hidden tab goes quiet (and stops using the audio thread).
     document.addEventListener("visibilitychange", () => {
@@ -189,6 +201,21 @@ class AudioEngine {
     });
     this.startDrift();
     this.applyAmbience();
+  }
+
+  /** Decode the recorded footsteps (the synthesised ones stand in until then). */
+  private async loadSteps(ctx: AudioContext) {
+    try {
+      const [buffer, index] = await Promise.all([
+        fetch(FOOTSTEPS_SRC)
+          .then((r) => r.arrayBuffer())
+          .then((b) => ctx.decodeAudioData(b)),
+        fetch(FOOTSTEPS_INDEX).then((r) => r.json() as Promise<{ walk: [number, number][]; run: [number, number][] }>),
+      ]);
+      this.steps = { buffer, walk: index.walk, run: index.run };
+    } catch {
+      // Keep the synthesised steps.
+    }
   }
 
   /** Fade the ambience bus to where the switch and the game say it should be. */
@@ -265,6 +292,24 @@ class AudioEngine {
     step.connect(pan);
     pan.connect(this.footsteps);
     pan.connect(this.reverbSend);
+
+    if (this.steps) {
+      // A recorded step: walking or running set, never the last one again,
+      // slightly re-pitched and levelled by how hard the foot lands.
+      const set = intensity >= RUN_INTENSITY ? this.steps.run : this.steps.walk;
+      let pick = Math.floor(Math.random() * set.length);
+      if (set.length > 1 && pick === this.lastStep) pick = (pick + 1) % set.length;
+      this.lastStep = pick;
+      const [offset, duration] = set[pick];
+      const src = ctx.createBufferSource();
+      src.buffer = this.steps.buffer;
+      const rate = rand(0.93, 1.07);
+      src.playbackRate.value = rate;
+      step.gain.value = STEP_GAIN * (0.75 + 0.25 * intensity) * rand(0.88, 1);
+      src.connect(step);
+      src.start(now, offset, duration);
+      return;
+    }
 
     /** A burst of the noise through a filter, with an attack/decay envelope. */
     const burst = (
