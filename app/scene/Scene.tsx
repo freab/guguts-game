@@ -21,6 +21,7 @@ import Flowers from "./Flowers";
 import MapleTree from "./MapleTree";
 import MazeGround from "./MazeGround";
 import Footsteps from "../audio/Footsteps";
+import GoalWatcher from "../game/GoalWatcher";
 import Vines from "./Vines";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
@@ -539,6 +540,7 @@ export default function Scene({ view }: { view: ViewMode }) {
         <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
         <PlayerController view={view} />
         <Footsteps />
+          <GoalWatcher />
 
         <Readiness onPostReady={enablePost} />
       </Suspense>

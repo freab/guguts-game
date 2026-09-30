@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Stats } from "@react-three/drei";
 import { Leva, useControls, button, folder } from "leva";
 import type { ViewMode } from "../character/CameraRig";
@@ -15,6 +15,11 @@ import MusicToggle from "../ui/MusicToggle";
 import Minimap from "../ui/Minimap";
 import PerfReadout from "../ui/PerfReadout";
 import TouchControls, { useIsTouch } from "../ui/TouchControls";
+import GameOver from "../ui/GameOver";
+import LeaderboardDialog from "../ui/LeaderboardDialog";
+import RunTimer from "../ui/RunTimer";
+import SettingsDialog from "../ui/SettingsDialog";
+import { runStore } from "../game/runStore";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
 const VIEWS: { id: ViewMode; label: string }[] = [
@@ -57,6 +62,10 @@ export default function SceneClient() {
   const debug = useHashRoute("debug");
   // Phones and tablets get on-screen controls (stick, look drag, view button).
   const touch = useIsTouch();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeBoard = useCallback(() => setBoardOpen(false), []);
 
   // The ambience plays only once the game is running — after the preloader
   // has gone — and fades out when leaving for the level chooser.
@@ -115,6 +124,19 @@ export default function SceneClient() {
 
   // The maze size currently built (mazeData starts at the Easy size).
   const applied = useRef({ w: easy.cellsW, h: easy.cellsH, c: easy.cell });
+
+  // A run starts once the level's scene is ready (the clock itself waits for
+  // the first step — game/runStore). Only the level's own maze is ranked: a
+  // size changed in #debug isn't.
+  useEffect(() => {
+    if (!ready || !level) {
+      runStore.reset();
+      return;
+    }
+    const preset = LEVELS.find((l) => l.id === level)!;
+    const a = applied.current;
+    runStore.arm(level, a.w === preset.cellsW && a.h === preset.cellsH && a.c === preset.cell);
+  }, [ready, level, runId]);
 
   // Title screen: build the chosen level's maze, then mount the scene.
   const chooseLevel = (next: Level) => {
@@ -206,9 +228,48 @@ export default function SceneClient() {
           everything until assets, bakes, shaders and post-processing are ready. */}
       <LoadingOverlay choosing={level === null} onChoose={chooseLevel} />
 
-      {/* Music on / off — always shown (above the title screen too); below the
-          leva panel on #debug. */}
-      <MusicToggle className={`absolute right-3 z-[60] ${debug ? "top-14" : "top-3"}`} />
+      {/* The run: its clock, and the finish screen when you reach the goat. */}
+      {ready && <RunTimer />}
+      {ready && (
+        <GameOver
+          onPlayAgain={restart}
+          onChangeLevel={() => setLevel(null)}
+          onChangeName={() => setSettingsOpen(true)}
+        />
+      )}
+
+      {/* Leaderboard, settings and music — always shown (above the title
+          screen too); below the leva panel on #debug. */}
+      <div className={`absolute right-3 z-[60] flex items-center gap-2 ${debug ? "top-14" : "top-3"}`}>
+        <IconButton label="Leaderboard" onClick={() => setBoardOpen(true)}>
+          <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
+        </IconButton>
+        <IconButton label="Settings" onClick={() => setSettingsOpen(true)}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+        </IconButton>
+        <MusicToggle />
+      </div>
+
+      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {boardOpen && <LeaderboardDialog initial={level ?? "easy"} onClose={closeBoard} />}
     </div>
+  );
+}
+
+/** A round icon button for the top-right cluster. */
+function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-zinc-100 backdrop-blur transition-colors hover:bg-white/15"
+    >
+      <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        {children}
+      </svg>
+    </button>
   );
 }

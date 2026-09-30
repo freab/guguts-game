@@ -15,6 +15,7 @@ import { WallCollider } from "./WallCollider";
 import { MAX_DELTA } from "./config";
 import { writePlayerStore } from "./playerStore";
 import { touchInput } from "./touchInput";
+import { runStore } from "../game/runStore";
 
 export type Control = "forward" | "backward" | "left" | "right" | "run";
 
@@ -90,14 +91,20 @@ export default function PlayerController({ view }: { view: ViewMode }) {
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, MAX_DELTA);
+    // The run is over (or a dialog is open): stand still, ignore input.
+    const blocked = runStore.inputBlocked();
     // Touch: apply the look drag since last frame, and the move stick.
     if (touchInput.lookDX || touchInput.lookDY) {
-      look.addDrag(touchInput.lookDX, touchInput.lookDY);
+      if (!blocked) look.addDrag(touchInput.lookDX, touchInput.lookDY);
       touchInput.lookDX = touchInput.lookDY = 0;
     }
     const keys = Object.assign(input.current, getKeys());
     keys.stickX = touchInput.moveX;
     keys.stickY = touchInput.moveY;
+    if (blocked) {
+      keys.forward = keys.backward = keys.left = keys.right = keys.run = false;
+      keys.stickX = keys.stickY = 0;
+    }
     motor.update(dt, keys, look.yaw, collider, { walkSpeed, runSpeed });
     // In first person the (hidden) body turns with the view, so switching to
     // third person shows it facing where you were looking.

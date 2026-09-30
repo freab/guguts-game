@@ -42,3 +42,6 @@ next-env.d.ts
 
 # texture sources (CC0; see public/textures/LICENSE.md — rebuild with npm run textures)
 /assets-src/
+
+# local leaderboard (dev / single server; production uses Upstash Redis — see app/leaderboard/store.ts)
+/.data/
