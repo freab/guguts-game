@@ -39,7 +39,8 @@ export default function MusicToggle({ className = "" }: { className?: string }) 
       className={`flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-100 backdrop-blur transition-colors hover:bg-white/15 ${className}`}
     >
       <SpeakerIcon on={on} />
-      <span>Music {on ? "on" : "off"}</span>
+      {/* Icon only on phones, to leave room for the timer. */}
+      <span className="hidden sm:inline">Music {on ? "on" : "off"}</span>
     </button>
   );
 }

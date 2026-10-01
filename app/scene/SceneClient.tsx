@@ -74,14 +74,18 @@ export default function SceneClient() {
   const run = useRun();
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [helpDismissed, setHelpDismissed] = useState(false);
   const [rotateDismissed, setRotateDismissed] = useState(false);
-  const closeHelp = useCallback(() => setHelpOpen(false), []);
+  const closeHelp = useCallback(() => {
+    setHelpOpen(false);
+    setHelpDismissed(true); // (the auto-shown help isn't driven by helpOpen)
+  }, []);
   const portrait = useIsPortrait();
   const fullscreen = useIsFullscreen();
   const canFullscreen = useSyncExternalStore(noSubscribe, fullscreenSupported, () => false);
   const playing = ready && (run.phase === "armed" || run.phase === "running");
   // The controls are shown on the first run on this device (then from the menu).
-  const showHelp = helpOpen || (playing && run.phase === "armed" && !controlsSeen());
+  const showHelp = helpOpen || (playing && run.phase === "armed" && !helpDismissed && !controlsSeen());
 
   // Pause when the game loses the mouse (Esc while it's captured: the browser
   // swallows the key and just releases the mouse) or the tab is left.
