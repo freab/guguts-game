@@ -7,7 +7,7 @@ import { useDisposable } from "../hooks/useDisposable";
 /** Diameter of the shadow under the feet (m), and its darkness at the centre. */
 const SIZE = 1.2;
 const OPACITY = 0.5;
-/** Just above the ground / footpath, below the exit marker. */
+/** Just above the ground. */
 const HEIGHT = 0.02;
 
 /** Soft radial falloff: dark in the middle, fading to nothing at the rim. */
@@ -31,7 +31,7 @@ export default function BlobShadow({
 }: {
   /** Diameter (m). */
   size?: number;
-  /** Height above the ground; raise it to sit above the exit marker. */
+  /** Height above the ground. */
   height?: number;
 }) {
   const material = useDisposable(() => createBlobMaterial(), []);

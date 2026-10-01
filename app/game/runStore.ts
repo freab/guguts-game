@@ -9,10 +9,14 @@ import type { LevelId } from "../maze/levels";
  *   idle ─(scene ready)→ armed ─(first step)→ running ─(reach the goat)→ won
  *
  * The clock starts on the player's first step (not when the scene appears),
- * so reading the view or looking around is free. Shared by the 3D loop
- * (game/GoalWatcher, the player controller) and the UI (timer, game-over).
+ * so reading the view or looking around is free, and it stops while the game
+ * is paused (pause menu, a dialog, the controls help). Shared by the 3D loop
+ * (game/GoalWatcher, the player controller) and the UI.
  */
 export type RunPhase = "idle" | "armed" | "running" | "won";
+
+/** Why the game is paused; paused while any is active. */
+export type PauseReason = "menu" | "dialog" | "help" | "rotate";
 
 export interface RunState {
   phase: RunPhase;
@@ -22,8 +26,12 @@ export interface RunState {
   /** performance.now() at the first step and at the finish. */
   startedAt: number;
   finishedAt: number;
-  /** A dialog (settings, leaderboard) is open: the player stands still. */
-  dialogOpen: boolean;
+  /** Time spent paused while running (ms), not counting a pause in progress. */
+  pausedTotal: number;
+  /** performance.now() when the current pause began (0 = not paused). */
+  pausedAt: number;
+  /** Anything pausing the game right now. */
+  pauses: readonly PauseReason[];
 }
 
 let state: RunState = {
@@ -32,7 +40,9 @@ let state: RunState = {
   ranked: false,
   startedAt: 0,
   finishedAt: 0,
-  dialogOpen: false,
+  pausedTotal: 0,
+  pausedAt: 0,
+  pauses: [],
 };
 const listeners = new Set<() => void>();
 const set = (next: Partial<RunState>) => {
@@ -44,27 +54,40 @@ export const runStore = {
   get: () => state,
   /** A fresh run, waiting for the first step. */
   arm(level: LevelId, ranked: boolean) {
-    set({ phase: "armed", level, ranked, startedAt: 0, finishedAt: 0 });
+    set({ phase: "armed", level, ranked, startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0 });
   },
   reset() {
-    set({ phase: "idle", startedAt: 0, finishedAt: 0 });
+    set({ phase: "idle", startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0 });
   },
   start(now: number) {
-    if (state.phase === "armed") set({ phase: "running", startedAt: now });
+    if (state.phase === "armed") set({ phase: "running", startedAt: now, pausedTotal: 0, pausedAt: 0 });
   },
   finish(now: number) {
     if (state.phase === "running") set({ phase: "won", finishedAt: now });
   },
-  setDialogOpen(open: boolean) {
-    if (state.dialogOpen !== open) set({ dialogOpen: open });
+  /** Pause (or un-pause) for a reason; the clock stops while any reason holds. */
+  setPaused(reason: PauseReason, on: boolean, now = performance.now()) {
+    const had = state.pauses.includes(reason);
+    if (had === on) return;
+    const pauses = on ? [...state.pauses, reason] : state.pauses.filter((r) => r !== reason);
+    const next: Partial<RunState> = { pauses };
+    if (state.phase === "running") {
+      if (pauses.length > 0 && !state.pausedAt) next.pausedAt = now;
+      if (pauses.length === 0 && state.pausedAt) {
+        next.pausedTotal = state.pausedTotal + (now - state.pausedAt);
+        next.pausedAt = 0;
+      }
+    }
+    set(next);
   },
-  /** Movement and look are ignored: the run is over, or a dialog is open. */
-  inputBlocked: () => state.phase === "won" || state.dialogOpen,
-  /** The run's time so far (or final), in ms. */
+  isPaused: () => state.pauses.length > 0,
+  /** Movement and look are ignored: the run is over, or the game is paused. */
+  inputBlocked: () => state.phase === "won" || state.pauses.length > 0,
+  /** The run's time so far (or final), in ms — paused time left out. */
   elapsed(now = performance.now()): number {
-    if (state.phase === "running") return now - state.startedAt;
-    if (state.phase === "won") return state.finishedAt - state.startedAt;
-    return 0;
+    if (state.phase !== "running" && state.phase !== "won") return 0;
+    const end = state.phase === "won" ? state.finishedAt : state.pausedAt || now;
+    return Math.max(0, end - state.startedAt - state.pausedTotal);
   },
   subscribe(l: () => void) {
     listeners.add(l);

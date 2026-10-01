@@ -6,8 +6,8 @@ import { runStore } from "../game/runStore";
 
 /**
  * A modal panel over the game (settings, leaderboard). While it's open the
- * player stands still and the mouse is released; Esc or a click outside
- * closes it.
+ * game is paused (the clock too) and the mouse is released; Esc or a click
+ * outside closes it.
  */
 export default function Dialog({
   title,
@@ -19,14 +19,17 @@ export default function Dialog({
   children: ReactNode;
 }) {
   useEffect(() => {
-    runStore.setDialogOpen(true);
+    runStore.setPaused("dialog", true);
     if (document.pointerLockElement) document.exitPointerLock();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault(); // handled: the pause menu leaves this Esc alone
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      runStore.setDialogOpen(false);
+      runStore.setPaused("dialog", false);
       window.removeEventListener("keydown", onKey);
     };
   }, [onClose]);

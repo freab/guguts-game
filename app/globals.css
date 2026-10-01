@@ -24,3 +24,18 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* RotatePrompt: a phone tipping onto its side and back. */
+@keyframes turn-sideways {
+  0%,
+  15% {
+    transform: rotate(0deg);
+  }
+  45%,
+  70% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}

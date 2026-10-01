@@ -4,12 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three/webgpu";
 import { mix, positionWorld, smoothstep, uniform } from "three/tsl";
 import { useDisposable } from "../hooks/useDisposable";
-import {
-  CELL,
-  WALL_HEIGHT,
-  exitPosition,
-  wallSlabs,
-} from "./mazeData";
+import { WALL_HEIGHT, wallSlabs } from "./mazeData";
 
 /**
  * Wall material: matte stone with ambient occlusion baked in analytically —
@@ -53,7 +48,6 @@ export default function Maze() {
 
   const wallMaterial = useDisposable(() => createWallMaterial(), []);
 
-  const [exitX, exitZ] = exitPosition();
 
   return (
     <>
@@ -69,11 +63,6 @@ export default function Maze() {
         <boxGeometry args={[1, 1, 1]} />
       </instancedMesh>
 
-      {/* Exit marker (unlit, full-bright). */}
-      <mesh position={[exitX, 0.03, exitZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[CELL * 0.9, CELL * 0.9]} />
-        <meshBasicMaterial color="#39d98a" toneMapped={false} />
-      </mesh>
     </>
   );
 }

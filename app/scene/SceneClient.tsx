@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Stats } from "@react-three/drei";
 import { Leva, useControls, button, folder } from "leva";
 import type { ViewMode } from "../character/CameraRig";
@@ -19,7 +19,11 @@ import GameOver from "../ui/GameOver";
 import LeaderboardDialog from "../ui/LeaderboardDialog";
 import RunTimer from "../ui/RunTimer";
 import SettingsDialog from "../ui/SettingsDialog";
-import { runStore } from "../game/runStore";
+import { runStore, useRun } from "../game/runStore";
+import ControlsHelp, { controlsSeen } from "../ui/ControlsHelp";
+import PauseMenu from "../ui/PauseMenu";
+import RotatePrompt from "../ui/RotatePrompt";
+import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
 const VIEWS: { id: ViewMode; label: string }[] = [
@@ -66,6 +70,47 @@ export default function SceneClient() {
   const [boardOpen, setBoardOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeBoard = useCallback(() => setBoardOpen(false), []);
+  // Pause menu, controls help, and the phone "turn sideways" prompt.
+  const run = useRun();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [rotateDismissed, setRotateDismissed] = useState(false);
+  const closeHelp = useCallback(() => setHelpOpen(false), []);
+  const portrait = useIsPortrait();
+  const fullscreen = useIsFullscreen();
+  const canFullscreen = useSyncExternalStore(noSubscribe, fullscreenSupported, () => false);
+  const playing = ready && (run.phase === "armed" || run.phase === "running");
+  // The controls are shown on the first run on this device (then from the menu).
+  const showHelp = helpOpen || (playing && run.phase === "armed" && !controlsSeen());
+
+  // Pause when the game loses the mouse (Esc while it's captured: the browser
+  // swallows the key and just releases the mouse) or the tab is left.
+  useEffect(() => {
+    const pauseIfPlaying = () => {
+      const { phase } = runStore.get();
+      if ((phase === "armed" || phase === "running") && !runStore.isPaused()) setMenuOpen(true);
+    };
+    const onLock = () => {
+      if (!document.pointerLockElement) pauseIfPlaying();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") pauseIfPlaying();
+    };
+    document.addEventListener("pointerlockchange", onLock);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("pointerlockchange", onLock);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  /** Back to the game: close the menu and (on desktop) capture the mouse again. */
+  const resume = () => {
+    setMenuOpen(false);
+    if (touch) return;
+    const canvas = [...document.querySelectorAll("canvas")].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    void canvas?.requestPointerLock()?.catch?.(() => {});
+  };
 
   // The ambience plays only once the game is running — after the preloader
   // has gone — and fades out when leaving for the level chooser.
@@ -91,12 +136,18 @@ export default function SceneClient() {
     void import("./Scene");
   }, []);
 
-  // V toggles first / third person; M toggles the music.
+  // V toggles first / third person; M toggles the music; Esc / P pause.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
       if (e.code === "KeyV") setView((v) => (v === "first" ? "third" : "first"));
       else if (e.code === "KeyM") audio.toggleMusic();
+      else if ((e.code === "Escape" || e.code === "KeyP") && !e.defaultPrevented) {
+        // (A dialog or the controls help handles its own Esc and marks it.)
+        const { phase } = runStore.get();
+        if (phase !== "armed" && phase !== "running") return;
+        setMenuOpen((open) => (open ? false : !runStore.isPaused()));
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -140,6 +191,8 @@ export default function SceneClient() {
 
   // Title screen: build the chosen level's maze, then mount the scene.
   const chooseLevel = (next: Level) => {
+    // Phones: fullscreen and landscape, while this tap still counts as a gesture.
+    if (touch) void enterFullscreen(true);
     applied.current = { w: next.cellsW, h: next.cellsH, c: next.cell };
     setMazeConfig({ cellsW: next.cellsW, cellsH: next.cellsH, cell: next.cell });
     setGame({ width: next.cellsW, height: next.cellsH, corridor: next.cell }); // keep leva in sync
@@ -241,6 +294,23 @@ export default function SceneClient() {
       {/* Leaderboard, settings and music — always shown (above the title
           screen too); below the leva panel on #debug. */}
       <div className={`absolute right-3 z-[60] flex items-center gap-2 ${debug ? "top-14" : "top-3"}`}>
+        {playing && (
+          <IconButton label="Pause (Esc)" onClick={() => setMenuOpen(true)}>
+            <path d="M9 5v14M15 5v14" />
+          </IconButton>
+        )}
+        {canFullscreen && (
+          <IconButton
+            label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            onClick={() => void (fullscreen ? exitFullscreen() : enterFullscreen(touch))}
+          >
+            {fullscreen ? (
+              <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+            ) : (
+              <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+            )}
+          </IconButton>
+        )}
         <IconButton label="Leaderboard" onClick={() => setBoardOpen(true)}>
           <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
         </IconButton>
@@ -251,11 +321,33 @@ export default function SceneClient() {
         <MusicToggle />
       </div>
 
+      {menuOpen && ready && (
+        <PauseMenu
+          onResume={resume}
+          onRestart={() => {
+            setMenuOpen(false);
+            restart();
+          }}
+          onControls={() => setHelpOpen(true)}
+          onLeaderboard={() => setBoardOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+          onChangeLevel={() => {
+            setMenuOpen(false);
+            setLevel(null);
+          }}
+        />
+      )}
+      {showHelp && <ControlsHelp touch={touch} onClose={closeHelp} />}
+      {ready && touch && portrait && !rotateDismissed && run.phase !== "won" && (
+        <RotatePrompt onDismiss={() => setRotateDismissed(true)} />
+      )}
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {boardOpen && <LeaderboardDialog initial={level ?? "easy"} onClose={closeBoard} />}
     </div>
   );
 }
+
+const noSubscribe = () => () => {};
 
 /** A round icon button for the top-right cluster. */
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {

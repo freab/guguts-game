@@ -33,7 +33,8 @@ function redisStore(url: string, token: string): LeaderboardStore {
     const res = await fetch(`${url.replace(/\/$/, "")}/pipeline`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(commands),
+      // The REST API takes every argument as a string.
+      body: JSON.stringify(commands.map((c) => c.map(String))),
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`leaderboard database: HTTP ${res.status}`);
@@ -171,12 +172,18 @@ function fileStore(file: string): LeaderboardStore {
 
 /* ------------------------------------------------------------------- pick one */
 
-let store: LeaderboardStore | null = null;
+let store: { key: string; store: LeaderboardStore } | null = null;
 
+/** The store for the current environment (re-picked if the Upstash settings change). */
 export function leaderboardStore(): LeaderboardStore {
-  if (store) return store;
   const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
-  store = url && token ? redisStore(url, token) : fileStore(path.join(process.cwd(), ".data", "leaderboard.json"));
-  return store;
+  const key = url && token ? `${url}|${token}` : "local";
+  if (store?.key !== key) {
+    store = {
+      key,
+      store: url && token ? redisStore(url, token) : fileStore(path.join(process.cwd(), ".data", "leaderboard.json")),
+    };
+  }
+  return store.store;
 }

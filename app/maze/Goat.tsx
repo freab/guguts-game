@@ -135,7 +135,6 @@ export default function Goat() {
   return (
     <group name="Goat" position={[x, 0, z]} rotation={[0, facing, 0]}>
       <primitive object={goat.root} />
-      {/* Above the exit marker (y = 0.03) so the marker doesn't cover it. */}
       <BlobShadow size={1.1} height={0.035} />
     </group>
   );

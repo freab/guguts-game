@@ -44,7 +44,7 @@ export default function GameOver(actions: Actions) {
 
 function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { run: RunState }) {
   const profile = useProfile();
-  const timeMs = run.finishedAt - run.startedAt;
+  const timeMs = run.finishedAt - run.startedAt - run.pausedTotal;
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ attempt: number; data: SubmitResponse | null; error: string | null }>({
     attempt: -1,
