@@ -23,6 +23,7 @@ import {
 import { grassAlbedo } from "../grass/grassColors";
 import { LEAF_LOD_MIN, LEAF_LOD_NEAR } from "./VineField";
 import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
+import { BULGE_CLEARANCE, wallBulge } from "../../maze/wallRelief";
 import { IVY_COLS, IVY_ROWS, grassTinted, ivyLook } from "./ivySurface";
 
 /** Mean linear luminance of the bark texture (measured), for recolouring it. */
@@ -36,8 +37,14 @@ const BARK_MEAN_LUMINANCE = 0.107;
  *   faint flutter strongest at the leaf tip;
  * - stems: the bark set (Poly Haven bark_brown_02)'s relief and detail in a
  *   dark grass green.
+ * Both move out from the wall with its stone bulge (`wallHeight`, see
+ * maze/wallRelief), so the ivy lies on the stone rather than inside it.
  */
-export function createVineMaterials(ivy: { map: THREE.Texture; normalMap: THREE.Texture }, bark: PbrSet) {
+export function createVineMaterials(
+  ivy: { map: THREE.Texture; normalMap: THREE.Texture },
+  bark: PbrSet,
+  wallHeight: THREE.Texture
+) {
   const uniforms = {
     time: uniform(0),
     wind: uniform(1),
@@ -71,13 +78,18 @@ export function createVineMaterials(ivy: { map: THREE.Texture; normalMap: THREE.
   const origin = attribute<"vec3">("leafOrigin", "vec3");
   const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
   const grown = origin.add(positionLocal.sub(origin).mul(inverseSqrt(keep)));
+  // The whole leaf moves out by the wall's bulge at its stalk.
+  const leafLift = attribute<"vec3">("leafWall", "vec3").mul(wallBulge(wallHeight, origin).add(BULGE_CLEARANCE));
   leaves.positionNode = select(
     rank.greaterThanEqual(keep),
     origin,
     grown.add(vec3(flutter, flutter.mul(0.4), flutter.mul(0.7)))
-  );
+  ).add(leafLift);
 
   const stems = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
+  stems.positionNode = positionLocal.add(
+    attribute<"vec3">("wallNormal", "vec3").mul(wallBulge(wallHeight, positionLocal).add(BULGE_CLEARANCE))
+  );
   const s = pbrSurface(bark, uv());
   const barkDetail = dot(s.color, vec3(0.2126, 0.7152, 0.0722)).div(BARK_MEAN_LUMINANCE);
   stems.colorNode = grassAlbedo(float(0.35)).mul(barkDetail).mul(0.55).mul(ivyLook.brightness);

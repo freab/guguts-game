@@ -34,9 +34,7 @@ import {
 import { useDisposable } from "../hooks/useDisposable";
 import { useHeightMap, usePbrSet, type PbrSet } from "../scene/textures/pbrTextures";
 import { WALL_HEIGHT, treeSeed, wallSlabs, type WallSlab } from "./mazeData";
-
-/** Metres of wall one repeat of the stone texture covers (its real size). */
-const STONE_TILE = 2;
+import { BULGE, STONE_TILE, wallBulge } from "./wallRelief";
 /**
  * The stone texture's mean luminance (linear, measured from the source) and
  * the brightness the walls are lifted to. The texture keeps its own colours —
@@ -49,17 +47,13 @@ const MOSS = new THREE.Color("#4d5a2c");
 /**
  * Relief from the stone's height map. Parallax: how deep the mortar joints
  * read (m), and the distances over which it fades out (none beyond, so far
- * walls cost nothing extra). Displacement: how far the wall faces bulge out
- * (m) at the highest stone, from a blurred read of the same map.
+ * walls cost nothing extra). (The bulge is in ./wallRelief, shared with the ivy.)
  */
 const PARALLAX_DEPTH = 0.045;
 const PARALLAX_NEAR = 4;
 const PARALLAX_FAR = 9;
 const PARALLAX_STEPS = 10;
 const HEIGHT_SIZE = 512;
-const BULGE = 0.075;
-/** Height-map mip the displacement reads: ~25 cm per texel, smooth bulges. */
-const BULGE_MIP = 6;
 /** Wall mesh segments along a long side (0.5 m apart on a 2 m slab) and up. */
 const LONG_SEGMENTS = 4;
 const HEIGHT_SEGMENTS = 4;
@@ -190,8 +184,7 @@ function createWallMaterial(stone: PbrSet, height: THREE.Texture, { displace }: 
     );
     // positionLocal is world space here (instanced, the mesh at the origin).
     const w = positionLocal;
-    const bulge = texture(height, vec2(w.x.add(w.z), w.y.negate()).div(STONE_TILE)).level(float(BULGE_MIP)).r;
-    material.positionNode = w.add(dir.mul(bulge.mul(BULGE).add(0.006)));
+    material.positionNode = w.add(dir.mul(wallBulge(height, w)));
   }
   return material;
 }

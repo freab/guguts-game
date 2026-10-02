@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import { playerStore } from "../character/playerStore";
 import { useDisposable } from "../hooks/useDisposable";
-import { useLeafAtlas, usePbrSet } from "./textures/pbrTextures";
+import { useHeightMap, useLeafAtlas, usePbrSet } from "./textures/pbrTextures";
 import { vineFaces } from "./vines/vineLayout";
 import { VineField } from "./vines/VineField";
 import { createVineMaterials } from "./vines/vineMaterials";
@@ -49,7 +49,8 @@ export default function Vines({
 
   const bark = usePbrSet("bark");
   const ivy = useLeafAtlas("ivy_leaves");
-  const materials = useDisposable(() => createVineMaterials(ivy, bark), [ivy, bark]);
+  const wallHeight = useHeightMap("wall");
+  const materials = useDisposable(() => createVineMaterials(ivy, bark, wallHeight), [ivy, bark, wallHeight]);
 
   const faces = useMemo(() => vineFaces(coverage, seed), [coverage, seed]);
   const field = useDisposable(

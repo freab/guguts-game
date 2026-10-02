@@ -37,6 +37,8 @@ export interface VineLeaf {
   size: number;
   /** Ivy atlas cell 0..7. */
   cell: number;
+  /** Out of the wall it grows on (it moves out with the wall's bulge). */
+  wall: THREE.Vector3;
 }
 
 /** How the ivy grows on a face. */
@@ -156,6 +158,7 @@ function leaf(rng: () => number, at: THREE.Vector3, face: WallFace, size: number
     z,
     size,
     cell: Math.floor(rng() * 8),
+    wall: face.normal,
   };
 }
 
