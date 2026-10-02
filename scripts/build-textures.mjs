@@ -4,7 +4,8 @@
 //   node scripts/build-textures.mjs
 //
 // Sources (all CC0, downloaded once into assets-src/textures):
-//   Poly Haven  forrest_ground_01 (ground + footpath), bark_brown_02 (1K JPG: diff, nor_gl, arm)
+//   Poly Haven  forrest_ground_01 (ground + footpath), bark_brown_02, old_stone_wall
+//               (maze walls) (1K JPG: diff, nor_gl, arm)
 //   ambientCG   LeafSet027 (1K JPG maple leaf atlas: Color, Opacity, NormalGL)
 //   ambientCG   LeafSet017 (1K JPG English ivy leaf atlas: Color, Opacity, NormalGL)
 //
@@ -258,6 +259,19 @@ console.log("ground (forrest_ground_01)");
 total += await pbrSet("forrest_ground_01", "ground");
 console.log("bark (bark_brown_02)");
 total += await pbrSet("bark_brown_02", "bark");
+console.log("walls (old_stone_wall)");
+total += await pbrSet("old_stone_wall", "wall");
+// Its height map, for the walls' parallax and displacement: UASTC (high
+// precision — parallax shows compression blocks), half resolution.
+total += await encode(
+  await sharp(await fs.readFile(path.join(SRC, "old_stone_wall_disp_1k.jpg")))
+    .toColourspace("srgb")
+    .resize(NORMAL_SIZE, NORMAL_SIZE)
+    .png()
+    .toBuffer(),
+  NORMAL,
+  "wall_height.ktx2"
+);
 console.log("maple leaves (LeafSet027)");
 total += await leafAtlas();
 console.log("ivy leaves (LeafSet017)");

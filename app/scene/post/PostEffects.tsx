@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import {
+  abs,
   clamp,
   dot,
   float,
@@ -17,6 +18,8 @@ import {
   screenUV,
   smoothstep,
   uniform,
+  vec2,
+  vec3,
   vec4,
 } from "three/tsl";
 import { bilateralBlur } from "three/examples/jsm/tsl/display/BilateralBlurNode.js";
@@ -35,6 +38,8 @@ export interface PostToggles {
   raysResolution: number;
   /** MSAA samples of the scene pass (0 = off). */
   msaa: number;
+  /** Lens flare ghosts when looking towards the sun. */
+  flare: boolean;
 }
 
 /** Live-tunable parameters (uniforms only). */
@@ -51,6 +56,7 @@ export interface PostParams {
   /** How much of the rays remain looking directly away from the sun (0..1). */
   raysAway: number;
   vignetteStrength: number;
+  flareStrength: number;
 }
 
 function createUniforms() {
@@ -63,15 +69,31 @@ function createUniforms() {
     /** Direction towards the sun, in view space (updated every frame). */
     sunView: uniform(new THREE.Vector3(0, 0, -1)),
     vignette: uniform(0.35),
+    /** The sun's position on screen (uv, y down) and how much flare to draw (0 = sun behind you). */
+    sunScreen: uniform(new THREE.Vector2(0.5, 0.5)),
+    flareOn: uniform(0),
+    flareStrength: uniform(0.6),
+    aspect: uniform(1),
   };
 }
 
 const _sunWorld = new THREE.Vector3();
 
-/** Point `sunView` at the sun as seen from the camera this frame. */
+const _sunPoint = new THREE.Vector3();
+
+/** Point `sunView` at the sun as seen from the camera this frame, and find it on screen. */
 function updateSunView(u: PostUniforms, light: THREE.DirectionalLight, camera: THREE.Camera) {
   _sunWorld.subVectors(light.position, light.target.position).normalize();
   u.sunView.value.copy(_sunWorld).transformDirection(camera.matrixWorldInverse);
+  // Where the sun is on screen: a point far along its direction, projected.
+  _sunPoint.setFromMatrixPosition(camera.matrixWorld).addScaledVector(_sunWorld, 10).project(camera);
+  u.sunScreen.value.set(_sunPoint.x * 0.5 + 0.5, 0.5 - _sunPoint.y * 0.5);
+  // No flare with the sun behind the camera; fade it as the sun leaves the screen.
+  const inFront = u.sunView.value.z < 0;
+  const off = Math.max(Math.abs(_sunPoint.x), Math.abs(_sunPoint.y)) - 1;
+  u.flareOn.value = inFront ? THREE.MathUtils.clamp(1 - off / 0.35, 0, 1) : 0;
+  const cam = camera as THREE.PerspectiveCamera;
+  u.aspect.value = cam.aspect ?? 1;
 }
 type PostUniforms = ReturnType<typeof createUniforms>;
 
@@ -129,6 +151,10 @@ function buildGraph(
     disposables.push(glow);
   }
 
+  if (t.flare) {
+    output = vec4(output.rgb.add(lensFlare(depth, u)), output.a);
+  }
+
   if (t.vignette) {
     const edge = smoothstep(0.45, 1, length(screenUV.sub(0.5)).mul(Math.SQRT2));
     output = vec4(output.rgb.mul(float(1).sub(edge.mul(u.vignette))), output.a);
@@ -147,6 +173,46 @@ function setPipelineOutput(pipeline: THREE.RenderPipeline, output: PostGraph["ou
   pipeline.needsUpdate = true;
 }
 
+/**
+ * Lens flare: soft, tinted ghosts along the line from the sun through the
+ * screen centre, as a camera lens makes — only while the sun itself is in
+ * view. Whether it is comes from the scene depth around the sun's screen
+ * position (sky = nothing nearer than the far plane), so walls, the tree or
+ * the goat hide the flare. A handful of depth reads at one spot and a little
+ * maths per pixel: no extra pass.
+ */
+function lensFlare(depth: THREE.Node<"vec4"> | THREE.TextureNode, u: PostUniforms): THREE.Node<"vec3"> {
+  const d = depth as THREE.TextureNode;
+  const s = u.sunScreen;
+  const tap = (x: number, y: number) => d.sample(s.add(vec2(x, y))).r.greaterThanEqual(0.9999).select(float(1), float(0));
+  const visible = tap(0, 0)
+    .add(tap(0.006, 0))
+    .add(tap(-0.006, 0))
+    .add(tap(0, 0.008))
+    .add(tap(0, -0.008))
+    .div(5);
+  const strength = visible.mul(u.flareOn).mul(u.flareStrength);
+
+  // Ghosts: [distance along the axis (0 = sun, 1 = centre, 2 = mirrored), radius, colour].
+  const ghosts: [number, number, [number, number, number]][] = [
+    [0.55, 0.035, [1.0, 0.75, 0.35]],
+    [1.25, 0.07, [0.45, 0.8, 0.55]],
+    [1.55, 0.025, [1.0, 0.55, 0.3]],
+    [1.85, 0.12, [0.35, 0.5, 0.9]],
+    [2.3, 0.05, [0.9, 0.6, 0.85]],
+  ];
+  const toAspect = vec2(u.aspect, 1);
+  let sum: THREE.Node<"vec3"> = vec3(0);
+  for (const [along, radius, [r, g, b]] of ghosts) {
+    const centre = mix(s, vec2(0.5, 0.5), along);
+    const dist = length(screenUV.sub(centre).mul(toAspect));
+    // A soft disc with a slightly brighter rim, like a lens ghost.
+    const disc = smoothstep(radius, radius * 0.55, dist).mul(0.6).add(smoothstep(radius * 0.18, 0, abs(dist.sub(radius * 0.85))).mul(0.25));
+    sum = sum.add(vec3(r, g, b).mul(disc));
+  }
+  return sum.mul(strength).mul(0.18) as THREE.Node<"vec3">;
+}
+
 function applyParams(graph: PostGraph, u: PostUniforms, p: PostParams) {
   u.bloomStrength.value = p.bloomStrength;
   u.bloomRadius.value = p.bloomRadius;
@@ -154,6 +220,7 @@ function applyParams(graph: PostGraph, u: PostUniforms, p: PostParams) {
   u.raysColor.value.set(p.raysColor);
   u.raysAway.value = p.raysAway;
   u.vignette.value = p.vignetteStrength;
+  u.flareStrength.value = p.flareStrength;
   if (graph.rays) {
     graph.rays.density.value = p.raysDensity;
     graph.rays.maxDensity.value = p.raysMaxDensity;
@@ -186,11 +253,11 @@ export default function PostEffects({
   );
 
   const uniforms = useMemo(() => createUniforms(), []);
-  const { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa } = toggles;
+  const { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa, flare } = toggles;
   const graph = useDisposable(
     () =>
-      buildGraph(scene, camera, light, { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa }, uniforms),
-    [scene, camera, light, bloomOn, raysOn, vignetteOn, raysResolution, msaa, uniforms]
+      buildGraph(scene, camera, light, { bloom: bloomOn, godrays: raysOn, vignette: vignetteOn, raysResolution, msaa, flare }, uniforms),
+    [scene, camera, light, bloomOn, raysOn, vignetteOn, raysResolution, msaa, flare, uniforms]
   );
   useEffect(() => {
     setPipelineOutput(pipeline, graph.output);

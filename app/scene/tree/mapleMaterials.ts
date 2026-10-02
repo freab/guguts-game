@@ -34,6 +34,7 @@ import {
 import { lightmapFactor } from "../bake/lightmap";
 import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
 import { LEAF_ATLAS } from "./treeGeometry";
+import { sunTranslucency } from "../translucency";
 import type { MapleTreeLayout } from "./mapleTree";
 
 /**
@@ -163,6 +164,10 @@ export function createMapleMaterials(
     leafPos.add(sway(origin)).add(vec3(flutter.mul(0.3), flutter, flutter.mul(0.3)))
   );
   leaves.colorNode = leafTexel.rgb.mul(uniforms.leafBrightness);
+  // Backlight: the low sun shining through the leaves — strongest on the
+  // crown's outer shell (inner leaves are shaded by the ones outside them).
+  const shell = smoothstep(0.35, 1, length(origin.sub(vec3(tree.canopyCenter.x, tree.canopyCenter.y, tree.canopyCenter.z))).div(tree.canopyRadius * 0.75));
+  leaves.emissiveNode = sunTranslucency(0.75).mul(leafTexel.rgb.mul(2.4)).mul(shell);
   leaves.opacityNode = leafTexel.a;
   leaves.alphaTest = 0.5;
   // One soft, rounded crown (normals from the canopy centre, tipped upward),

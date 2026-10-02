@@ -8,6 +8,9 @@ import * as THREE from "three/webgpu";
 import type { ViewMode } from "../character/CameraRig";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import Goat from "../maze/Goat";
+import CoffeeBush from "../maze/CoffeeBush";
+import Birds from "./atmosphere/Birds";
+import Particles from "./atmosphere/Particles";
 import Maze from "../maze/Maze";
 import { CELL, COLS, ROWS } from "../maze/mazeData";
 import LightmapBaker from "./bake/LightmapBaker";
@@ -26,6 +29,7 @@ import Vines from "./Vines";
 import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
 import SkyEnvironment from "./SkyEnvironment";
+import { setSun as setSunUniforms } from "./sunUniforms";
 
 // Register the three/webgpu class catalog with R3F's JSX reconciler so every
 // <mesh>/<meshLambertMaterial>/etc. uses the same classes the WebGPURenderer
@@ -380,6 +384,8 @@ export default function Scene({ view }: { view: ViewMode }) {
         bloomStrength: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
         bloomRadius: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Bloom radius" },
         bloomThreshold: { value: 0.9, min: 0, max: 2, step: 0.01, label: "Bloom threshold" },
+        flare: { value: true, label: "Lens flare" },
+        flareStrength: { value: 0.6, min: 0, max: 2, step: 0.05, label: "Flare strength" },
         vignette: { value: true, label: "Vignette" },
         vignetteStrength: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Vignette strength" },
       },
@@ -391,10 +397,11 @@ export default function Scene({ view }: { view: ViewMode }) {
       bloom: post.bloom,
       godrays: post.godrays,
       vignette: post.vignette,
+      flare: post.flare,
       raysResolution: post.raysResolution,
       msaa: post.msaa,
     }),
-    [post.bloom, post.godrays, post.vignette, post.raysResolution, post.msaa]
+    [post.bloom, post.godrays, post.vignette, post.raysResolution, post.msaa, post.flare]
   );
   const postParams = useMemo(
     () => ({
@@ -408,6 +415,7 @@ export default function Scene({ view }: { view: ViewMode }) {
       raysColor: post.raysColor,
       raysAway: post.raysAway,
       vignetteStrength: post.vignetteStrength,
+      flareStrength: post.flareStrength,
     }),
     [
       post.bloomStrength,
@@ -420,6 +428,7 @@ export default function Scene({ view }: { view: ViewMode }) {
       post.raysColor,
       post.raysAway,
       post.vignetteStrength,
+      post.flareStrength,
     ]
   );
 
@@ -461,6 +470,8 @@ export default function Scene({ view }: { view: ViewMode }) {
       ),
     [elevation, azimuth]
   );
+  // …and the materials that react to the sun directly (sunUniforms).
+  useEffect(() => setSunUniforms(sunDirection, sunColor), [sunDirection, sunColor]);
 
   const skyParams = useMemo(
     () => ({
@@ -535,6 +546,9 @@ export default function Scene({ view }: { view: ViewMode }) {
         <Maze />
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
+        <CoffeeBush />
+        <Particles />
+        <Birds />
         <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
         <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />

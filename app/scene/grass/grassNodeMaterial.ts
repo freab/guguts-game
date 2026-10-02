@@ -23,6 +23,7 @@ import {
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
 import { grassColors, setGrassColors } from "./grassColors";
+import { sunTranslucency } from "../translucency";
 
 /** Live-tunable grass look (no shader rebuild needed). */
 export interface GrassLook {
@@ -72,6 +73,8 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     lodNear: uniform(5),
     lodFar: uniform(10),
     lodForced: uniform(-1),
+    // Strength of the sunlight shining through the blades (see translucency.ts).
+    backlight: uniform(0.9),
   };
 
   // 0 at the blade base, 1 at the tip (the GLB has uv.y = 1 at the base).
@@ -141,6 +144,15 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
   material.colorNode = mix(grassColors.base, tipColor, tip)
     .mul(grassColors.brightness)
     .mul(mix(float(1), lightmapFactor, uniforms.lightmapMix));
+
+  // Backlight: looking towards the low sun, light shines through the thin
+  // blade tips (golden, tinted by the blade) — not where the walls shade it.
+  const sunlit = mix(float(1), lightmapFactor, uniforms.lightmapMix);
+  // (Every NodeMaterial adds emissiveNode; Lambert's typings just omit it.)
+  (material as typeof material & { emissiveNode: THREE.Node | null }).emissiveNode = sunTranslucency(uniforms.backlight)
+    .mul(tipColor.mul(2.2).add(0.15))
+    .mul(tip.pow(1.6))
+    .mul(sunlit);
 
   // Blade silhouettes from the alpha mask (same UV flip as FluffyGrass),
   // as an opaque alpha-clip: no blending, depth-write + early-Z stay on.

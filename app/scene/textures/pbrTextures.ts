@@ -51,6 +51,15 @@ export function usePbrSet(name: string): PbrSet {
   }, [map, normal, arm]);
 }
 
+/** `<name>_height.ktx2`: a tiling height map (linear, grey), e.g. for parallax and displacement. */
+export function useHeightMap(name: string): THREE.Texture {
+  const [height] = useKtx2([`${TEXTURE_DIR}${name}_height.ktx2`]);
+  return useMemo(() => {
+    configure([height], -1, THREE.RepeatWrapping);
+    return height;
+  }, [height]);
+}
+
 /** A leaf atlas (`maple_leaves` or `ivy_leaves`): RGBA colour + opacity, and its normal map (clamped). */
 export function useLeafAtlas(name = "maple_leaves"): { map: THREE.Texture; normalMap: THREE.Texture } {
   const [map, normal] = useKtx2([`${TEXTURE_DIR}${name}_color.ktx2`, `${TEXTURE_DIR}${name}_normal.ktx2`]);
