@@ -165,9 +165,12 @@ interface LeafData {
   matrices: Float32Array;
   colors: Float32Array;
   cells: Float32Array;
+  /**
+   * Stalk point (xyz) and, in w, which way the wall it grows on faces (an
+   * angle about Y: walls only face ±X/±Z) — packed together because a
+   * pipeline may only have 8 vertex buffers.
+   */
   origins: Float32Array;
-  /** Out of the wall each leaf grows on. */
-  walls: Float32Array;
   /**
    * A fixed random number per leaf: which leaves the LOD keeps, and the
    * leaf's tint and flutter phase — stable however the leaves are packed.
@@ -183,8 +186,7 @@ function leafData(leaves: VineLeaf[]): LeafData {
     matrices: new Float32Array(count * 16),
     colors: new Float32Array(count * 3),
     cells: new Float32Array(count),
-    origins: new Float32Array(count * 3),
-    walls: new Float32Array(count * 3),
+    origins: new Float32Array(count * 4),
     ranks: new Float32Array(count),
   };
   const m = new THREE.Matrix4();
@@ -203,8 +205,8 @@ function leafData(leaves: VineLeaf[]): LeafData {
     const age = Math.abs((Math.sin(i * 12.9898) * 43758.5453) % 1);
     data.colors.fill(0.82 + 0.28 * age, i * 3, i * 3 + 3);
     data.cells[i] = leaf.cell;
-    leaf.position.toArray(data.origins, i * 3);
-    leaf.wall.toArray(data.walls, i * 3);
+    leaf.position.toArray(data.origins, i * 4);
+    data.origins[i * 4 + 3] = Math.atan2(leaf.wall.z, leaf.wall.x);
     seed = (Math.imul(seed ^ (seed >>> 15), 2246822519) + 0x6d2b79f5) | 0;
     data.ranks[i] = (seed >>> 0) / 4294967296;
   });
@@ -218,9 +220,8 @@ function leafData(leaves: VineLeaf[]): LeafData {
 function sharedLeafMesh(card: THREE.BufferGeometry, material: THREE.Material, capacity: number): THREE.InstancedMesh {
   const geometry = card.clone();
   geometry.setAttribute("leafCell", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
-  geometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
+  geometry.setAttribute("leafOrigin", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4));
   geometry.setAttribute("leafRank", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
-  geometry.setAttribute("leafWall", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
   mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
   mesh.count = 0;
@@ -429,7 +430,6 @@ export class VineField {
       [g.getAttribute("leafCell") as THREE.InstancedBufferAttribute, "cells"],
       [g.getAttribute("leafOrigin") as THREE.InstancedBufferAttribute, "origins"],
       [g.getAttribute("leafRank") as THREE.InstancedBufferAttribute, "ranks"],
-      [g.getAttribute("leafWall") as THREE.InstancedBufferAttribute, "walls"],
     ];
     let n = 0;
     for (const ch of chunks) {

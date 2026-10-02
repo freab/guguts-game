@@ -3,6 +3,7 @@ import {
   attribute,
   cameraPosition,
   clamp,
+  cos,
   dot,
   float,
   floor,
@@ -75,11 +76,12 @@ export function createVineMaterials(
   // are drawn (those whose rank is under it; the rest collapse to their stalk
   // point — no area, never rasterised), each grown about its stalk by
   // 1/sqrt of that, so the wall stays as covered.
-  const origin = attribute<"vec3">("leafOrigin", "vec3");
+  const stalk = attribute<"vec4">("leafOrigin", "vec4");
+  const origin = stalk.xyz;
   const keep = clamp(uniforms.lodNear.div(length(origin.sub(cameraPosition))), uniforms.lodMin, 1);
   const grown = origin.add(positionLocal.sub(origin).mul(inverseSqrt(keep)));
   // The whole leaf moves out by the wall's bulge at its stalk.
-  const leafLift = attribute<"vec3">("leafWall", "vec3").mul(wallBulge(wallHeight, origin).add(BULGE_CLEARANCE));
+  const leafLift = vec3(cos(stalk.w), 0, sin(stalk.w)).mul(wallBulge(wallHeight, origin).add(BULGE_CLEARANCE));
   leaves.positionNode = select(
     rank.greaterThanEqual(keep),
     origin,
