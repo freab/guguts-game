@@ -56,6 +56,8 @@ export interface RunState {
   callsUsed: number;
   /** performance.now() of the last call (its map shows for a moment), 0 = none. */
   calledAt: number;
+  /** performance.now() of the last call tried with no voice left (a dry rasp), 0 = none. */
+  dryAt: number;
   /** Which of the hidden bottles have been drunk. */
   bottlesTaken: readonly boolean[];
   /** The latest message for the player, if any. */
@@ -74,6 +76,7 @@ let state: RunState = {
   calls: GOAT_CALLS,
   callsUsed: 0,
   calledAt: 0,
+  dryAt: 0,
   bottlesTaken: Array(BOTTLES).fill(false),
   notice: null,
 };
@@ -82,6 +85,7 @@ const freshCalls = () => ({
   calls: GOAT_CALLS,
   callsUsed: 0,
   calledAt: 0,
+  dryAt: 0,
   bottlesTaken: Array<boolean>(BOTTLES).fill(false),
   notice: null,
 });
@@ -109,6 +113,7 @@ export const runStore = {
     if (state.phase !== "armed" && state.phase !== "running") return false;
     if (state.calls <= 0) {
       set({
+        dryAt: now,
         notice: {
           text: "Your throat is too dry to call. Find water — two bottles are hidden in the maze.",
           at: now,

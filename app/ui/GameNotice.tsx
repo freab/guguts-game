@@ -8,9 +8,10 @@ const NOTICE_MS = 5000;
 const FADE_MS = 700;
 
 /**
- * A short message to the player under the clock (runStore.notice): the goat
- * calls running out, water found… Each notice shows for a few seconds and
- * fades; a newer one replaces it.
+ * A short message to the player (runStore.notice) — the goat calls running
+ * out, water found… — under the clock, or at the bottom on small screens,
+ * clear of the call map. Each shows for a few seconds and fades; a newer one
+ * replaces it.
  */
 export default function GameNotice() {
   const { notice, phase } = useRun();
@@ -33,7 +34,7 @@ function Message({ notice }: { notice: Notice }) {
   return (
     <div
       role="status"
-      className={`pointer-events-none absolute left-1/2 top-28 z-20 w-[min(92vw,26rem)] -translate-x-1/2 rounded-2xl bg-black/60 px-4 py-2.5 text-center text-sm text-[#fdf3d4] backdrop-blur transition-opacity sm:top-16 ${
+      className={`pointer-events-none absolute bottom-28 left-1/2 z-20 w-[min(70vw,24rem)] -translate-x-1/2 sm:bottom-auto rounded-2xl bg-black/60 px-4 py-2.5 text-center text-sm text-[#fdf3d4] backdrop-blur transition-opacity sm:top-16 ${
         fading ? "opacity-0" : "opacity-100"
       }`}
       style={{ transitionDuration: `${FADE_MS}ms`, animation: "notice-in 250ms ease-out" }}

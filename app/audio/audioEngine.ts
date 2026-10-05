@@ -3,8 +3,10 @@
  *
  *   ambience ─ birds ┐                                 ┐
  *             wind ──┴─ ambience bus (music switch) ───┤
- *   footsteps ─ dry ─────────── footstep bus ──────────┼─ master ─ compressor ─ out
- *              └─ wet ─ short "maze walls" reverb ─────┘
+ *   footsteps ─ dry ─────────── footstep bus ──────────┤
+ *              └─ wet ─ short "maze walls" reverb ─────┼─ master ─ compressor ─ out
+ *   calls ─ Gugut's whistle, the goat's bleat ─ calls bus ┤
+ *              └─ wet ─ long "across the maze" reverb ─┘
  *
  * - Ambience: evening birdsong and wind recordings (public/audio), decoded to
  *   buffers and looped gaplessly on the audio clock, each loudness-matched
@@ -16,6 +18,12 @@
  *   never the same one twice in a row, each slightly re-pitched, alternating
  *   left/right, with a touch of short reverb off the maze walls. Until they
  *   load, steps are synthesised (filtered noise: swish, thud, rustle).
+ * - Calling the goat (goatCall): Gugut's two-note shepherd's whistle
+ *   (synthesised), then — after she has heard it and the sound has crossed the
+ *   maze — her bleat (real recordings, public/audio/bleats.webm) from where
+ *   she really is: HRTF-panned around the listener (the camera, setListener),
+ *   quieter and wetter with distance, muffled when walls stand between. With
+ *   no voice left, a dry, breathy rasp instead (dryCall).
  * - A gentle compressor on the master glues the mix and prevents clipping.
  *
  * The ambience plays only while the game is running (after the preloader) and
@@ -51,6 +59,20 @@ const STEP_GAIN = 0.8;
 /** Above this intensity the running steps are used. */
 const RUN_INTENSITY = 0.75;
 const FADE_OUT = 1.2;
+/** The goat's bleats: the sprite, and where each is in it ([start, duration] s). */
+const BLEATS_SRC = "/audio/bleats.webm";
+const BLEATS_INDEX = "/audio/bleats.json";
+/** The calls bus (Gugut's whistle and the goat's answer): over the ambience. */
+const CALLS_DB = -5;
+/**
+ * The bleat's distance roll-off (Web Audio "inverse" model): full level
+ * within BLEAT_NEAR m, about -15 dB across the maze.
+ */
+const BLEAT_NEAR = 4;
+const BLEAT_ROLLOFF = 0.7;
+/** How long the goat takes to answer once she hears the call (s, random in range). */
+const BLEAT_REACTION: [number, number] = [0.25, 0.6];
+const SPEED_OF_SOUND = 343;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
@@ -75,6 +97,10 @@ class AudioEngine {
   private lastStep = -1;
   private drift: ReturnType<typeof setInterval> | null = null;
   private foot = 1;
+  private calls: GainNode | null = null;
+  private farSend: GainNode | null = null;
+  private bleats: { buffer: AudioBuffer; index: [number, number][] } | null = null;
+  private lastBleat = -1;
 
   private musicOn = true;
   private loadedPreference = false;
@@ -164,6 +190,14 @@ class AudioEngine {
     this.reverbSend.gain.value = dbToGain(REVERB_SEND_DB);
     this.reverbSend.connect(reverb).connect(master);
 
+    this.calls = ctx.createGain();
+    this.calls.gain.value = dbToGain(CALLS_DB);
+    this.calls.connect(master);
+    const far = ctx.createConvolver();
+    far.buffer = this.distanceImpulse(ctx);
+    this.farSend = ctx.createGain();
+    this.farSend.connect(far).connect(master);
+
     // One second of white noise, reused by every footstep.
     const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noise.getChannelData(0);
@@ -172,6 +206,7 @@ class AudioEngine {
 
     void this.loadTracks(ctx);
     void this.loadSteps(ctx);
+    void this.loadBleats(ctx);
 
     // A hidden tab goes quiet (and stops using the audio thread).
     document.addEventListener("visibilitychange", () => {
@@ -220,6 +255,21 @@ class AudioEngine {
       this.steps = { buffer, walk: index.walk, run: index.run };
     } catch {
       // Keep the synthesised steps.
+    }
+  }
+
+  /** Decode the goat's bleats. */
+  private async loadBleats(ctx: AudioContext) {
+    try {
+      const [buffer, index] = await Promise.all([
+        fetch(BLEATS_SRC)
+          .then((r) => r.arrayBuffer())
+          .then((b) => ctx.decodeAudioData(b)),
+        fetch(BLEATS_INDEX).then((r) => r.json() as Promise<[number, number][]>),
+      ]);
+      this.bleats = { buffer, index };
+    } catch {
+      // No answer then — the call's map still shows where she is.
     }
   }
 
@@ -275,6 +325,191 @@ class AudioEngine {
       }
     }
     return impulse;
+  }
+
+  /** A longer, darker tail — a sound carrying across the maze. */
+  private distanceImpulse(ctx: AudioContext): AudioBuffer {
+    const length = Math.floor(ctx.sampleRate * 1.6);
+    const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = impulse.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < length; i++) {
+        const t = i / ctx.sampleRate;
+        lp += (Math.random() * 2 - 1 - lp) * 0.18;
+        // A soft onset (the first reflections arrive late), then a slow decay.
+        d[i] = lp * Math.min(1, t / 0.04) * Math.exp(-t * 3.2) * 0.6;
+      }
+    }
+    return impulse;
+  }
+
+  /* ---------- calling the goat ---------- */
+
+  /** Where the listener is (the camera) and which way it faces — for the goat's bleat. */
+  setListener(x: number, y: number, z: number, forwardX: number, forwardY: number, forwardZ: number) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const l = ctx.listener;
+    if (l.positionX) {
+      l.positionX.value = x;
+      l.positionY.value = y;
+      l.positionZ.value = z;
+      l.forwardX.value = forwardX;
+      l.forwardY.value = forwardY;
+      l.forwardZ.value = forwardZ;
+      l.upX.value = 0;
+      l.upY.value = 1;
+      l.upZ.value = 0;
+    } else {
+      l.setPosition(x, y, z);
+      l.setOrientation(forwardX, forwardY, forwardZ, 0, 1, 0);
+    }
+  }
+
+  /**
+   * Gugut calls the goat — a two-note shepherd's whistle — and she answers
+   * from (x, y, z): `distance` m away (sets how late, quiet and distant her
+   * bleat sounds), `occluded` when walls stand between (muffled).
+   */
+  goatCall(x: number, y: number, z: number, distance: number, occluded: boolean) {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || ctx.state !== "running") return;
+    const whistle = this.whistle(ctx);
+    const rand = (a: number, b: number) => a + Math.random() * (b - a);
+    const delay = whistle + distance / SPEED_OF_SOUND + rand(...BLEAT_REACTION);
+    this.bleat(ctx, x, y, z, distance, occluded, delay);
+    // Now and then she bleats twice.
+    if (Math.random() < 0.35) this.bleat(ctx, x, y, z, distance, occluded, delay + rand(0.9, 1.4));
+  }
+
+  /** Gugut tries to call with no voice left: a dry, breathy rasp. */
+  dryCall() {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || !this.noise || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.setValueAtTime(1300, now);
+    band.frequency.linearRampToValueAtTime(800, now + 0.4);
+    band.Q.value = 1.1;
+    // A rough, catching rasp: the breath stutters.
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(0.32, now + 0.04);
+    env.gain.setTargetAtTime(0.16, now + 0.08, 0.05);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+    const flutter = ctx.createOscillator();
+    flutter.frequency.value = 23;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    const rough = ctx.createGain();
+    rough.gain.value = 0.6;
+    flutter.connect(depth).connect(rough.gain);
+    src.connect(band).connect(env).connect(rough).connect(this.calls);
+    src.start(now, Math.random() * 0.4);
+    src.stop(now + 0.5);
+    flutter.start(now);
+    flutter.stop(now + 0.5);
+  }
+
+  /** The whistle, starting now; returns its length (s). */
+  private whistle(ctx: AudioContext): number {
+    const now = ctx.currentTime;
+    const rand = (a: number, b: number) => a + Math.random() * (b - a);
+    const out = ctx.createGain();
+    out.gain.value = 0.22;
+    out.connect(this.calls!);
+    if (this.reverbSend) out.connect(this.reverbSend);
+    if (this.farSend) {
+      const send = ctx.createGain();
+      send.gain.value = 0.25;
+      out.connect(send).connect(this.farSend);
+    }
+    // Two notes: a rising call, then a falling one — a little different each time.
+    const pitch = rand(0.94, 1.06);
+    const notes: [number, number, number, number][] = [
+      // [start, length, from Hz, to Hz]
+      [0, 0.26, 1650 * pitch, 2350 * pitch],
+      [0.34, 0.38, 2300 * pitch, 1500 * pitch],
+    ];
+    for (const [at, length, from, to] of notes) {
+      const t0 = now + at;
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(from, t0);
+      osc.frequency.exponentialRampToValueAtTime(to, t0 + length * 0.85);
+      // A lip's waver.
+      const vibrato = ctx.createOscillator();
+      vibrato.frequency.value = rand(5, 7);
+      const vibratoDepth = ctx.createGain();
+      vibratoDepth.gain.value = 22;
+      vibrato.connect(vibratoDepth).connect(osc.frequency);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.exponentialRampToValueAtTime(1, t0 + 0.035);
+      env.gain.setValueAtTime(1, t0 + length - 0.07);
+      env.gain.exponentialRampToValueAtTime(0.0001, t0 + length);
+      osc.connect(env).connect(out);
+      // The breath around the tone.
+      if (this.noise) {
+        const breath = ctx.createBufferSource();
+        breath.buffer = this.noise;
+        const band = ctx.createBiquadFilter();
+        band.type = "bandpass";
+        band.frequency.value = (from + to) / 2;
+        band.Q.value = 2.5;
+        const air = ctx.createGain();
+        air.gain.value = 0.12;
+        breath.connect(band).connect(air).connect(env);
+        breath.start(t0, Math.random() * 0.5);
+        breath.stop(t0 + length);
+      }
+      osc.start(t0);
+      osc.stop(t0 + length);
+      vibrato.start(t0);
+      vibrato.stop(t0 + length);
+    }
+    return 0.72;
+  }
+
+  /** One bleat from (x, y, z), `delay` s from now (never the same one twice running). */
+  private bleat(ctx: AudioContext, x: number, y: number, z: number, distance: number, occluded: boolean, delay: number) {
+    if (!this.bleats || !this.calls || !this.farSend) return;
+    const { buffer, index } = this.bleats;
+    let pick = Math.floor(Math.random() * index.length);
+    if (index.length > 1 && pick === this.lastBleat) pick = (pick + 1) % index.length;
+    this.lastBleat = pick;
+    const [offset, duration] = index[pick];
+    const t0 = ctx.currentTime + delay;
+
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    // Walls in the way muffle her; distance takes the top off too.
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = "lowpass";
+    muffle.frequency.value = (occluded ? 2600 : 12000) / (1 + distance / 40);
+    muffle.Q.value = 0.5;
+    const panner = new PannerNode(ctx, {
+      panningModel: "HRTF",
+      distanceModel: "inverse",
+      refDistance: BLEAT_NEAR,
+      rolloffFactor: BLEAT_ROLLOFF,
+      maxDistance: 200,
+      positionX: x,
+      positionY: y,
+      positionZ: z,
+    });
+    src.connect(muffle).connect(panner);
+    panner.connect(this.calls);
+    // The farther she is, the more of her you hear as echo off the maze.
+    const wet = ctx.createGain();
+    wet.gain.value = Math.min(0.9, 0.12 + distance / 45);
+    panner.connect(wet).connect(this.farSend);
+    src.start(t0, offset, duration);
   }
 
   /* ---------- footsteps ---------- */

@@ -1,5 +1,5 @@
 // Builds the game's audio from the source recordings in assets-src/audio
-// (gitignored; all CC0, BigSoundBank / Joseph Sardin — see public/audio/LICENSE.md):
+// (gitignored; all CC0, BigSoundBank — see public/audio/LICENSE.md):
 //
 //   npm run audio
 //
@@ -9,6 +9,9 @@
 //   "Steps in the Grass, Slow / Quick" (#1253 / #1254) — found by their
 //   loudness peaks, the cleanest and most consistent kept, each levelled and
 //   faded — packed into one Opus file with an index of where each step is.
+// - public/audio/bleats.webm + bleats.json: the goat's answers to a call —
+//   single bleats cut from "Bleating Goat #1 / #2" (#0279 / #0280) and
+//   "Dwarf goat bleating" (#0880), levelled and faded, packed the same way.
 //
 // Prints each output's RMS level: the ambience's goes into TRACKS in
 // app/audio/audioEngine.ts (loudness matching).
@@ -207,5 +210,50 @@ function buildFootsteps() {
   console.log(`footsteps.webm: ${(pcm.length / RATE).toFixed(2)} s, ${index.walk.length} walk + ${index.run.length} run steps`);
 }
 
+/* ----------------------------------------------------------------- bleats */
+
+/**
+ * The bleats, by hand: [file, start s, end s] around each one (with a little
+ * air either side), found with ffmpeg's silencedetect at -35 dB.
+ */
+const BLEATS = [
+  ["bleating-goat-1-0279.mp3", 0, 1.0],
+  ["bleating-goat-2-0280.mp3", 0, 0.86],
+  ["dwarf-goat-bleating-0880.mp3", 0.27, 1.02],
+  ["dwarf-goat-bleating-0880.mp3", 1.62, 2.35],
+  ["dwarf-goat-bleating-0880.mp3", 3.14, 3.94],
+  ["dwarf-goat-bleating-0880.mp3", 4.92, 5.6],
+  ["dwarf-goat-bleating-0880.mp3", 6.55, 7.3],
+  ["dwarf-goat-bleating-0880.mp3", 8.11, 8.69],
+  ["dwarf-goat-bleating-0880.mp3", 10.3, 11.2],
+];
+
+function buildBleats() {
+  const GAP = Math.round(RATE * 0.15);
+  const LEAD = Math.round(RATE * 0.1);
+  const decoded = new Map();
+  const parts = [new Float32Array(LEAD)];
+  let cursor = LEAD;
+  const index = BLEATS.map(([file, from, to]) => {
+    if (!decoded.has(file)) decoded.set(file, decodeMono(path.join(src, file)));
+    const a = decoded.get(file);
+    const bleat = levelStep(a, { start: Math.round(from * RATE), end: Math.min(a.length, Math.round(to * RATE)) });
+    const entry = [+(cursor / RATE).toFixed(4), +(bleat.length / RATE).toFixed(4)];
+    parts.push(bleat, new Float32Array(GAP));
+    cursor += bleat.length + GAP;
+    return entry;
+  });
+  const pcm = new Float32Array(cursor);
+  let at = 0;
+  for (const part of parts) (pcm.set(part, at), (at += part.length));
+  ffmpeg(
+    ["-f", "f32le", "-ar", String(RATE), "-ac", "1", "-i", "-", "-c:a", "libopus", "-b:a", "96k", path.join(out, "bleats.webm")],
+    Buffer.from(pcm.buffer)
+  );
+  writeFileSync(path.join(out, "bleats.json"), JSON.stringify(index) + "\n");
+  console.log(`bleats.webm: ${(pcm.length / RATE).toFixed(2)} s, ${index.length} bleats`);
+}
+
 buildBirds();
 buildFootsteps();
+buildBleats();
