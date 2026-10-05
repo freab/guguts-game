@@ -4,9 +4,8 @@
 //   node scripts/build-textures.mjs
 //
 // Sources (all CC0, downloaded once into assets-src/textures):
-//   Poly Haven  forrest_ground_01 (ground + footpath), bark_brown_02,
-//               wood_textured_concrete (walls), old_stone_wall (its height map,
-//               for the walls' chipped edges) (1K JPG: diff, nor_gl, arm, disp)
+//   Poly Haven  forrest_ground_01 (ground + footpath), bark_brown_02, old_stone_wall
+//               (maze walls) (1K JPG: diff, nor_gl, arm)
 //   ambientCG   LeafSet027 (1K JPG maple leaf atlas: Color, Opacity, NormalGL)
 //   ambientCG   LeafSet017 (1K JPG English ivy leaf atlas: Color, Opacity, NormalGL)
 //
@@ -260,10 +259,10 @@ console.log("ground (forrest_ground_01)");
 total += await pbrSet("forrest_ground_01", "ground");
 console.log("bark (bark_brown_02)");
 total += await pbrSet("bark_brown_02", "bark");
-console.log("walls (wood_textured_concrete)");
-total += await pbrSet("wood_textured_concrete", "wall");
-// The old stone wall's height map: the shapes of the walls' chipped edges
-// and their slight bulge. UASTC, half resolution.
+console.log("walls (old_stone_wall)");
+total += await pbrSet("old_stone_wall", "wall");
+// Its height map, for the walls' parallax and displacement: UASTC (high
+// precision — parallax shows compression blocks), half resolution.
 total += await encode(
   await sharp(await fs.readFile(path.join(SRC, "old_stone_wall_disp_1k.jpg")))
     .toColourspace("srgb")

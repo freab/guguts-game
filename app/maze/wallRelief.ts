@@ -3,11 +3,8 @@ import { float, texture, vec2 } from "three/tsl";
 
 /** Metres of wall one repeat of the stone texture covers (its real size). */
 export const STONE_TILE = 2;
-/**
- * How far the wall faces bulge out (m) at most: a centimetre — cast concrete
- * slabs, just not ruler-flat.
- */
-export const BULGE = 0.012;
+/** How far the wall faces bulge out (m) at the highest stone. */
+export const BULGE = 0.075;
 /** Pushed out at least this much everywhere (m), so no face sits flat. */
 const BULGE_BASE = 0.006;
 /** Height-map mip the bulge reads: ~25 cm per texel, smooth bulges. */
