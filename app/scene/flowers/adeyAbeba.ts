@@ -1,5 +1,5 @@
 import * as THREE from "three/webgpu";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /**
  * Adey Abeba, the yellow Meskel daisy, ported from the adey-abeba project
@@ -191,8 +191,9 @@ function buildStarHead(): THREE.BufferGeometry {
 }
 
 /**
- * Bake one flower head (petals + core) into a single geometry, facing up,
- * 1 unit across, centred on the origin. Attributes: position, normal, color.
+ * Bake one flower head (petals + core) into a single indexed geometry, facing
+ * up, 1 unit across, centred on the origin. Attributes: position, normal,
+ * color.
  */
 export function bakeAdeyAbeba(petalBase: THREE.BufferGeometry | null, detail: FlowerDetail): THREE.BufferGeometry {
   let merged: THREE.BufferGeometry;
@@ -229,8 +230,18 @@ export function bakeAdeyAbeba(petalBase: THREE.BufferGeometry | null, detail: Fl
     merged.translate(-(min.x + max.x) / 2, -min.y, -(min.z + max.z) / 2);
     merged.scale(unit, unit, unit);
   }
-  merged.computeVertexNormals();
-  merged.computeBoundingBox();
-  merged.computeBoundingSphere();
-  return merged;
+  // The material lights every head with a straight-up normal
+  // (flowerNodeMaterial), so the mesh's normals are only placeholders: all up.
+  // That lets triangle corners with the same position and colour merge into
+  // one vertex — the parts were built non-indexed for the merge — so the GPU
+  // shades each vertex once instead of once per triangle using it: the same
+  // triangles, 3-4x fewer vertices.
+  const normals = new Float32Array(merged.getAttribute("position").count * 3);
+  for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
+  merged.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
+  const indexed = mergeVertices(merged);
+  merged.dispose();
+  indexed.computeBoundingBox();
+  indexed.computeBoundingSphere();
+  return indexed;
 }

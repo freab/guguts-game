@@ -93,6 +93,7 @@ function geometryBySystem(scene: THREE.Scene): GeometryRow[] {
   scene.traverseVisible((o) => {
     const mesh = o as THREE.Mesh & { isInstancedMesh?: boolean; count?: number };
     if (!mesh.isMesh) return;
+    if (!mesh.layers.isEnabled(0)) return; // shadow-map-only copies (WallBatch)
     const g = mesh.geometry;
     const elements = Math.min(g.index ? g.index.count : (g.attributes.position?.count ?? 0), g.drawRange.count);
     // (Meshes that thin themselves in the shader report what they draw.)

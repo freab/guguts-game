@@ -30,6 +30,7 @@ import Grass from "./Grass";
 import InfiniteGrid from "./InfiniteGrid";
 import SkyEnvironment from "./SkyEnvironment";
 import { setSun as setSunUniforms } from "./sunUniforms";
+import { SHADOW_ONLY_LAYER } from "./layers";
 
 // Register the three/webgpu class catalog with R3F's JSX reconciler so every
 // <mesh>/<meshLambertMaterial>/etc. uses the same classes the WebGPURenderer
@@ -89,6 +90,8 @@ function bakeShadows(light: THREE.DirectionalLight, direction: THREE.Vector3) {
   cam.near = 1;
   cam.far = distance * 2;
   cam.updateProjectionMatrix();
+  // Also the full copies of things culled in the view (every wall: WallBatch).
+  cam.layers.enable(SHADOW_ONLY_LAYER);
 
   light.shadow.autoUpdate = false;
   light.shadow.needsUpdate = true;
@@ -543,7 +546,7 @@ export default function Scene({ view }: { view: ViewMode }) {
 
         <InfiniteGrid />
         <MazeGround />
-        <Maze />
+        <Maze drawDistance={fogEnabled ? viewDistance * 1.03 + 0.5 : Infinity} />
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <CoffeeBush />

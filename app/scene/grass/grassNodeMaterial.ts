@@ -1,5 +1,7 @@
 import * as THREE from "three/webgpu";
 import {
+  Fn,
+  If,
   abs,
   attribute,
   cameraPosition,
@@ -19,7 +21,7 @@ import {
   vec2,
   select,
   vec3,
-  vertexStage,
+  varyingProperty,
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
 import { grassColors, setGrassColors } from "./grassColors";
@@ -47,7 +49,7 @@ const SWAY_REF_HEIGHT = 0.6;
  * mask, a dark base fading to a noise-varied tip colour, a travelling sine wind,
  * and noise-driven height. Differences, for performance and the footpath:
  * - The perlin texture is replaced by procedural `mx_noise_float`, so the vertex
- *   stage never samples a texture; colour noise is per vertex (`vertexStage`),
+ *   stage never samples a texture; colour noise is per vertex (a varying),
  *   not per pixel, which matters under heavy grass overdraw.
  * - Height lift and sway scale with each blade's own (instance-scaled) height
  *   instead of a fixed amount, so short trodden grass on the footpath stays
@@ -126,19 +128,30 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
   // tufts, each vertex tagged with its LOD. Each tuft keeps the LOD for its
   // distance; the other LODs' vertices collapse onto the tuft's base, so their
   // triangles have no area and are never rasterised.
+  //
+  // Those collapsed vertices are most of the mesh (a tuft carries 228 vertices
+  // and keeps 132, 64 or 32 of them), so they skip everything else: the noise,
+  // height and wind are worked out only inside the branch for the kept LOD —
+  // the same result for every drawn vertex, a fraction of the vertex work.
+  // (The patch noise reaches the fragment stage through vPatch, set in the
+  // branch too; collapsed vertices draw nothing, so it never matters there.)
   const origin = attribute<"vec3">("tuftOrigin", "vec3");
   const distance = length(origin.sub(cameraPosition));
   const autoLod = select(distance.lessThan(uniforms.lodNear), float(0), select(distance.lessThan(uniforms.lodFar), float(1), float(2)));
   const wantLod = select(uniforms.lodForced.greaterThanEqual(0), uniforms.lodForced, autoLod);
   const inLod = abs(attribute<"float">("grassLod", "float").sub(wantLod)).lessThan(0.5);
-  material.positionNode = select(
-    inLod,
-    vec3(positionLocal.x.add(sway), lifted, positionLocal.z.add(sway)),
-    origin
-  );
+  const vPatch = varyingProperty("float", "vGrassPatch");
+  material.positionNode = Fn(() => {
+    const position = origin.toVar();
+    If(inLod, () => {
+      vPatch.assign(patch);
+      position.assign(vec3(positionLocal.x.add(sway), lifted, positionLocal.z.add(sway)));
+    });
+    return position;
+  })();
 
   // Colour: base -> tip gradient, tip hue picked by the patch noise.
-  const tipColor = mix(grassColors.tip1, grassColors.tip2, vertexStage(patch));
+  const tipColor = mix(grassColors.tip1, grassColors.tip2, vPatch);
   // Baked wall shadows + AO: one lightmap fetch per fragment instead of
   // filtering the shadow map (the grass doesn't receive realtime shadows).
   material.colorNode = mix(grassColors.base, tipColor, tip)

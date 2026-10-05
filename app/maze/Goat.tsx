@@ -4,114 +4,76 @@ import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
+import { float, positionLocal, rotate, sin, smoothstep, uniform, vec3 } from "three/tsl";
 import BlobShadow from "../character/BlobShadow";
 import { fitSkinnedModel } from "../character/fitSkinnedModel";
 import { exitPosition } from "./mazeData";
 import { useDisposable } from "../hooks/useDisposable";
 
 /**
- * Animated goat — Gobkit Free Animal Pack Vol. 2, CC0 (public domain):
- * https://gobkit.itch.io/gobkit-free-animal-pack-vol-2
- * Separate clips: idle / walk / attack / dead. Authored facing +Z.
+ * The goat: one static, textured mesh (no rig, no clips), authored facing +Z
+ * in a unit box — body along Z (tail at -0.5, snout at +0.5), feet at
+ * y ≈ -0.47, head top at y ≈ +0.47, front legs around z ≈ 0, hind legs
+ * around z ≈ -0.45. The regions below are in those model units.
  */
-const GOAT_URL = "/models/Goat.glb";
-/** Standing height (top of the horns), metres. */
+const GOAT_URL = "/models/goatnew.glb";
+/** Standing height (top of the head), metres. */
 const GOAT_HEIGHT = 1.0;
 
-/** Seconds per idle cycle: look around, graze, look around again. */
-const GRAZE_PERIOD = 9;
-
-const _parentQ = new THREE.Quaternion();
-const _offset = new THREE.Quaternion();
-const _axis = new THREE.Vector3();
-const X_AXIS = new THREE.Vector3(1, 0, 0);
-const Y_AXIS = new THREE.Vector3(0, 1, 0);
-const Z_AXIS = new THREE.Vector3(0, 0, 1);
-
-/** 0 → 1 → 0 over [start, end], easing in and out over `edge` seconds. */
-function bump(t: number, start: number, end: number, edge: number): number {
-  const s = THREE.MathUtils.smoothstep(t, start, start + edge);
-  return s * (1 - THREE.MathUtils.smoothstep(t, end - edge, end));
-}
+/** Seconds per breath: a calm, resting goat. */
+const BREATH_PERIOD = 3.4;
+/** How much the barrel swells on the in-breath (fraction of its radius). */
+const BREATH_SWELL = 0.035;
+/** Where the neck bends from, for the head's slow look-around and nod. */
+const NECK = new THREE.Vector3(0, 0.1, 0.12);
 
 /**
- * The goat's idle loop. The pack's idle clip is only a slight breathing bob
- * (≈3° of motion), so a procedural layer goes on top of it every frame: she
- * looks around, bows to graze and chew, wags her tail in bursts and flicks her
- * ears. It's a chibi rig — the face (mouth, eyes, ears) sits on the round body
- * ("Spine") and "Head" is just the tuft on top — so turning and bowing happen
- * at the spine. Everything is offset per goat so it doesn't look canned.
+ * The goat's material with life in the vertex shader — no skeleton needed:
+ * - breathing: the barrel (between the legs, above them) swells and settles,
+ *   the belly a little more than the back, with a slight pause after each
+ *   out-breath; legs, head and rump stay put;
+ * - the head and neck turn slowly to look around and nod faintly with each
+ *   breath, bending smoothly from the neck.
+ * Each goat gets its own phase so they don't breathe in step.
  */
-class GoatAnimator {
-  private readonly mixer: THREE.AnimationMixer;
-  private readonly bones: Partial<Record<"spine" | "tuft" | "mouth" | "tail" | "leftEar" | "rightEar", THREE.Object3D>>;
-  private time = Math.random() * 100;
+function createGoatMaterial(source: THREE.MeshStandardMaterial) {
+  const time = uniform(Math.random() * 100);
+  const material = new THREE.MeshStandardNodeMaterial();
+  material.map = source.map;
+  material.color.copy(source.color);
+  material.roughnessMap = source.roughnessMap;
+  material.metalnessMap = source.metalnessMap;
+  material.roughness = source.roughness;
+  material.metalness = source.metalness;
+  material.normalMap = source.normalMap;
 
-  constructor(
-    root: THREE.Object3D,
-    clips: THREE.AnimationClip[],
-    /** The model's frame (+Z forward, +Y up); the procedural axes live in it. */
-    private readonly frame: THREE.Object3D
-  ) {
-    this.mixer = new THREE.AnimationMixer(root);
-    const idle = clips.find((c) => /idle/i.test(c.name)) ?? clips[0];
-    if (idle) {
-      const action = this.mixer.clipAction(idle).setLoop(THREE.LoopRepeat, Infinity).play();
-      action.timeScale = 0.7; // slower, calmer breathing
-      action.time = Math.random() * idle.duration;
-    }
-    this.bones = {
-      spine: root.getObjectByName("Spine"),
-      tuft: root.getObjectByName("Head"),
-      mouth: root.getObjectByName("Mouth"),
-      tail: root.getObjectByName("Tail"),
-      leftEar: root.getObjectByName("LeftEar"),
-      rightEar: root.getObjectByName("RightEar"),
-    };
-  }
+  const p = positionLocal;
+  // Breath: 0 → 1 → 0, eased, with a short rest at the bottom.
+  const phase = time.mul((2 * Math.PI) / BREATH_PERIOD);
+  const breath = smoothstep(-0.6, 1, sin(phase));
+  // The barrel: along the body between the haunch and the shoulder, above the
+  // legs and below the neck.
+  const barrel = smoothstep(-0.46, -0.3, p.z)
+    .mul(smoothstep(0.2, 0.04, p.z))
+    .mul(smoothstep(-0.3, -0.14, p.y))
+    .mul(smoothstep(0.3, 0.16, p.y));
+  // Out from the body's long axis; the belly drops a little more.
+  const belly = smoothstep(0.05, -0.15, p.y).mul(0.6).add(1);
+  const swell = vec3(p.x, p.y.mul(belly), 0).mul(breath.mul(barrel).mul(BREATH_SWELL));
 
-  update(dt: number): void {
-    // The clip rewrites every animated bone's pose, so offsets never pile up.
-    this.mixer.update(dt);
-    this.time += dt;
-    const t = this.time;
-    const { spine, tuft, mouth, tail, leftEar, rightEar } = this.bones;
+  // Head: a slow wandering look (layered sines), and a faint nod on each breath.
+  const headWeight = smoothstep(0.08, 0.26, p.z).mul(smoothstep(-0.02, 0.14, p.y));
+  const look = sin(time.mul(0.31)).add(sin(time.mul(0.73).add(1.7)).mul(0.5)).mul(0.11);
+  const nod = breath.mul(0.025).add(sin(time.mul(0.23).add(0.4)).mul(0.04));
+  const neck = vec3(NECK.x, NECK.y, NECK.z);
+  const turned = rotate(p.sub(neck), vec3(nod.mul(headWeight), look.mul(headWeight), float(0))).add(neck);
 
-    // Graze: every cycle she bows forward for a few seconds and chews.
-    const cycle = t % GRAZE_PERIOD;
-    const graze = bump(cycle, 5, 8.2, 0.7);
-    // Look around (slow, layered sines) — less while grazing.
-    const look = (Math.sin(t * 0.41) + 0.5 * Math.sin(t * 0.93 + 1.7)) * 0.35 * (1 - graze);
-    this.rotate(spine, Y_AXIS, look);
-    this.rotate(spine, X_AXIS, graze * 0.38);
-    this.rotate(mouth, X_AXIS, graze * Math.max(0, Math.sin(t * 11)) * 0.25);
-    // The tuft lags the body a little.
-    this.rotate(tuft, Z_AXIS, Math.sin(t * 1.9) * 0.08 - look * 0.3);
-
-    // Tail: quick wagging bursts.
-    const wag = bump((t + 1.3) % 4.3, 0, 1.3, 0.25);
-    this.rotate(tail, Y_AXIS, wag * Math.sin(t * 20) * 0.45);
-
-    // Ears: short independent flicks.
-    this.rotate(leftEar, Z_AXIS, bump((t + 0.4) % 3.7, 0, 0.35, 0.12) * 0.5);
-    this.rotate(rightEar, Z_AXIS, -bump((t + 2.1) % 5.3, 0, 0.35, 0.12) * 0.5);
-  }
-
-  /** Rotate a bone by `angle` about an axis given in the model's frame. */
-  private rotate(bone: THREE.Object3D | undefined, axis: THREE.Vector3, angle: number): void {
-    if (!bone?.parent || angle === 0) return;
-    // Axis in model space -> world space -> the bone's parent space.
-    this.frame.getWorldQuaternion(_offset);
-    _axis.copy(axis).applyQuaternion(_offset);
-    bone.parent.getWorldQuaternion(_parentQ);
-    _axis.applyQuaternion(_parentQ.invert()).normalize();
-    bone.quaternion.premultiply(_offset.setFromAxisAngle(_axis, angle));
-  }
-
-  dispose(): void {
-    this.mixer.stopAllAction();
-    this.mixer.uncacheRoot(this.mixer.getRoot());
-  }
+  material.positionNode = turned.add(swell);
+  return {
+    material,
+    advance: (dt: number) => void (time.value += dt),
+    dispose: () => material.dispose(),
+  };
 }
 
 /**
@@ -119,14 +81,26 @@ class GoatAnimator {
  * the thing you're looking for. It faces back into the maze, towards you.
  */
 export default function Goat() {
-  const { scene, animations } = useGLTF(GOAT_URL);
+  const { scene } = useGLTF(GOAT_URL);
   const goat = useMemo(() => fitSkinnedModel(scene, GOAT_HEIGHT), [scene]);
-  const animator = useDisposable(
-    () => new GoatAnimator(goat.animated, animations, goat.root),
-    [goat, animations]
-  );
+  const life = useDisposable(() => {
+    let source: THREE.MeshStandardMaterial | null = null;
+    goat.animated.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh && !source) source = mesh.material as THREE.MeshStandardMaterial;
+    });
+    const goatMaterial = createGoatMaterial(source!);
+    goat.animated.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.material = goatMaterial.material;
+        mesh.name = ""; // (counted under "Goat" in the #debug readout)
+      }
+    });
+    return goatMaterial;
+  }, [goat]);
 
-  useFrame((_, dt) => animator.update(Math.min(dt, 0.1)));
+  useFrame((_, dt) => life.advance(Math.min(dt, 0.1)));
 
   const [x, z] = exitPosition();
   // Model faces +Z; turn it to look at the maze centre (the origin).

@@ -20,6 +20,8 @@ const THIN_STEM = 0.006;
  */
 export const LEAF_LOD_NEAR = 5;
 export const LEAF_LOD_MIN = 0.3;
+/** Stem vertices the shared stem mesh starts with (it grows when needed). */
+const STEM_VERTEX_CAPACITY = 65536;
 /** Leaf slots the shared leaf mesh starts with (it grows when needed). */
 const LEAF_CAPACITY = 16384;
 /** Beyond this, tendrils are under a pixel wide (and deep in the fog): skip them. */
@@ -36,15 +38,18 @@ const STEM_LOD_DISTANCE = 6;
 interface Chunk extends CullableChunk {
   /** The wall faces in this chunk (grown only when the chunk is built). */
   faces: VineFace[];
-  /** The chunk's meshes, once built (streamed in near the player). */
-  group: THREE.Group | null;
+  /** Whether the chunk's ivy is grown (streamed in near the player). */
+  built: boolean;
   /** The chunk's leaves, packed into the shared leaf mesh while it is drawn. */
   leaves: LeafData | null;
-  /** Stems near and far (fewer rings); one is visible. */
-  stems: THREE.Mesh | null;
-  stemsFar: THREE.Mesh | null;
+  /** Stems near and far (fewer rings), packed into the shared stem mesh while drawn. */
+  stems: StemData | null;
+  stemsFar: StemData | null;
+  /** Which of them is drawn (STEMS_*). */
+  stemLod: number;
   leafCount: number;
-  disposables: { dispose(): void }[];
+  /** Camera distance this frame (draw order: nearest first). */
+  viewDistance: number;
 }
 
 /**
@@ -65,26 +70,48 @@ const _up = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** A chunk's stems at one LOD, as vertex data (packed into the shared stem mesh when drawn). */
+interface StemData {
+  position: Float32Array;
+  normal: Float32Array;
+  uv: Float32Array;
+  wall: Float32Array;
+  index: Uint32Array;
+  vertexCount: number;
+  /** The thick stems alone (they come first; tendrils after). */
+  thickVertexCount: number;
+  thickIndexCount: number;
+}
+
 /**
- * Stems and tendrils as tapered tubes, written straight into one indexed
- * geometry (no per-stem TubeGeometry, no merge). Stems lie on a wall, so the
+ * Stems and tendrils as tapered tubes, written straight into one set of
+ * arrays (no per-stem TubeGeometry, no merge). Stems lie on a wall, so the
  * wall normal gives each ring a stable frame without Frenet frames. A ring
  * every `stride` growth points (7 cm apart), always including the tip:
  * `thinStride` for tendrils.
+ *
+ * The stems lying on the wall are half-pipes: of their four sides, only the
+ * two facing out of the wall are built — the other two face into the stone,
+ * which no camera in the maze can see (half the triangles, the same picture).
+ * Tendrils curl off the wall, so they stay whole tubes.
  */
-function stemGeometry(stems: VineStem[], stride: number, thinStride: number): THREE.BufferGeometry | null {
+function stemData(stems: VineStem[], stride: number, thinStride: number): StemData | null {
   if (stems.length === 0) return null;
   const plans = stems.map((stem) => {
     const n = stem.points.length;
-    const step = stem.r0 < THIN_STEM ? thinStride : stride;
+    const thin = stem.r0 < THIN_STEM;
+    const step = thin ? thinStride : stride;
     const rings: number[] = [];
     for (let i = 0; i < n; i++) if (i % step === 0 || i === n - 1) rings.push(i);
+    const radial = thin ? 3 : 4;
     return {
       stem,
       points: rings.map((i) => stem.points[i]),
       // Where along the stem each ring is (0..1), for the taper.
       along: rings.map((i) => i / (n - 1)),
-      radial: stem.r0 < THIN_STEM ? 3 : 4,
+      radial,
+      // Sides built: all for tendrils; the outer half for stems on the wall.
+      sides: thin ? radial : radial / 2,
     };
   });
   // Tendrils last, so far away the draw range can simply stop before them.
@@ -92,10 +119,14 @@ function stemGeometry(stems: VineStem[], stride: number, thinStride: number): TH
   let vertexCount = 0;
   let indexCount = 0;
   let thickIndexCount = 0;
-  for (const { stem, points, radial } of plans) {
-    vertexCount += points.length * (radial + 1);
-    indexCount += (points.length - 1) * radial * 6;
-    if (stem.r0 >= THIN_STEM) thickIndexCount = indexCount;
+  let thickVertexCount = 0;
+  for (const { stem, points, sides } of plans) {
+    vertexCount += points.length * (sides + 1);
+    indexCount += (points.length - 1) * sides * 6;
+    if (stem.r0 >= THIN_STEM) {
+      thickIndexCount = indexCount;
+      thickVertexCount = vertexCount;
+    }
   }
   const position = new Float32Array(vertexCount * 3);
   const normal = new Float32Array(vertexCount * 3);
@@ -105,7 +136,7 @@ function stemGeometry(stems: VineStem[], stride: number, thinStride: number): TH
 
   let v = 0;
   let k = 0;
-  for (const { stem, points, along: at, radial } of plans) {
+  for (const { stem, points, along: at, radial, sides } of plans) {
     const n = points.length;
     const base = v;
     let along = 0;
@@ -115,9 +146,10 @@ function stemGeometry(stems: VineStem[], stride: number, thinStride: number): TH
       _side.crossVectors(_t, stem.normal);
       if (_side.lengthSq() < 1e-6) _side.crossVectors(_t, UP); // heading straight off the wall
       _side.normalize();
+      // Out of the wall (for a stem lying on it): the half-pipe's crown.
       _up.crossVectors(_side, _t).normalize();
       const r = THREE.MathUtils.lerp(stem.r0, stem.r1, at[i]);
-      for (let j = 0; j <= radial; j++) {
+      for (let j = 0; j <= sides; j++) {
         const a = (j / radial) * Math.PI * 2;
         _dir.copy(_side).multiplyScalar(Math.cos(a)).addScaledVector(_up, Math.sin(a));
         position[v * 3] = p.x + _dir.x * r;
@@ -135,9 +167,9 @@ function stemGeometry(stems: VineStem[], stride: number, thinStride: number): TH
     }
     // Quads between consecutive rings, wound outwards.
     for (let i = 0; i < n - 1; i++) {
-      for (let j = 0; j < radial; j++) {
-        const a = base + i * (radial + 1) + j;
-        const b = a + radial + 1;
+      for (let j = 0; j < sides; j++) {
+        const a = base + i * (sides + 1) + j;
+        const b = a + sides + 1;
         index[k++] = a;
         index[k++] = b;
         index[k++] = a + 1;
@@ -147,17 +179,29 @@ function stemGeometry(stems: VineStem[], stride: number, thinStride: number): TH
       }
     }
   }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
-  geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
-  geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  geometry.setAttribute("wallNormal", new THREE.BufferAttribute(wall, 3));
-  geometry.setIndex(new THREE.BufferAttribute(index, 1));
-  geometry.computeBoundingSphere();
-  geometry.userData.thickIndexCount = thickIndexCount;
-  return geometry;
+  return { position, normal, uv, wall, index, vertexCount, thickVertexCount, thickIndexCount };
 }
+
+/** The one mesh every drawn stem is packed into (one draw for all of them), with room for this many vertices / indices. */
+function sharedStemMesh(material: THREE.Material, vertices: number, indices: number): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+  geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(vertices * 2), 2));
+  geometry.setAttribute("wallNormal", new THREE.BufferAttribute(new Float32Array(vertices * 3), 3));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indices), 1));
+  geometry.setDrawRange(0, 0);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = "Ivy stems";
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // culled by chunk
+  return mesh;
+}
+
+/** Stem LODs: near rings; far (fewer rings); far without the tendrils. */
+const STEMS_NEAR = 0;
+const STEMS_FAR = 1;
+const STEMS_FAR_THICK = 2;
 
 /** One chunk's leaves as instance data, ready to pack into the shared leaf mesh. */
 interface LeafData {
@@ -240,11 +284,13 @@ const BUILDS_PER_FRAME = 2;
 
 /**
  * The ivy, bucketed into square chunks and streamed: a chunk's faces are
- * grown and its meshes (one stem mesh, one instanced leaf mesh) built only
- * once the player comes within range — nearest first, a couple per frame —
- * and freed again when they are far away, so load time and memory stay flat
- * however dense the ivy or big the maze. Built chunks are culled like the grass and flowers: by the view
- * distance, the camera frustum and the walls in between (ChunkCuller).
+ * grown and its stem and leaf data built only once the player comes within
+ * range — nearest first, a couple per frame — and freed again when they are
+ * far away, so load time and memory stay flat however dense the ivy or big
+ * the maze. Built chunks are culled like the grass and flowers: by the view
+ * distance, the camera frustum and the walls in between (ChunkCuller). The
+ * visible chunks' stems and leaves are packed into one stem mesh and one
+ * instanced leaf mesh: two draws for all the ivy.
  */
 export class VineField {
   readonly group = new THREE.Group();
@@ -257,6 +303,11 @@ export class VineField {
   private leafMesh: THREE.InstancedMesh;
   private packed: Chunk[] = [];
   private readonly visible: Chunk[] = [];
+  /** Every drawn stem, packed from the visible chunks (see packStems()). */
+  private stemMesh: THREE.Mesh;
+  private stemsPacked: Chunk[] = [];
+  private stemLodsPacked: number[] = [];
+  private readonly stemChunks: Chunk[] = [];
   /** Leaves in the built chunks. */
   leavesBuilt = 0;
   leavesDrawn = 0;
@@ -270,6 +321,8 @@ export class VineField {
   ) {
     this.leafMesh = sharedLeafMesh(this.card, materials.leaves, LEAF_CAPACITY);
     this.group.add(this.leafMesh);
+    this.stemMesh = sharedStemMesh(materials.stems, STEM_VERTEX_CAPACITY, STEM_VERTEX_CAPACITY * 2);
+    this.group.add(this.stemMesh);
 
     const key = (p: THREE.Vector3) => `${Math.floor(p.x / CHUNK_SIZE)},${Math.floor(p.z / CHUNK_SIZE)}`;
     const buckets = new Map<string, VineFace[]>();
@@ -288,13 +341,14 @@ export class VineField {
         half: CHUNK_SIZE / 2,
         sphere: new THREE.Sphere(center.clone(), CHUNK_SIZE * 0.75 + 2),
         lastSeen: -Infinity,
+        viewDistance: 0,
         faces: list,
-        group: null,
+        built: false,
         leaves: null,
         stems: null,
         stemsFar: null,
+        stemLod: STEMS_NEAR,
         leafCount: 0,
-        disposables: [],
       });
     }
   }
@@ -308,32 +362,16 @@ export class VineField {
       stemList.push(...grown.stems);
       leafList.push(...grown.leaves);
     }
-    const group = new THREE.Group();
-    const stemMesh = (geometry: THREE.BufferGeometry | null) => {
-      if (!geometry) return null;
-      const mesh = new THREE.Mesh(geometry, this.materials.stems);
-      mesh.name = "Ivy stems";
-      mesh.receiveShadow = true;
-      group.add(mesh);
-      ch.disposables.push(geometry);
-      return mesh;
-    };
-    ch.stems = stemMesh(stemGeometry(stemList, STEM_STRIDE_NEAR, STEM_STRIDE_NEAR));
-    ch.stemsFar = stemMesh(stemGeometry(stemList, STEM_STRIDE_FAR, TENDRIL_STRIDE_FAR));
-    if (ch.stemsFar) ch.stemsFar.visible = false;
+    ch.stems = stemData(stemList, STEM_STRIDE_NEAR, STEM_STRIDE_NEAR);
+    ch.stemsFar = stemData(stemList, STEM_STRIDE_FAR, TENDRIL_STRIDE_FAR);
     ch.leafCount = leafList.length;
     ch.leaves = leafList.length > 0 ? leafData(leafList) : null;
-    group.visible = false;
-    this.group.add(group);
-    ch.group = group;
+    ch.built = true;
   }
 
   private free(ch: Chunk) {
-    if (!ch.group) return;
-    this.group.remove(ch.group);
-    for (const d of ch.disposables) d.dispose();
-    ch.disposables = [];
-    ch.group = null;
+    if (!ch.built) return;
+    ch.built = false;
     ch.leaves = null;
     ch.stems = null;
     ch.stemsFar = null;
@@ -345,19 +383,10 @@ export class VineField {
    */
   private applyLod(ch: Chunk): number {
     const dist = this.culler.distanceTo(ch);
+    ch.viewDistance = dist;
     const keep = dist <= LEAF_LOD_NEAR ? 1 : Math.max(LEAF_LOD_MIN, LEAF_LOD_NEAR / dist);
     const drawn = Math.ceil(ch.leafCount * keep);
-    if (ch.stems && ch.stemsFar) {
-      const far = dist > STEM_LOD_DISTANCE;
-      if (ch.stems.visible === far) ch.stems.visible = !far;
-      if (ch.stemsFar.visible !== far) ch.stemsFar.visible = far;
-      if (far) {
-        const geometry = ch.stemsFar.geometry;
-        const all = geometry.index!.count;
-        const count = dist > TENDRIL_DISTANCE ? (geometry.userData.thickIndexCount as number) : all;
-        if (geometry.drawRange.count !== count) geometry.setDrawRange(0, count);
-      }
-    }
+    ch.stemLod = dist <= STEM_LOD_DISTANCE ? STEMS_NEAR : dist <= TENDRIL_DISTANCE ? STEMS_FAR : STEMS_FAR_THICK;
     return drawn;
   }
 
@@ -375,8 +404,8 @@ export class VineField {
     const wanted: { ch: Chunk; d: number }[] = [];
     for (const ch of this.chunks) {
       const d = this.distance(ch, playerX, playerZ);
-      if (!ch.group && drawDistance >= 0 && d < drawDistance + BUILD_MARGIN) wanted.push({ ch, d });
-      else if (ch.group && d > drawDistance + FREE_MARGIN) this.free(ch);
+      if (!ch.built && drawDistance >= 0 && d < drawDistance + BUILD_MARGIN) wanted.push({ ch, d });
+      else if (ch.built && d > drawDistance + FREE_MARGIN) this.free(ch);
     }
     wanted.sort((a, b) => a.d - b.d);
     for (const { ch } of wanted.slice(0, BUILDS_PER_FRAME)) this.build(ch);
@@ -388,21 +417,32 @@ export class VineField {
     let leavesBuilt = 0;
     const shown = this.visible;
     shown.length = 0;
+    const stemChunks = this.stemChunks;
+    stemChunks.length = 0;
     for (const ch of this.chunks) {
-      if (!ch.group) continue;
+      if (!ch.built) continue;
       built++;
       leavesBuilt += ch.leafCount;
       const visible =
         drawDistance >= 0 &&
         this.culler.classify(ch, playerX, playerZ, drawDistance, occlusion) === ChunkState.Drawn;
-      if (ch.group.visible !== visible) ch.group.visible = visible;
       if (visible) {
         leaves += this.applyLod(ch);
         drawn++;
         if (ch.leaves) shown.push(ch);
+        if (ch.stems) stemChunks.push(ch);
       }
     }
+    // Leaves nearest first, so near leaves hide farther ones before they are
+    // shaded (the walls are drawn before all of it: maze/WallBatch).
+    shown.sort((a, b) => a.viewDistance - b.viewDistance);
     if (shown.length !== this.packed.length || shown.some((ch, i) => ch !== this.packed[i])) this.pack(shown);
+    if (
+      stemChunks.length !== this.stemsPacked.length ||
+      stemChunks.some((ch, i) => ch !== this.stemsPacked[i] || ch.stemLod !== this.stemLodsPacked[i])
+    ) {
+      this.packStems(stemChunks);
+    }
     this.leafMesh.userData.drawnInstances = leaves; // for the #debug triangle readout
     this.leavesDrawn = leaves;
     this.chunksDrawn = drawn;
@@ -446,8 +486,68 @@ export class VineField {
     this.packed = chunks.slice();
   }
 
+  /** Copy these chunks' stems (each at its LOD), back to back, into the shared stem mesh. */
+  private packStems(chunks: Chunk[]) {
+    const parts = chunks.map((ch) => {
+      const data = ch.stemLod === STEMS_NEAR ? ch.stems! : (ch.stemsFar ?? ch.stems!);
+      const thick = ch.stemLod === STEMS_FAR_THICK;
+      return {
+        data,
+        vertices: thick ? data.thickVertexCount : data.vertexCount,
+        indices: thick ? data.thickIndexCount : data.index.length,
+      };
+    });
+    const vertices = parts.reduce((n, p) => n + p.vertices, 0);
+    const indices = parts.reduce((n, p) => n + p.indices, 0);
+    let geometry = this.stemMesh.geometry;
+    const vertexCapacity = geometry.getAttribute("position").count;
+    const indexCapacity = geometry.index!.count;
+    if (vertices > vertexCapacity || indices > indexCapacity) {
+      // Grow (rare): a new mesh with room to spare.
+      this.group.remove(this.stemMesh);
+      geometry.dispose();
+      this.stemMesh = sharedStemMesh(
+        this.materials.stems,
+        Math.max(vertices, vertexCapacity * 2),
+        Math.max(indices, indexCapacity * 2)
+      );
+      this.group.add(this.stemMesh);
+      geometry = this.stemMesh.geometry;
+    }
+    const targets: [THREE.BufferAttribute, "position" | "normal" | "uv" | "wall"][] = [
+      [geometry.getAttribute("position") as THREE.BufferAttribute, "position"],
+      [geometry.getAttribute("normal") as THREE.BufferAttribute, "normal"],
+      [geometry.getAttribute("uv") as THREE.BufferAttribute, "uv"],
+      [geometry.getAttribute("wallNormal") as THREE.BufferAttribute, "wall"],
+    ];
+    const index = geometry.index!.array as Uint32Array;
+    let v = 0;
+    let k = 0;
+    for (const { data, vertices: nv, indices: ni } of parts) {
+      for (const [attr, key] of targets) {
+        const size = attr.itemSize;
+        (attr.array as Float32Array).set(data[key].subarray(0, nv * size), v * size);
+      }
+      for (let i = 0; i < ni; i++) index[k + i] = data.index[i] + v;
+      v += nv;
+      k += ni;
+    }
+    for (const [attr] of targets) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, Math.max(1, v) * attr.itemSize);
+      attr.needsUpdate = true;
+    }
+    geometry.index!.clearUpdateRanges();
+    geometry.index!.addUpdateRange(0, Math.max(1, k));
+    geometry.index!.needsUpdate = true;
+    geometry.setDrawRange(0, k);
+    this.stemsPacked = chunks.slice();
+    this.stemLodsPacked = chunks.map((ch) => ch.stemLod);
+  }
+
   dispose() {
     for (const ch of this.chunks) this.free(ch);
+    this.stemMesh.geometry.dispose();
     this.leafMesh.geometry.dispose();
     this.leafMesh.dispose();
     this.card.dispose();
