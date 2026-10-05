@@ -1,22 +1,35 @@
 "use client";
 
+import { keyLabel, usePreferences } from "../game/preferences";
 import { GOAT_CALLS, runStore, useRun } from "../game/runStore";
 
 /**
- * "Call the goat": a button on the HUD (also the C key and the pause menu),
- * with Gugut's calls left as pips — empty and showing a water drop when his
- * throat is dry (runStore.callGoat explains, and to go find water).
+ * "Call the goat": a button on the HUD (also its key — C unless changed in
+ * Settings — and the pause menu), with Gugut's calls left as pips — empty
+ * and showing a water drop when his throat is dry (runStore.callGoat
+ * explains, and to go find water). `large` for thumbs on touch screens.
  */
-export default function CallButton({ showKey, className = "" }: { showKey: boolean; className?: string }) {
+export default function CallButton({
+  showKey,
+  large = false,
+  className = "",
+}: {
+  showKey: boolean;
+  large?: boolean;
+  className?: string;
+}) {
   const { calls } = useRun();
+  const { callKey } = usePreferences();
   const dry = calls <= 0;
   return (
     <button
       type="button"
       onClick={() => runStore.callGoat()}
-      title={dry ? "Too thirsty to call — find water" : "Call the goat (C)"}
+      title={dry ? "Too thirsty to call — find water" : `Call the goat (${keyLabel(callKey)})`}
       aria-label={`Call the goat — ${calls} of ${GOAT_CALLS} calls left`}
-      className={`z-20 flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-3 text-sm font-medium backdrop-blur transition-colors ${
+      className={`z-20 flex touch-manipulation select-none items-center gap-2 rounded-full font-medium backdrop-blur transition active:scale-95 ${
+        large ? "min-h-12 py-2.5 pl-3.5 pr-4 text-base" : "py-1.5 pl-2.5 pr-3 text-sm"
+      } ${
         dry ? "bg-black/40 text-zinc-400 hover:bg-black/55" : "bg-black/50 text-zinc-100 hover:bg-white/15"
       } ${className}`}
     >
@@ -38,7 +51,7 @@ export default function CallButton({ showKey, className = "" }: { showKey: boole
           ))
         )}
       </span>
-      {showKey && <kbd className="rounded bg-white/10 px-1.5 font-mono text-xs text-zinc-300">C</kbd>}
+      {showKey && <kbd className="rounded bg-white/10 px-1.5 font-mono text-xs text-zinc-300">{keyLabel(callKey)}</kbd>}
     </button>
   );
 }

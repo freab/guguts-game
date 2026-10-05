@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { posterFont } from "../fonts";
+import { keyLabel, usePreferences } from "../game/preferences";
 import { runStore } from "../game/runStore";
 
 const SEEN_KEY = "gugut.controlsSeen";
@@ -35,6 +36,7 @@ const Key = ({ children }: { children: ReactNode }) => (
  * (the clock doesn't start) while it's up.
  */
 export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClose: () => void }) {
+  const { callKey } = usePreferences();
   useEffect(() => {
     runStore.setPaused("help", true);
     if (document.pointerLockElement) document.exitPointerLock();
@@ -63,7 +65,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         [<span key="l">Left thumb</span>, "Drag anywhere on the left to move — push all the way to run"],
         [<span key="r">Right thumb</span>, "Drag on the right to look around"],
         [<span key="e">Eye button</span>, "Switch first / third person"],
-        [<span key="c">Call button</span>, "Top left — call the goat: a map shows where she is for a moment"],
+        [<span key="c">Call button</span>, "Top left — call the goat: she bleats back, and a map shows where she is"],
         [<span key="p">Pause button</span>, "Top right — pause, restart, settings"],
       ]
     : [
@@ -79,7 +81,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         [<span key="mouse">Mouse</span>, "Look around — click the view to capture the mouse"],
         [<Key key="shift">Shift</Key>, "Run"],
         [<Key key="v">V</Key>, "Switch first / third person"],
-        [<Key key="c">C</Key>, "Call the goat — a map shows where she is for a moment"],
+        [<Key key="c">{keyLabel(callKey)}</Key>, "Call the goat — she bleats back, and a map shows where she is for a moment"],
         [<Key key="esc">Esc</Key>, "Pause"],
         [<Key key="m">M</Key>, "Music on / off"],
       ];

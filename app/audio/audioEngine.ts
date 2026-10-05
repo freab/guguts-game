@@ -370,17 +370,19 @@ class AudioEngine {
   /**
    * Gugut calls the goat — a two-note shepherd's whistle — and she answers
    * from (x, y, z): `distance` m away (sets how late, quiet and distant her
-   * bleat sounds), `occluded` when walls stand between (muffled).
+   * bleat sounds), `occluded` when walls stand between (muffled). Returns
+   * how long (s) until she answers, or null when nothing can play.
    */
-  goatCall(x: number, y: number, z: number, distance: number, occluded: boolean) {
+  goatCall(x: number, y: number, z: number, distance: number, occluded: boolean): number | null {
     const ctx = this.ctx;
-    if (!ctx || !this.calls || ctx.state !== "running") return;
+    if (!ctx || !this.calls || ctx.state !== "running") return null;
     const whistle = this.whistle(ctx);
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
     const delay = whistle + distance / SPEED_OF_SOUND + rand(...BLEAT_REACTION);
     this.bleat(ctx, x, y, z, distance, occluded, delay);
     // Now and then she bleats twice.
     if (Math.random() < 0.35) this.bleat(ctx, x, y, z, distance, occluded, delay + rand(0.9, 1.4));
+    return this.bleats ? delay : null;
   }
 
   /** Gugut tries to call with no voice left: a dry, breathy rasp. */
