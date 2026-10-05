@@ -64,8 +64,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
     ? [
         [<span key="l">Left thumb</span>, "Drag anywhere on the left to move — push all the way to run"],
         [<span key="r">Right thumb</span>, "Drag on the right to look around"],
-        [<span key="e">Eye button</span>, "Switch first / third person"],
-        [<span key="c">Call button</span>, "Top left — call the goat: she bleats back, and a map shows where she is"],
+        [<span key="c">Call button</span>, "Bottom right — call the goat: she bleats back, and a map shows where she is"],
         [<span key="p">Pause button</span>, "Top right — pause, restart, settings"],
       ]
     : [
@@ -80,7 +79,6 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         ],
         [<span key="mouse">Mouse</span>, "Look around — click the view to capture the mouse"],
         [<Key key="shift">Shift</Key>, "Run"],
-        [<Key key="v">V</Key>, "Switch first / third person"],
         [<Key key="c">{keyLabel(callKey)}</Key>, "Call the goat — she bleats back, and a map shows where she is for a moment"],
         [<Key key="esc">Esc</Key>, "Pause"],
         [<Key key="m">M</Key>, "Music on / off"],

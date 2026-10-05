@@ -61,3 +61,19 @@ body {
     opacity: 1;
   }
 }
+
+/*
+ * Phones and tablets: no frosted-glass blur on the HUD. A backdrop blur over
+ * the 3D view makes the browser re-blur the scene behind every blurred panel
+ * every frame — a real cost on a phone GPU. The panels keep their dark,
+ * semi-transparent backgrounds; desktops (a fine, hovering pointer) keep the
+ * blur.
+ */
+@media (pointer: coarse) and (hover: none) {
+  *,
+  *::before,
+  *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

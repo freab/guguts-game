@@ -7,8 +7,7 @@ import { useControls, folder } from "leva";
 import * as THREE from "three/webgpu";
 import { cellAt, startPosition } from "../maze/mazeData";
 import BlobShadow from "./BlobShadow";
-import CharacterModel from "./CharacterModel";
-import { CameraRig, type ViewMode } from "./CameraRig";
+import { CameraRig } from "./CameraRig";
 import { LookInput } from "./LookInput";
 import { PlayerMotor, facingForYaw, type MoveKeys } from "./PlayerMotor";
 import { WallCollider } from "./WallCollider";
@@ -39,12 +38,12 @@ function placeBody(body: THREE.Object3D, motor: PlayerMotor): void {
 }
 
 /**
- * The playable character: keyboard movement with wall collision, mouse look,
- * and a first- / third-person camera. Owns the per-frame loop in this order:
+ * The player: keyboard / touch movement with wall collision, mouse / drag
+ * look, and the first-person camera. Owns the per-frame loop in this order:
  * input -> motor (move + collide) -> body transform -> camera -> shared state.
  */
-export default function PlayerController({ view }: { view: ViewMode }) {
-  const { walkSpeed, runSpeed, sensitivity, invertY, distance, headBob, fovFirst, fovThird } =
+export default function PlayerController() {
+  const { walkSpeed, runSpeed, sensitivity, invertY, headBob, fov } =
     useControls({
       Player: folder(
         {
@@ -52,10 +51,8 @@ export default function PlayerController({ view }: { view: ViewMode }) {
           runSpeed: { value: 5.5, min: 2, max: 10, step: 0.1, label: "Run speed" },
           sensitivity: { value: 1, min: 0.2, max: 3, step: 0.05, label: "Mouse sens." },
           invertY: { value: false, label: "Invert Y" },
-          distance: { value: 4.2, min: 1.5, max: 10, step: 0.1, label: "3P distance" },
           headBob: { value: true, label: "Head bob" },
-          fovFirst: { value: 75, min: 50, max: 100, step: 1, label: "1P FOV" },
-          fovThird: { value: 55, min: 35, max: 80, step: 1, label: "3P FOV" },
+          fov: { value: 75, min: 50, max: 100, step: 1, label: "FOV" },
         },
         { collapsed: true }
       ),
@@ -106,25 +103,15 @@ export default function PlayerController({ view }: { view: ViewMode }) {
       keys.stickX = keys.stickY = 0;
     }
     motor.update(dt, keys, look.yaw, collider, { walkSpeed, runSpeed });
-    // In first person the (hidden) body turns with the view, so switching to
-    // third person shows it facing where you were looking.
-    if (view === "first") motor.faceCamera(look.yaw);
+    motor.faceCamera(look.yaw);
     if (body.current) placeBody(body.current, motor);
-    rig.update(camera, motor, look, collider, view, { distance, headBob, fovFirst, fovThird }, dt);
+    rig.update(camera, motor, look, { headBob, fov });
     writePlayerStore(motor.position.x, motor.position.z, look.yaw, motor.speed, camera);
   });
 
   return (
     <group ref={body}>
       <BlobShadow />
-      {/* Suspends until the model loads — caught by the scene's Suspense, so
-          the preloader waits for it along with every other asset. */}
-      <CharacterModel
-        motor={motor}
-        visible={view === "third"}
-        walkSpeed={walkSpeed}
-        runSpeed={runSpeed}
-      />
     </group>
   );
 }

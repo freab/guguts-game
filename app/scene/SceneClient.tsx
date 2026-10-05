@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Stats } from "@react-three/drei";
 import { Leva, useControls, button, folder } from "leva";
-import type { ViewMode } from "../character/CameraRig";
 import { useDefaultsVersion } from "../hooks/useDefaultsVersion";
 import { useHashRoute } from "../hooks/useHashRoute";
 import { LEVELS, type Level, type LevelId } from "../maze/levels";
@@ -31,11 +30,6 @@ import { getPreferences } from "../game/preferences";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
-const VIEWS: { id: ViewMode; label: string }[] = [
-  { id: "first", label: "First person" },
-  { id: "third", label: "Third person" },
-];
-
 /** True while the user is typing in a field (e.g. a leva number input). */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -61,7 +55,6 @@ export default function SceneClient() {
 
   // Bumping runId remounts the scene (fresh maze / new dimensions).
   const [runId, setRunId] = useState(0);
-  const [view, setView] = useState<ViewMode>("first");
   // null = on the title screen, choosing a level (no scene mounted).
   const [level, setLevel] = useState<LevelId | null>(null);
   const ready = useLoading().stage === "ready" && level !== null;
@@ -145,13 +138,12 @@ export default function SceneClient() {
     void import("./Scene");
   }, []);
 
-  // V toggles first / third person; M toggles the music; C (or the key set
-  // in Settings) calls the goat; Esc / P pause.
+  // M toggles the music; C (or the key set in Settings) calls the goat;
+  // Esc / P pause.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
-      if (e.code === "KeyV") setView((v) => (v === "first" ? "third" : "first"));
-      else if (e.code === "KeyM") audio.toggleMusic();
+      if (e.code === "KeyM") audio.toggleMusic();
       else if (e.code === getPreferences().callKey && !runStore.isPaused()) runStore.callGoat();
       else if ((e.code === "Escape" || e.code === "KeyP") && !e.defaultPrevented) {
         // (A dialog or the controls help handles its own Esc and marks it.)
@@ -232,19 +224,6 @@ export default function SceneClient() {
 
       {debug && (
         <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
-          <div className="flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
-            {VIEWS.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setView(v.id)}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                  view === v.id ? "bg-white text-black" : "text-zinc-300 hover:bg-white/10"
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
           <button
             onClick={() => setLevel(null)}
             className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
@@ -267,8 +246,7 @@ export default function SceneClient() {
             <b className="text-zinc-100">Click</b> to look around · <b className="text-zinc-100">Esc</b> to release
           </div>
           <div>
-            <b className="text-zinc-100">WASD / Arrows</b> move · <b className="text-zinc-100">Shift</b> run ·{" "}
-            <b className="text-zinc-100">V</b> switch view · <b className="text-zinc-100">Scroll</b> zoom
+            <b className="text-zinc-100">WASD / Arrows</b> move · <b className="text-zinc-100">Shift</b> run
           </div>
         </div>
       )}
@@ -281,12 +259,10 @@ export default function SceneClient() {
 
       {/* The game: mounted once a level is picked; remounted on restart / resize. */}
       {level && debug && minimap && <Minimap key={`minimap-${runId}`} />}
-      {level && <Scene key={`scene-${runId}`} view={view} />}
+      {level && <Scene key={`scene-${runId}`} />}
 
       {/* Touch controls, while playing on a touch device. */}
-      {ready && touch && (
-        <TouchControls onToggleView={() => setView((v) => (v === "first" ? "third" : "first"))} />
-      )}
+      {ready && touch && <TouchControls />}
 
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}
@@ -297,13 +273,15 @@ export default function SceneClient() {
       {ready && <GameNotice />}
       {ready && <BleatIndicator />}
 
-      {/* Calling the goat (also C and the pause menu), and the map it flashes. */}
+      {/* Calling the goat (also its key and the pause menu), and the map it
+          flashes. On phones the button sits bottom right, under the thumb. */}
       {playing && (
         <div className={`absolute left-3 flex flex-col items-start gap-2 ${debug ? "top-28" : "top-3"}`}>
-          <CallButton showKey={!touch} large={touch} />
+          {!touch && <CallButton showKey />}
           {run.calledAt > 0 && <CallMap key={`${runId}-${run.calledAt}`} />}
         </div>
       )}
+      {playing && touch && <CallButton showKey={false} large className="absolute bottom-8 right-6" />}
       {ready && (
         <GameOver
           onPlayAgain={restart}

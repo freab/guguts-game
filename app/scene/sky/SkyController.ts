@@ -13,6 +13,7 @@ import {
   vertexStage,
 } from "three/tsl";
 import { SkyMesh } from "three/examples/jsm/objects/SkyMesh.js";
+import { tier } from "../../quality";
 import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
 
 /** Live sky settings (Preetham scattering + SkyMesh's procedural clouds). */
@@ -41,8 +42,8 @@ function applySkyParams(sky: SkyMesh, p: SkyParams) {
 
 /** Resolution of the cube the sky is captured into for the light probe. */
 const PROBE_CUBE_SIZE = 32;
-/** Resolution (per face) of the baked sky background. */
-const BACKGROUND_CUBE_SIZE = 768;
+/** Resolution (per face) of the baked sky background (phones: quicker to bake, less memory). */
+const BACKGROUND_CUBE_SIZE = tier(768, 512);
 
 /** Band-0 SH basis constant: a uniform radiance L has coefficient 0 = L / Y00. */
 const SH_Y00 = 0.282095;

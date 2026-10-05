@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
+import { tier } from "../quality";
 import { FLOWER_DETAIL, bakeAdeyAbeba, petalGeometry, type PetalLodData } from "./flowers/adeyAbeba";
 import { FlowerField } from "./flowers/FlowerField";
 import { createFlowerMaterial } from "./flowers/flowerNodeMaterial";
@@ -54,12 +55,12 @@ export default function Flowers({
     Flowers: folder(
       {
         enabled: { value: true, label: "Show flowers" },
-        density: { value: 8, min: 0.1, max: 12, step: 0.1, label: "Plants / m²" },
-        headsPerPlant: { value: 11, min: 2, max: 12, step: 1, label: "Heads / plant" },
+        density: { value: tier(8, 5), min: 0.1, max: 12, step: 0.1, label: "Plants / m²" },
+        headsPerPlant: { value: tier(11, 7), min: 2, max: 12, step: 1, label: "Heads / plant" },
         clumping: { value: 0.85, min: 0, max: 1, step: 0.05, label: "Clumping" },
         headSize: { value: 0.08, min: 0.02, max: 0.3, step: 0.005, label: "Head size (m)" },
         height: { value: 0.28, min: 0.05, max: 1.2, step: 0.01, label: "Head height (m)" },
-        drawDistance: { value: 8, min: 4, max: 80, step: 1, label: "Draw distance" },
+        drawDistance: { value: tier(8, 6), min: 4, max: 80, step: 1, label: "Draw distance" },
         fadeWidth: { value: 3, min: 0.5, max: 15, step: 0.5, label: "Fade width" },
         // Full petals (536 triangles a head) only this close: further out a head
         // is a few dozen pixels and the lighter petals look the same.

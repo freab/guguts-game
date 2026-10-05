@@ -34,6 +34,7 @@ import {
   vec4,
 } from "three/tsl";
 import { useDisposable } from "../hooks/useDisposable";
+import { MOBILE } from "../quality";
 import { useHeightMap, usePbrSet, type PbrSet } from "../scene/textures/pbrTextures";
 import { CELL, WALL_HEIGHT, treeSeed, wallSlabs, type WallSlab } from "./mazeData";
 import { WallBatch, type BatchPart } from "./WallBatch";
@@ -129,7 +130,8 @@ function createWallMaterial(stone: PbrSet, height: THREE.Texture, { displace }: 
   const view = toEye.normalize();
   const viewUv = vec3(dot(view, tangent), dot(view, bitangent).negate(), dot(view, n));
   const footprint = max(length(uv.dFdx()), length(uv.dFdy())).mul(HEIGHT_SIZE);
-  const surfaceUv = Fn(() => {
+  // (Phones skip it: up to 10 extra texture reads on every wall pixel.)
+  const surfaceUv = MOBILE ? uv : Fn(() => {
     // Derivatives before any branch (they need uniform control flow).
     const mip = log2(max(footprint, 1)).toVar();
     const depthAt = (at: THREE.Node<"vec2">) => float(1).sub(texture(height, at).level(mip).r);

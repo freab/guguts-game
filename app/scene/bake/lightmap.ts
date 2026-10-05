@@ -4,6 +4,7 @@ import { WallCollider } from "../../character/WallCollider";
 import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld } from "../../maze/mazeData";
 import { mapleTreeLayout, treeTransmittance } from "../tree/mapleTree";
 import { nextFrames } from "./bakeTracker";
+import { tier } from "../../quality";
 
 /**
  * Baked ground lighting ("lightmap") for everything lying on the floor — the
@@ -15,8 +16,12 @@ import { nextFrames } from "./bakeTracker";
  * shadow-map filtering per pixel, and it gives the grass wall shadows for free.
  */
 
-/** Resolution: texels per metre (capped), plus a margin around the maze. */
-const TEXELS_PER_METRE = 10;
+/**
+ * Resolution: texels per metre (capped), plus a margin around the maze.
+ * Phones bake a coarser one: it is baked on the CPU while the loading
+ * screen is up, and the shadows on the ground are soft anyway.
+ */
+const TEXELS_PER_METRE = tier(10, 7);
 const MAX_SIZE = 2048;
 const MARGIN = 4;
 /** Rows baked per frame, so the page (and loading screen) stays responsive. */

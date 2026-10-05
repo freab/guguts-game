@@ -136,14 +136,16 @@ export default function LoadingOverlay({
       {/* Left: the poster, whole and unzoomed. On wide screens the panel takes
           the poster's own aspect ratio (full height), so nothing is cropped. */}
       <div className="relative h-[38vh] w-full shrink-0 overflow-hidden md:aspect-932/1368 md:h-full md:w-auto md:max-w-[55%]">
-        {/* Soft backdrop: the poster itself, blurred, filling any spare space. */}
+        {/* Soft backdrop: the poster itself, blurred, filling any spare space
+            (not on phones: a big CSS blur is costly there, and the poster
+            already fills the narrow panel). */}
         <Image
           src={POSTER_SRC}
           alt=""
           aria-hidden
           fill
           sizes={POSTER_SIZES}
-          className="scale-110 object-cover opacity-40 blur-2xl"
+          className="scale-110 object-cover opacity-40 blur-2xl pointer-coarse:hidden"
         />
         <Image
           src={POSTER_SRC}

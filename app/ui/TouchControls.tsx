@@ -34,13 +34,13 @@ export function useIsTouch(): boolean {
  * Phone controls, the usual mobile-game layout:
  * - left half: a floating move stick — it appears under the thumb wherever it
  *   lands; a small push walks, a full push runs;
- * - right half: drag to look around;
- * - a button to switch between first- and third-person view.
+ * - right half: drag to look around (the call-the-goat button sits at the
+ *   bottom right, under the thumb — SceneClient).
  * Move and look work together (one pointer each). The overlay writes to
  * character/touchInput; the player controller reads it every frame. The
  * stick moves through refs, not React state, so dragging never re-renders.
  */
-export default function TouchControls({ onToggleView }: { onToggleView: () => void }) {
+export default function TouchControls() {
   const base = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
   const idle = useRef<HTMLDivElement>(null);
@@ -155,18 +155,6 @@ export default function TouchControls({ onToggleView }: { onToggleView: () => vo
         />
       </div>
 
-      <button
-        type="button"
-        aria-label="Switch view"
-        onClick={onToggleView}
-        className="absolute bottom-10 right-10 flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-white/25 bg-black/35 text-white/85 backdrop-blur active:bg-white/20"
-      >
-        {/* Eye: first ↔ third person */}
-        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </button>
     </div>
   );
 }

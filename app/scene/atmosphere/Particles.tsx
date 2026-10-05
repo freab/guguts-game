@@ -21,6 +21,7 @@ import {
   vec4,
 } from "three/tsl";
 import { useDisposable } from "../../hooks/useDisposable";
+import { tier } from "../../quality";
 import { sun } from "../sunUniforms";
 
 interface FieldOptions {
@@ -119,7 +120,7 @@ export default function Particles() {
   const time = clock.time;
 
   const dust = useDisposable(() => {
-    const f = particleField({ count: 260, radius: 6, minY: 0.15, maxY: 3.2, size: 0.022, speed: 0.06, sway: 0.25, seed: 11 }, time);
+    const f = particleField({ count: tier(260, 120), radius: 6, minY: 0.15, maxY: 3.2, size: 0.022, speed: 0.06, sway: 0.25, seed: 11 }, time);
     // Faint everywhere; bright in the forward-scattering lobe towards the sun.
     const view = f.toCamera.negate().normalize();
     const glint = dot(view.negate(), sun.direction).clamp(0, 1).pow(10);

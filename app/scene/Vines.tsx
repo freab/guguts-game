@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
+import { tier } from "../quality";
 import { playerStore } from "../character/playerStore";
 import { useDisposable } from "../hooks/useDisposable";
 import { useHeightMap, useLeafAtlas, usePbrSet } from "./textures/pbrTextures";
@@ -33,7 +34,7 @@ export default function Vines({
         {
           show: { value: true, label: "Show ivy" },
           coverage: { value: 1, min: 0, max: 1, step: 0.05, label: "Faces with vines" },
-          leafDensity: { value: 24, min: 2, max: 30, step: 1, label: "Leaves / m" },
+          leafDensity: { value: tier(24, 15), min: 2, max: 30, step: 1, label: "Leaves / m" },
           leafSize: { value: 1.95, min: 0.4, max: 2, step: 0.05, label: "Leaf size" },
           maxHeight: { value: 0.95, min: 0.2, max: 1, step: 0.05, label: "Max height" },
           brightness: { value: 1.25, min: 0.3, max: 2.5, step: 0.05, label: "Brightness" },
