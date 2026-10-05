@@ -15,6 +15,25 @@ import type { LevelId } from "../maze/levels";
  */
 export type RunPhase = "idle" | "armed" | "running" | "won";
 
+/**
+ * Calling the goat: for a moment, a bare map shows where she is (the
+ * CallMap). Gugut's voice is good for GOAT_CALLS calls; after that his throat is
+ * dry until he drinks — BOTTLES bottles of water are hidden in the maze (see
+ * game/bottles), each giving his voice back in full.
+ */
+export const GOAT_CALLS = 3;
+export const BOTTLES = 2;
+/** How long the call's map stays up, then fades (ms). */
+export const CALL_MAP_MS = 3200;
+export const CALL_MAP_FADE_MS = 1200;
+
+/** A short message to the player (a call used up, water found…). */
+export interface Notice {
+  text: string;
+  /** performance.now() when it was posted (each notice is a fresh one). */
+  at: number;
+}
+
 /** Why the game is paused; paused while any is active. */
 export type PauseReason = "menu" | "dialog" | "help" | "rotate";
 
@@ -32,6 +51,15 @@ export interface RunState {
   pausedAt: number;
   /** Anything pausing the game right now. */
   pauses: readonly PauseReason[];
+  /** Goat calls left, and used this run. */
+  calls: number;
+  callsUsed: number;
+  /** performance.now() of the last call (its map shows for a moment), 0 = none. */
+  calledAt: number;
+  /** Which of the hidden bottles have been drunk. */
+  bottlesTaken: readonly boolean[];
+  /** The latest message for the player, if any. */
+  notice: Notice | null;
 }
 
 let state: RunState = {
@@ -43,7 +71,20 @@ let state: RunState = {
   pausedTotal: 0,
   pausedAt: 0,
   pauses: [],
+  calls: GOAT_CALLS,
+  callsUsed: 0,
+  calledAt: 0,
+  bottlesTaken: Array(BOTTLES).fill(false),
+  notice: null,
 };
+/** Everything a new run starts with for the goat calls and the water. */
+const freshCalls = () => ({
+  calls: GOAT_CALLS,
+  callsUsed: 0,
+  calledAt: 0,
+  bottlesTaken: Array<boolean>(BOTTLES).fill(false),
+  notice: null,
+});
 const listeners = new Set<() => void>();
 const set = (next: Partial<RunState>) => {
   state = { ...state, ...next };
@@ -54,10 +95,51 @@ export const runStore = {
   get: () => state,
   /** A fresh run, waiting for the first step. */
   arm(level: LevelId, ranked: boolean) {
-    set({ phase: "armed", level, ranked, startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0 });
+    set({ phase: "armed", level, ranked, startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0, ...freshCalls() });
   },
   reset() {
-    set({ phase: "idle", startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0 });
+    set({ phase: "idle", startedAt: 0, finishedAt: 0, pausedTotal: 0, pausedAt: 0, ...freshCalls() });
+  },
+  /**
+   * Call the goat (the C key, the HUD button, the pause menu): uses a call and
+   * flashes her position on the map — or, with no voice left, tells the
+   * player to find water. Returns whether she was called.
+   */
+  callGoat(now = performance.now()): boolean {
+    if (state.phase !== "armed" && state.phase !== "running") return false;
+    if (state.calls <= 0) {
+      set({
+        notice: {
+          text: "Your throat is too dry to call. Find water — two bottles are hidden in the maze.",
+          at: now,
+        },
+      });
+      return false;
+    }
+    const calls = state.calls - 1;
+    set({
+      calls,
+      callsUsed: state.callsUsed + 1,
+      calledAt: now,
+      notice:
+        calls === 0
+          ? {
+              text: "That was your last call — your throat is parched. Find water: two bottles are hidden in the maze.",
+              at: now,
+            }
+          : state.notice,
+    });
+    return true;
+  },
+  /** Drink hidden bottle `i`: Gugut's voice comes back in full. */
+  drink(i: number, now = performance.now()) {
+    if (state.bottlesTaken[i] || state.phase === "won") return;
+    const bottlesTaken = state.bottlesTaken.map((taken, j) => taken || j === i);
+    set({
+      bottlesTaken,
+      calls: GOAT_CALLS,
+      notice: { text: `You drink the cool water — your voice is back (${GOAT_CALLS} calls).`, at: now },
+    });
   },
   start(now: number) {
     if (state.phase === "armed") set({ phase: "running", startedAt: now, pausedTotal: 0, pausedAt: 0 });

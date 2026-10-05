@@ -9,6 +9,7 @@ import type { ViewMode } from "../character/CameraRig";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
+import WaterBottles from "../maze/WaterBottles";
 import Birds from "./atmosphere/Birds";
 import Particles from "./atmosphere/Particles";
 import Maze from "../maze/Maze";
@@ -550,6 +551,7 @@ export default function Scene({ view }: { view: ViewMode }) {
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <CoffeeBush />
+        <WaterBottles />
         <Particles />
         <Birds />
         <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />

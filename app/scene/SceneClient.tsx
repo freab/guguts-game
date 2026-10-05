@@ -23,6 +23,9 @@ import { runStore, useRun } from "../game/runStore";
 import ControlsHelp, { controlsSeen } from "../ui/ControlsHelp";
 import PauseMenu from "../ui/PauseMenu";
 import RotatePrompt from "../ui/RotatePrompt";
+import CallButton from "../ui/CallButton";
+import CallMap from "../ui/CallMap";
+import GameNotice from "../ui/GameNotice";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
@@ -140,12 +143,14 @@ export default function SceneClient() {
     void import("./Scene");
   }, []);
 
-  // V toggles first / third person; M toggles the music; Esc / P pause.
+  // V toggles first / third person; M toggles the music; C calls the goat;
+  // Esc / P pause.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
       if (e.code === "KeyV") setView((v) => (v === "first" ? "third" : "first"));
       else if (e.code === "KeyM") audio.toggleMusic();
+      else if (e.code === "KeyC" && !runStore.isPaused()) runStore.callGoat();
       else if ((e.code === "Escape" || e.code === "KeyP") && !e.defaultPrevented) {
         // (A dialog or the controls help handles its own Esc and marks it.)
         const { phase } = runStore.get();
@@ -287,6 +292,15 @@ export default function SceneClient() {
 
       {/* The run: its clock, and the finish screen when you reach the goat. */}
       {ready && <RunTimer />}
+      {ready && <GameNotice />}
+
+      {/* Calling the goat (also C and the pause menu), and the map it flashes. */}
+      {playing && (
+        <div className={`absolute left-3 flex flex-col items-start gap-2 ${debug ? "top-28" : "top-3"}`}>
+          <CallButton showKey={!touch} />
+          {run.calledAt > 0 && <CallMap key={`${runId}-${run.calledAt}`} />}
+        </div>
+      )}
       {ready && (
         <GameOver
           onPlayAgain={restart}
@@ -328,6 +342,10 @@ export default function SceneClient() {
       {menuOpen && ready && (
         <PauseMenu
           onResume={resume}
+          onCallGoat={() => {
+            resume();
+            runStore.callGoat();
+          }}
           onRestart={() => {
             setMenuOpen(false);
             restart();

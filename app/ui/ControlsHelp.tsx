@@ -63,6 +63,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         [<span key="l">Left thumb</span>, "Drag anywhere on the left to move — push all the way to run"],
         [<span key="r">Right thumb</span>, "Drag on the right to look around"],
         [<span key="e">Eye button</span>, "Switch first / third person"],
+        [<span key="c">Call button</span>, "Top left — call the goat: a map shows where she is for a moment"],
         [<span key="p">Pause button</span>, "Top right — pause, restart, settings"],
       ]
     : [
@@ -78,6 +79,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         [<span key="mouse">Mouse</span>, "Look around — click the view to capture the mouse"],
         [<Key key="shift">Shift</Key>, "Run"],
         [<Key key="v">V</Key>, "Switch first / third person"],
+        [<Key key="c">C</Key>, "Call the goat — a map shows where she is for a moment"],
         [<Key key="esc">Esc</Key>, "Pause"],
         [<Key key="m">M</Key>, "Music on / off"],
       ];
@@ -88,7 +90,8 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         <h2 className={`${posterFont.className} text-center text-4xl tracking-wide`}>Find the goat</h2>
         <p className="mt-2 text-center text-sm text-white/70">
           Gugut&apos;s goat is somewhere in the maze. Find her and bring her home. The clock starts on your first
-          step, and stops while you&apos;re paused.
+          step, and stops while you&apos;re paused. You can call her three times; after that your throat is dry
+          until you find water — two bottles are hidden in the maze.
         </p>
         <dl className="mt-5 space-y-2.5">
           {rows.map(([what, does], i) => (

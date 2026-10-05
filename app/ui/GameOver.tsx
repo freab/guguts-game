@@ -86,6 +86,11 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { ru
 
         <div className="mt-5 text-center">
           <div className="font-mono text-5xl font-semibold tabular-nums text-amber-200">{formatTime(timeMs)}</div>
+          <div className="mt-1 text-sm text-white/60">
+            {run.callsUsed === 0 ? "Found without calling her" : `Called her ${run.callsUsed} ${run.callsUsed === 1 ? "time" : "times"}`}
+            {" · "}
+            {run.bottlesTaken.filter(Boolean).length} of {run.bottlesTaken.length} bottles of water found
+          </div>
           <div className="mt-2 h-5 text-sm">
             {!run.ranked && <span className="text-white/60">Custom maze — not on the leaderboard.</span>}
             {submitting && <span className="text-white/50">Saving your time…</span>}

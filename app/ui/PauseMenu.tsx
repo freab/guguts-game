@@ -2,11 +2,13 @@
 
 import { useEffect } from "react";
 import { posterFont } from "../fonts";
-import { runStore, useRun } from "../game/runStore";
+import { GOAT_CALLS, runStore, useRun } from "../game/runStore";
 import { formatTime } from "../leaderboard/shared";
 
 export interface PauseActions {
   onResume: () => void;
+  /** Back to the game, calling the goat. */
+  onCallGoat: () => void;
   onRestart: () => void;
   onControls: () => void;
   onLeaderboard: () => void;
@@ -46,6 +48,9 @@ export default function PauseMenu(actions: PauseActions) {
             className="w-full rounded-full bg-amber-300 px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-amber-200"
           >
             Resume
+          </button>
+          <button type="button" onClick={actions.onCallGoat} className={button}>
+            {run.calls > 0 ? `Call the goat (${run.calls} of ${GOAT_CALLS} left)` : "Call the goat — too thirsty, find water"}
           </button>
           <button type="button" onClick={actions.onRestart} className={button}>
             Restart (new maze)
