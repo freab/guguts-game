@@ -122,7 +122,14 @@ class AudioEngine {
   private lastBleat = -1;
   private drinkSounds: { buffer: AudioBuffer; index: Record<"open" | "gulps" | "breath", [number, number]> } | null = null;
   private master: GainNode | null = null;
-  private song: { element: HTMLAudioElement; gain: GainNode; muffle: BiquadFilterNode; panner: PannerNode } | null = null;
+  private song: {
+    element: HTMLAudioElement;
+    gain: GainNode;
+    muffle: BiquadFilterNode;
+    panner: PannerNode;
+    analyser: AnalyserNode;
+    samples: Float32Array<ArrayBuffer>;
+  } | null = null;
   private songEnded: (() => void) | null = null;
   private songStop: ReturnType<typeof setTimeout> | null = null;
 
@@ -620,13 +627,17 @@ class AudioEngine {
       // Direction only (HRTF): the level is setSongLevel's, so no roll-off here.
       const panner = new PannerNode(ctx, { panningModel: "HRTF", distanceModel: "linear", rolloffFactor: 0 });
       source.connect(muffle).connect(gain).connect(panner).connect(this.master);
+      // Listened to as played (before distance), so Temesgen's hands can follow the music.
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
       if (this.reverbSend) {
         const wet = ctx.createGain();
         wet.gain.value = SONG_REVERB;
         panner.connect(wet).connect(this.reverbSend);
       }
       element.addEventListener("ended", () => this.songEnded?.());
-      this.song = { element, gain, muffle, panner };
+      this.song = { element, gain, muffle, panner, analyser, samples: new Float32Array(analyser.fftSize) };
     }
     if (this.songStop) clearTimeout(this.songStop);
     const { element, panner } = this.song;
@@ -648,6 +659,20 @@ class AudioEngine {
     const now = ctx.currentTime;
     this.song.gain.gain.setTargetAtTime(level * dbToGain(SONG_DB), now, 0.25);
     this.song.muffle.frequency.setTargetAtTime(occluded ? 1100 : 16000, now, 0.3);
+  }
+
+  /**
+   * How loud the song is being played right now (RMS of the last few ms, as
+   * recorded — not as heard from afar): 0 when it isn't playing. Drives
+   * Temesgen's strumming and nodding (maze/Temesgen).
+   */
+  songEnergy(): number {
+    if (!this.song || this.song.element.paused) return 0;
+    const { analyser, samples } = this.song;
+    analyser.getFloatTimeDomainData(samples);
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+    return Math.sqrt(sum / samples.length);
   }
 
   /** He stops playing: the song fades out, then stops. */

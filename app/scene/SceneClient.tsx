@@ -29,6 +29,7 @@ import BleatIndicator from "../ui/BleatIndicator";
 import DrinkPrompt from "../ui/DrinkPrompt";
 import TalkPrompt from "../ui/TalkPrompt";
 import TemesgenDialog from "../ui/TemesgenDialog";
+import SeatedHint from "../ui/SeatedHint";
 import { temesgen, useTemesgen } from "../game/temesgen";
 import DrinkVignette from "../ui/DrinkVignette";
 import { bottleFocus } from "../game/bottleFocus";
@@ -76,7 +77,7 @@ export default function SceneClient() {
   const closeBoard = useCallback(() => setBoardOpen(false), []);
   // Pause menu, controls help, and the phone "turn sideways" prompt.
   const run = useRun();
-  const { talking } = useTemesgen();
+  const { talking, seated } = useTemesgen();
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDismissed, setHelpDismissed] = useState(false);
@@ -286,6 +287,7 @@ export default function SceneClient() {
       {playing && <DrinkPrompt touch={touch} />}
       {playing && <TalkPrompt touch={touch} />}
       {playing && talking && <TemesgenDialog onClose={resume} />}
+      {playing && seated && !talking && <SeatedHint touch={touch} />}
 
       {/* Calling the goat (also its key and the pause menu), and the map it
           flashes. On phones the button sits bottom right, under the thumb. */}

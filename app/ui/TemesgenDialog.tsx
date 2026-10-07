@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { runStore } from "../game/runStore";
 import { temesgen } from "../game/temesgen";
 
-type Step = "greet" | "invite" | "playing" | "farewell" | "listening";
+type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin";
 
 interface Choice {
   text: string;
@@ -39,7 +39,7 @@ const LINES: Record<Step, Line> = {
     ],
   },
   playing: {
-    says: "Temesgen smiles, settles the kirar on his knee and begins to play.",
+    says: "Temesgen smiles and settles the kirar on his knee. You sit down on the grass in front of him as he begins to play.",
     narration: true,
     choices: [{ text: "Listen", then: "close" }],
   },
@@ -48,9 +48,16 @@ const LINES: Record<Step, Line> = {
     choices: [{ text: "Goodbye", then: "close" }],
   },
   listening: {
-    says: "You came back to listen? Good. The song is not finished yet.",
+    says: "Stay as long as you like, little brother. The song is not finished yet.",
     choices: [
       { text: "Keep playing", then: "close" },
+      { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
+    ],
+  },
+  rejoin: {
+    says: "You came back to listen? Good. Sit — the song is not finished yet.",
+    choices: [
+      { text: "Sit and listen", then: "close", act: () => temesgen.sit() },
       { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
     ],
   },
@@ -60,12 +67,15 @@ const LINES: Record<Step, Line> = {
  * Talking to Temesgen by the maple (E / the Talk button when close and
  * looking at him — game/temesgen): Gugut asks about his goat; Temesgen hasn't
  * seen her, but offers a song to calm him — and plays it if Gugut says yes
- * (heard in 3D from where he sits). Back while he's playing, Gugut can ask
- * him to stop. Choices by click / tap or the number keys (Enter = the first,
+ * (heard in 3D from where he sits), Gugut sitting down in front of him to
+ * listen. Back while he's playing, Gugut can sit again or ask him to stop. Choices by click / tap or the number keys (Enter = the first,
  * Esc = leave). The game is paused while it's open; `onClose` returns to it.
  */
 export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<Step>(() => (temesgen.get().song === "playing" ? "listening" : "greet"));
+  const [step, setStep] = useState<Step>(() => {
+    const { song, seated } = temesgen.get();
+    return song !== "playing" ? "greet" : seated ? "listening" : "rejoin";
+  });
   const line = LINES[step];
 
   useEffect(() => {

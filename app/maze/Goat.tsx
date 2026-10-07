@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
@@ -82,8 +81,12 @@ function createGoatMaterial(source: THREE.MeshStandardMaterial) {
  */
 export default function Goat() {
   const { scene } = useGLTF(GOAT_URL);
-  const goat = useMemo(() => fitSkinnedModel(scene, GOAT_HEIGHT), [scene]);
+  // Her copy of the scan and its breathing material, made together: in
+  // development React runs this twice (StrictMode) and keeps the first, so
+  // the material whose clock is advanced must be the one on the mesh that's
+  // drawn — built apart, the second run's material ends up on it, frozen.
   const life = useDisposable(() => {
+    const goat = fitSkinnedModel(scene, GOAT_HEIGHT);
     let source: THREE.MeshStandardMaterial | null = null;
     goat.animated.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -97,8 +100,8 @@ export default function Goat() {
         mesh.name = ""; // (counted under "Goat" in the #debug readout)
       }
     });
-    return goatMaterial;
-  }, [goat]);
+    return { root: goat.root, advance: goatMaterial.advance, dispose: goatMaterial.dispose };
+  }, [scene]);
 
   useFrame((_, dt) => life.advance(Math.min(dt, 0.1)));
 
@@ -108,7 +111,7 @@ export default function Goat() {
 
   return (
     <group name="Goat" position={[x, 0, z]} rotation={[0, facing, 0]}>
-      <primitive object={goat.root} />
+      <primitive object={life.root} />
       <BlobShadow size={1.1} height={0.035} />
     </group>
   );

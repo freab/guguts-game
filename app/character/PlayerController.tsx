@@ -10,6 +10,7 @@ import BlobShadow from "./BlobShadow";
 import { CameraRig } from "./CameraRig";
 import { LookInput } from "./LookInput";
 import { PlayerMotor, facingForYaw, type MoveKeys } from "./PlayerMotor";
+import { Seat } from "./Seat";
 import { WallCollider } from "./WallCollider";
 import { MAX_DELTA } from "./config";
 import { writePlayerStore } from "./playerStore";
@@ -40,7 +41,8 @@ function placeBody(body: THREE.Object3D, motor: PlayerMotor): void {
 /**
  * The player: keyboard / touch movement with wall collision, mouse / drag
  * look, and the first-person camera. Owns the per-frame loop in this order:
- * input -> motor (move + collide) -> body transform -> camera -> shared state.
+ * input -> motor (move + collide) -> seat (sitting down to listen to
+ * Temesgen) -> body transform -> camera -> shared state.
  */
 export default function PlayerController() {
   const { walkSpeed, runSpeed, sensitivity, invertY, headBob, fov } =
@@ -69,6 +71,8 @@ export default function PlayerController() {
     return new PlayerMotor(new THREE.Vector3(x, 0, z), facingForYaw(look.yaw));
   }, [look]);
   const rig = useMemo(() => new CameraRig(), []);
+  const seat = useMemo(() => new Seat(), []);
+  useEffect(() => () => seat.dispose(), [seat]);
   const body = useRef<THREE.Group>(null);
   /** Keys + touch stick, merged each frame (reused, no per-frame allocation). */
   const input = useRef<MoveKeys>({
@@ -98,7 +102,10 @@ export default function PlayerController() {
     const keys = Object.assign(input.current, getKeys());
     keys.stickX = touchInput.moveX;
     keys.stickY = touchInput.moveY;
-    if (blocked) {
+    const wantsToMove =
+      !blocked && (keys.forward || keys.backward || keys.left || keys.right || Math.hypot(keys.stickX, keys.stickY) > 0.3);
+    // Sitting (or sitting down) to listen to Temesgen: no walking.
+    if (blocked || seat.update(dt, motor, look, wantsToMove)) {
       keys.forward = keys.backward = keys.left = keys.right = keys.run = false;
       keys.stickX = keys.stickY = 0;
     }
