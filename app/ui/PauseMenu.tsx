@@ -17,7 +17,7 @@ export interface PauseActions {
 }
 
 /**
- * The pause menu (Esc, P, the pause button, or leaving the tab). The clock
+ * The pause menu (P, the pause button, or leaving the tab; Esc closes it). The clock
  * stops while it's open.
  */
 export default function PauseMenu(actions: PauseActions) {

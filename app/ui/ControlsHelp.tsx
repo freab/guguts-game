@@ -82,7 +82,8 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
         [<Key key="shift">Shift</Key>, "Run"],
         [<Key key="c">{keyLabel(callKey)}</Key>, "Call the goat — she bleats back, and a map shows where she is for a moment"],
         [<Key key="e">E</Key>, "Drink / talk — look at a bottle of water or a person close by"],
-        [<Key key="esc">Esc</Key>, "Pause"],
+        [<Key key="p">P</Key>, "Pause"],
+        [<Key key="esc">Esc</Key>, "Free the mouse — click the view to look around again"],
         [<Key key="m">M</Key>, "Music on / off"],
       ];
 

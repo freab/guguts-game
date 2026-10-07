@@ -93,25 +93,18 @@ export default function SceneClient() {
   // The controls are shown on the first run on this device (then from the menu).
   const showHelp = helpOpen || (playing && run.phase === "armed" && !helpDismissed && !controlsSeen());
 
-  // Pause when the game loses the mouse (Esc while it's captured: the browser
-  // swallows the key and just releases the mouse) or the tab is left.
+  // Pause when the tab is left. (Esc only lets go of the mouse — the browser
+  // releases it and the game plays on; click the view to take it back. P or
+  // the pause button open the menu.)
   useEffect(() => {
-    const pauseIfPlaying = () => {
-      const { phase } = runStore.get();
-      if ((phase === "armed" || phase === "running") && !runStore.isPaused()) setMenuOpen(true);
-    };
-    const onLock = () => {
-      if (!document.pointerLockElement) pauseIfPlaying();
-    };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") pauseIfPlaying();
+      const { phase } = runStore.get();
+      if (document.visibilityState === "hidden" && (phase === "armed" || phase === "running") && !runStore.isPaused()) {
+        setMenuOpen(true);
+      }
     };
-    document.addEventListener("pointerlockchange", onLock);
     document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      document.removeEventListener("pointerlockchange", onLock);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   /** Back to the game: close the menu and (on desktop) capture the mouse again. */
@@ -147,7 +140,8 @@ export default function SceneClient() {
   }, []);
 
   // M toggles the music; C (or the key set in Settings) calls the goat; E
-  // talks to Temesgen or drinks the bottle in view; Esc / P pause.
+  // talks to Temesgen or drinks the bottle in view; P pauses (and resumes);
+  // Esc closes the pause menu but never opens it — it just frees the mouse.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
@@ -156,11 +150,13 @@ export default function SceneClient() {
       else if (e.code === "KeyE") {
         if (!temesgen.talk()) bottleFocus.grab();
       }
-      else if ((e.code === "Escape" || e.code === "KeyP") && !e.defaultPrevented) {
-        // (A dialog or the controls help handles its own Esc and marks it.)
+      else if (e.code === "KeyP" && !e.defaultPrevented) {
         const { phase } = runStore.get();
         if (phase !== "armed" && phase !== "running") return;
         setMenuOpen((open) => (open ? false : !runStore.isPaused()));
+      } else if (e.code === "Escape" && !e.defaultPrevented) {
+        // (A dialog or the controls help handles its own Esc and marks it.)
+        setMenuOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -333,7 +329,7 @@ export default function SceneClient() {
         </div>
         {/* The main action while playing, as the light key. */}
         {playing && (
-          <IconButton label="Pause (Esc)" primary onClick={() => setMenuOpen(true)}>
+          <IconButton label="Pause (P)" primary onClick={() => setMenuOpen(true)}>
             <path d="M9 5v14M15 5v14" />
           </IconButton>
         )}
