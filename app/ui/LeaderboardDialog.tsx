@@ -15,15 +15,13 @@ export default function LeaderboardDialog({ initial, onClose }: { initial: Level
 
   return (
     <Dialog title="Leaderboard" onClose={onClose}>
-      <div className="mb-3 flex gap-1 rounded-full bg-black/40 p-1">
+      <div className="mb-3 flex gap-1 rounded-xl bg-[#303030] p-1">
         {LEVELS.map((l) => (
           <button
             key={l.id}
             type="button"
             onClick={() => setLevel(l.id)}
-            className={`flex-1 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-              level === l.id ? "bg-[#fdf3d4] text-black" : "text-white/70 hover:bg-white/10"
-            }`}
+            className={`flex-1 px-3 py-1.5 text-sm font-medium ${level === l.id ? "ui-cta" : "ui-tile"}`}
           >
             {l.label}
           </button>

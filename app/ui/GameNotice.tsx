@@ -34,12 +34,12 @@ function Message({ notice }: { notice: Notice }) {
   return (
     <div
       role="status"
-      className={`pointer-events-none absolute bottom-28 left-1/2 z-20 w-[min(70vw,24rem)] -translate-x-1/2 sm:bottom-auto rounded-2xl bg-black/60 px-4 py-2.5 text-center text-sm text-[#fdf3d4] backdrop-blur transition-opacity sm:top-16 ${
+      className={`pointer-events-none absolute bottom-28 left-1/2 z-20 w-[min(70vw,24rem)] -translate-x-1/2 sm:bottom-auto ui-shell p-1.5 text-center text-sm transition-opacity sm:top-16 ${
         fading ? "opacity-0" : "opacity-100"
       }`}
       style={{ transitionDuration: `${FADE_MS}ms`, animation: "notice-in 250ms ease-out" }}
     >
-      {notice.text}
+      <div className="ui-well px-4 py-2.5">{notice.text}</div>
     </div>
   );
 }

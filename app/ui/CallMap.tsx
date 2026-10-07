@@ -93,14 +93,16 @@ export default function CallMap({ className = "" }: { className?: string }) {
   if (gone) return null;
   return (
     <div
-      className={`pointer-events-none z-20 rounded-2xl bg-black/55 p-2 backdrop-blur transition-opacity ease-in ${
+      className={`pointer-events-none z-20 ui-shell p-1.5 transition-opacity ease-in ${
         fading ? "opacity-0" : "opacity-100"
       } ${className}`}
       style={{ transitionDuration: `${CALL_MAP_FADE_MS}ms`, animation: "call-map-in 220ms ease-out" }}
     >
-      <div className="relative" style={{ width: SIZE, height: SIZE }}>
-        <canvas ref={mazeRef} className="absolute inset-0" style={{ width: SIZE, height: SIZE }} />
-        <canvas ref={liveRef} className="absolute inset-0" style={{ width: SIZE, height: SIZE }} />
+      <div className="ui-well p-2">
+        <div className="relative" style={{ width: SIZE, height: SIZE }}>
+          <canvas ref={mazeRef} className="absolute inset-0" style={{ width: SIZE, height: SIZE }} />
+          <canvas ref={liveRef} className="absolute inset-0" style={{ width: SIZE, height: SIZE }} />
+        </div>
       </div>
     </div>
   );

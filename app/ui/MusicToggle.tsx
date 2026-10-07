@@ -36,7 +36,7 @@ export default function MusicToggle({ className = "" }: { className?: string }) 
       title="Music (M)"
       aria-pressed={on}
       aria-label={on ? "Turn music off" : "Turn music on"}
-      className={`flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-100 backdrop-blur transition-colors hover:bg-white/15 ${className}`}
+      className={`ui-tile flex h-8 items-center justify-center gap-2 px-3 text-sm font-medium ${className}`}
     >
       <SpeakerIcon on={on} />
       {/* Icon only on phones, to leave room for the timer. */}

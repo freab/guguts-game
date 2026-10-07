@@ -1,0 +1,139 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { runStore } from "../game/runStore";
+import { temesgen } from "../game/temesgen";
+
+type Step = "greet" | "invite" | "playing" | "farewell" | "listening";
+
+interface Choice {
+  text: string;
+  then: Step | "close";
+  /** Run as the choice is made (before moving on). */
+  act?: () => void;
+}
+
+interface Line {
+  /** What Gugut just said (shown above Temesgen's answer), if anything. */
+  asked?: string;
+  /** Temesgen's words, or a stage direction when `narration`. */
+  says: string;
+  narration?: boolean;
+  choices: Choice[];
+}
+
+const LINES: Record<Step, Line> = {
+  greet: {
+    says: "Selam, little brother. You are walking fast for such a quiet evening.",
+    choices: [
+      { text: "Have you seen my goat?", then: "invite" },
+      { text: "Goodbye", then: "close" },
+    ],
+  },
+  invite: {
+    asked: "Have you seen my goat?",
+    says: "Your goat? No — nothing has passed this tree but the wind. But look at you: out of breath, eyes everywhere. Sit a while and listen to one of my songs. A calm heart hears what a hurried one misses. Maybe then you will find her.",
+    choices: [
+      { text: "Yes — play me a song", then: "playing", act: () => temesgen.playSong() },
+      { text: "Not now, I have to keep looking", then: "farewell" },
+    ],
+  },
+  playing: {
+    says: "Temesgen smiles, settles the kirar on his knee and begins to play.",
+    narration: true,
+    choices: [{ text: "Listen", then: "close" }],
+  },
+  farewell: {
+    says: "Then go well. If you hear her bleat, follow it — and come back if your heart needs a song.",
+    choices: [{ text: "Goodbye", then: "close" }],
+  },
+  listening: {
+    says: "You came back to listen? Good. The song is not finished yet.",
+    choices: [
+      { text: "Keep playing", then: "close" },
+      { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
+    ],
+  },
+};
+
+/**
+ * Talking to Temesgen by the maple (E / the Talk button when close and
+ * looking at him — game/temesgen): Gugut asks about his goat; Temesgen hasn't
+ * seen her, but offers a song to calm him — and plays it if Gugut says yes
+ * (heard in 3D from where he sits). Back while he's playing, Gugut can ask
+ * him to stop. Choices by click / tap or the number keys (Enter = the first,
+ * Esc = leave). The game is paused while it's open; `onClose` returns to it.
+ */
+export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<Step>(() => (temesgen.get().song === "playing" ? "listening" : "greet"));
+  const line = LINES[step];
+
+  useEffect(() => {
+    runStore.setPaused("talk", true);
+    if (document.pointerLockElement) document.exitPointerLock();
+    return () => runStore.setPaused("talk", false);
+  }, []);
+
+  const pick = useCallback(
+    (choice: Choice | undefined) => {
+      if (!choice) return;
+      choice.act?.();
+      if (choice.then === "close") {
+        temesgen.endTalk();
+        onClose();
+      } else setStep(choice.then);
+    },
+    [onClose]
+  );
+
+  // 1, 2… pick a choice, Enter the first, Esc leaves. (Handled here, so the
+  // focused button doesn't also click: preventDefault.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+      if (digit) pick(line.choices[Number(digit[1]) - 1]);
+      else if (e.code === "Enter" || e.code === "NumpadEnter") pick(line.choices[0]);
+      else if (e.code === "Escape") pick({ text: "", then: "close" });
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [line, pick]);
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-[64] flex justify-center p-4 pb-6">
+      <div
+        role="dialog"
+        aria-label="Talking to Temesgen"
+        className="ui-shell flex w-full max-w-xl flex-col gap-1.5 p-1.5"
+        style={{ animation: "notice-in 200ms ease-out" }}
+      >
+        <div key={step} className="ui-well px-5 py-4" style={{ animation: "notice-in 260ms ease-out" }}>
+          {line.asked && <p className="mb-2 text-sm text-white/50">You: “{line.asked}”</p>}
+          {!line.narration && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/80">Temesgen</p>}
+          <p className={`text-base leading-relaxed ${line.narration ? "italic text-white/70" : "text-white"}`}>
+            {line.narration ? line.says : `“${line.says}”`}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5 sm:flex-row">
+          {line.choices.map((choice, i) => (
+            <button
+              key={choice.text}
+              type="button"
+              autoFocus={i === 0}
+              onClick={() => pick(choice)}
+              className={`flex min-h-11 flex-1 items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium ${
+                i === 0 ? "ui-cta" : "ui-tile"
+              }`}
+            >
+              <kbd className="ui-key hidden px-1.5 text-xs pointer-fine:inline">{i + 1}</kbd>
+              {choice.text}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -12,6 +12,9 @@
 // - public/audio/bleats.webm + bleats.json: the goat's answers to a call —
 //   single bleats cut from "Bleating Goat #1 / #2" (#0279 / #0280) and
 //   "Dwarf goat bleating" (#0880), levelled and faded, packed the same way.
+// - public/audio/drink.webm + drink.json: Gugut drinking a bottle he finds —
+//   the cork, the gulps and the breath after, cut from "Drink from the gourd
+//   #1" (#3247).
 //
 // Prints each output's RMS level: the ambience's goes into TRACKS in
 // app/audio/audioEngine.ts (loudness matching).
@@ -254,6 +257,44 @@ function buildBleats() {
   console.log(`bleats.webm: ${(pcm.length / RATE).toFixed(2)} s, ${index.length} bleats`);
 }
 
+/* ------------------------------------------------------------------ drink */
+
+/**
+ * Gugut drinking from a bottle he finds, from "Drink from the gourd #1"
+ * (#3247): the cork coming out, the gulps, the breath after — [start, end] s
+ * in the recording, found from its loudness (ffmpeg silencedetect at -38 dB).
+ */
+const DRINK = {
+  open: [0.25, 1.6],
+  gulps: [2.4, 5.05],
+  breath: [7.7, 8.5],
+};
+
+function buildDrink() {
+  const a = decodeMono(path.join(src, "drink-from-the-gourd-3247.mp3"));
+  const GAP = Math.round(RATE * 0.15);
+  const LEAD = Math.round(RATE * 0.1);
+  const parts = [new Float32Array(LEAD)];
+  let cursor = LEAD;
+  const index = {};
+  for (const [name, [from, to]] of Object.entries(DRINK)) {
+    const clip = levelStep(a, { start: Math.round(from * RATE), end: Math.round(to * RATE) });
+    index[name] = [+(cursor / RATE).toFixed(4), +(clip.length / RATE).toFixed(4)];
+    parts.push(clip, new Float32Array(GAP));
+    cursor += clip.length + GAP;
+  }
+  const pcm = new Float32Array(cursor);
+  let at = 0;
+  for (const part of parts) (pcm.set(part, at), (at += part.length));
+  ffmpeg(
+    ["-f", "f32le", "-ar", String(RATE), "-ac", "1", "-i", "-", "-c:a", "libopus", "-b:a", "96k", path.join(out, "drink.webm")],
+    Buffer.from(pcm.buffer)
+  );
+  writeFileSync(path.join(out, "drink.json"), JSON.stringify(index) + "\n");
+  console.log(`drink.webm: ${(pcm.length / RATE).toFixed(2)} s (open, gulps, breath)`);
+}
+
 buildBirds();
 buildFootsteps();
 buildBleats();
+buildDrink();

@@ -37,12 +37,12 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             autoComplete="nickname"
             spellCheck={false}
             onChange={(e) => setName(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-base text-white outline-none focus:border-amber-300/70"
+            className="min-w-0 flex-1 rounded-[10px] border border-[var(--ui-line)] bg-[var(--ui-mark)] px-3 py-2 text-base text-white outline-none focus:border-white/40"
           />
           <button
             type="submit"
             disabled={status.saving || name.trim() === profile.name}
-            className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-black transition-opacity disabled:opacity-40"
+            className="ui-cta px-4 py-2 text-sm disabled:opacity-40"
           >
             {status.saving ? "Saving…" : "Save"}
           </button>
@@ -75,7 +75,7 @@ function GameplaySettings() {
       setListening(false);
       if (e.code === "Escape") return;
       if (RESERVED_KEYS.has(e.code)) {
-        setMessage(`${keyLabel(e.code)} is already used (moving, running, music or pause).`);
+        setMessage(`${keyLabel(e.code)} is already used (moving, running, drinking, music or pause).`);
         return;
       }
       setPreferences({ callKey: e.code });
@@ -95,9 +95,7 @@ function GameplaySettings() {
             setMessage(null);
             setListening(true);
           }}
-          className={`min-w-28 rounded-lg border px-3 py-1.5 font-mono text-sm transition-colors ${
-            listening ? "border-amber-300/70 bg-amber-300/10 text-amber-200" : "border-white/15 bg-black/40 text-white hover:bg-white/10"
-          }`}
+          className={`min-w-28 px-3 py-1.5 font-mono text-sm ${listening ? "ui-cta" : "ui-tile"}`}
         >
           {listening ? "Press a key…" : keyLabel(prefs.callKey)}
         </button>
@@ -112,7 +110,7 @@ function GameplaySettings() {
           type="checkbox"
           checked={prefs.captions}
           onChange={(e) => setPreferences({ captions: e.target.checked })}
-          className="h-5 w-5 accent-amber-300"
+          className="h-5 w-5 accent-neutral-200"
         />
       </label>
     </div>

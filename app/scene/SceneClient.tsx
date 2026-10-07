@@ -26,6 +26,12 @@ import CallButton from "../ui/CallButton";
 import CallMap from "../ui/CallMap";
 import GameNotice from "../ui/GameNotice";
 import BleatIndicator from "../ui/BleatIndicator";
+import DrinkPrompt from "../ui/DrinkPrompt";
+import TalkPrompt from "../ui/TalkPrompt";
+import TemesgenDialog from "../ui/TemesgenDialog";
+import { temesgen, useTemesgen } from "../game/temesgen";
+import DrinkVignette from "../ui/DrinkVignette";
+import { bottleFocus } from "../game/bottleFocus";
 import { getPreferences } from "../game/preferences";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
@@ -70,6 +76,7 @@ export default function SceneClient() {
   const closeBoard = useCallback(() => setBoardOpen(false), []);
   // Pause menu, controls help, and the phone "turn sideways" prompt.
   const run = useRun();
+  const { talking } = useTemesgen();
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpDismissed, setHelpDismissed] = useState(false);
@@ -138,13 +145,16 @@ export default function SceneClient() {
     void import("./Scene");
   }, []);
 
-  // M toggles the music; C (or the key set in Settings) calls the goat;
-  // Esc / P pause.
+  // M toggles the music; C (or the key set in Settings) calls the goat; E
+  // talks to Temesgen or drinks the bottle in view; Esc / P pause.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
       if (e.code === "KeyM") audio.toggleMusic();
       else if (e.code === getPreferences().callKey && !runStore.isPaused()) runStore.callGoat();
+      else if (e.code === "KeyE") {
+        if (!temesgen.talk()) bottleFocus.grab();
+      }
       else if ((e.code === "Escape" || e.code === "KeyP") && !e.defaultPrevented) {
         // (A dialog or the controls help handles its own Esc and marks it.)
         const { phase } = runStore.get();
@@ -223,16 +233,16 @@ export default function SceneClient() {
       <Leva collapsed hidden={!ready || !debug} titleBar={{ title: "Controls" }} />
 
       {debug && (
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-2">
+        <div className="ui-shell absolute left-3 top-3 z-10 flex items-center gap-1.5 p-1.5">
           <button
             onClick={() => setLevel(null)}
-            className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
+            className="ui-tile h-9 whitespace-nowrap px-3 text-sm font-medium"
           >
             {LEVELS.find((l) => l.id === level)?.label ?? "Level"} · Change
           </button>
           <button
             onClick={restart}
-            className="whitespace-nowrap rounded-full bg-black/50 px-3 py-1.5 text-sm font-medium text-zinc-200 backdrop-blur transition-colors hover:bg-white/10"
+            className="ui-tile h-9 whitespace-nowrap px-3 text-sm font-medium"
           >
             New maze
           </button>
@@ -241,7 +251,7 @@ export default function SceneClient() {
 
       {/* Controls hint. */}
       {debug && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-black/50 px-3 py-2 text-xs leading-5 text-zinc-300 backdrop-blur">
+        <div className="ui-shell pointer-events-none absolute bottom-3 left-3 z-10 px-3 py-2 text-xs leading-5 text-zinc-300">
           <div>
             <b className="text-zinc-100">Click</b> to look around · <b className="text-zinc-100">Esc</b> to release
           </div>
@@ -272,6 +282,10 @@ export default function SceneClient() {
       {ready && <RunTimer />}
       {ready && <GameNotice />}
       {ready && <BleatIndicator />}
+      {ready && <DrinkVignette />}
+      {playing && <DrinkPrompt touch={touch} />}
+      {playing && <TalkPrompt touch={touch} />}
+      {playing && talking && <TemesgenDialog onClose={resume} />}
 
       {/* Calling the goat (also its key and the pause menu), and the map it
           flashes. On phones the button sits bottom right, under the thumb. */}
@@ -292,12 +306,8 @@ export default function SceneClient() {
 
       {/* Leaderboard, settings and music — always shown (above the title
           screen too); below the leva panel on #debug. */}
-      <div className={`absolute right-3 z-[60] flex items-center gap-2 ${debug ? "top-14" : "top-3"}`}>
-        {playing && (
-          <IconButton label="Pause (Esc)" onClick={() => setMenuOpen(true)}>
-            <path d="M9 5v14M15 5v14" />
-          </IconButton>
-        )}
+      <div className={`ui-shell absolute right-3 z-[60] flex items-stretch gap-1.5 p-1.5 ${debug ? "top-14" : "top-3"}`}>
+        <div className="ui-well flex items-center gap-1 p-1">
         {canFullscreen && (
           <IconButton
             label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
@@ -318,6 +328,13 @@ export default function SceneClient() {
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
         </IconButton>
         <MusicToggle />
+        </div>
+        {/* The main action while playing, as the light key. */}
+        {playing && (
+          <IconButton label="Pause (Esc)" primary onClick={() => setMenuOpen(true)}>
+            <path d="M9 5v14M15 5v14" />
+          </IconButton>
+        )}
       </div>
 
       {menuOpen && ready && (
@@ -352,15 +369,25 @@ export default function SceneClient() {
 
 const noSubscribe = () => () => {};
 
-/** A round icon button for the top-right cluster. */
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+/** An icon key for the top-right cluster (`primary`: the light one). */
+function IconButton({
+  label,
+  primary = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  primary?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-zinc-100 backdrop-blur transition-colors hover:bg-white/15"
+      className={`flex items-center justify-center ${primary ? "ui-cta w-10" : "ui-tile h-8 w-9"}`}
     >
       <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {children}

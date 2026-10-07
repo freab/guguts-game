@@ -16,8 +16,12 @@ export const MAX_SUBSTEP = 0.1;
 /** Frame delta clamp, so a hitch or tab switch can't teleport the player. */
 export const MAX_DELTA = 0.05;
 
-/** First-person eye height and head bob. */
-export const EYE_HEIGHT = 1.65;
+/**
+ * First-person eye height and head bob. Gugut is a young goatherd: eyes at
+ * 1.35 m, so people and the goat read at their true size (at an adult 1.65 m,
+ * Temesgen sitting by the tree looked tiny).
+ */
+export const EYE_HEIGHT = 1.35;
 export const BOB_AMPLITUDE = 0.035;
 /** Bob cycles per metre travelled (roughly one per step). */
 export const BOB_FREQUENCY = 1.6;

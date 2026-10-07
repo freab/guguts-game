@@ -116,7 +116,7 @@ function Indicator({ answer }: { answer: GoatAnswer }) {
       {captions && (
         <div
           role="status"
-          className="pointer-events-none absolute bottom-16 left-1/2 z-20 max-w-[90vw] -translate-x-1/2 rounded-lg bg-black/70 px-3 py-1.5 text-center text-sm text-white transition-opacity sm:bottom-10"
+          className="pointer-events-none absolute bottom-16 left-1/2 z-20 max-w-[90vw] -translate-x-1/2 ui-shell px-3.5 py-2 text-center text-sm transition-opacity sm:bottom-10"
           style={{ opacity, transitionDuration: `${FADE_MS}ms` }}
         >
           [{caption}]

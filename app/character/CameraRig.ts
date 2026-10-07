@@ -2,6 +2,7 @@ import * as THREE from "three/webgpu";
 import { BOB_AMPLITUDE, BOB_FREQUENCY, EYE_HEIGHT, FIRST_PERSON_PITCH, WALK_CLIP_SPEED } from "./config";
 import type { LookInput } from "./LookInput";
 import type { PlayerMotor } from "./PlayerMotor";
+import { viewTilt } from "./viewTilt";
 
 export interface RigSettings {
   headBob: boolean;
@@ -19,8 +20,9 @@ export class CameraRig {
     const p = motor.position;
     const stride = Math.min(1, motor.speed / WALK_CLIP_SPEED);
     const bob = settings.headBob ? Math.sin(motor.distance * BOB_FREQUENCY * Math.PI * 2) * BOB_AMPLITUDE * stride : 0;
-    camera.position.set(p.x, p.y + EYE_HEIGHT + bob, p.z);
-    camera.rotation.set(pitch, yaw, 0, "YXZ");
+    // (Lower when sitting down, and any tilt of the head — tipping back to drink: viewTilt.)
+    camera.position.set(p.x, p.y + EYE_HEIGHT - viewTilt.drop + bob, p.z);
+    camera.rotation.set(pitch + viewTilt.pitch, yaw, 0, "YXZ");
     if (camera.fov !== settings.fov) {
       camera.fov = settings.fov;
       camera.updateProjectionMatrix();

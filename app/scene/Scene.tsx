@@ -8,6 +8,7 @@ import * as THREE from "three/webgpu";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
+import Temesgen from "../maze/Temesgen";
 import WaterBottles from "../maze/WaterBottles";
 import Birds from "./atmosphere/Birds";
 import Particles from "./atmosphere/Particles";
@@ -555,13 +556,16 @@ export default function Scene() {
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <CoffeeBush />
-        <WaterBottles />
+        <Temesgen />
         <Particles />
         <Birds />
         <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
         <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
         <PlayerController />
+        {/* After the player: a bottle being drunk is held in front of the camera
+            the controller has just placed. */}
+        <WaterBottles />
         <Footsteps />
         <GoalWatcher />
         <GoatVoice />

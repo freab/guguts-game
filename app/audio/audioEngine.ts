@@ -24,6 +24,14 @@
  *   she really is: HRTF-panned around the listener (the camera, setListener),
  *   quieter and wetter with distance, muffled when walls stand between. With
  *   no voice left, a dry, breathy rasp instead (dryCall).
+ * - Drinking a bottle he finds (drink): a glass clink as he picks it up
+ *   (synthesised), then the cork, the gulps and a breath after (a real
+ *   recording, public/audio/drink.webm), on the calls bus.
+ * - Temesgen's song (playSong): his kirar recording, streamed from
+ *   public/audio when he's asked to play, HRTF-panned from where he sits
+ *   straight into the master. Its level is set from outside (setSongLevel):
+ *   full beside him, fading to silence across the clearing, muffled when walls
+ *   stand between.
  * - A gentle compressor on the master glues the mix and prevents clipping.
  *
  * The ambience plays only while the game is running (after the preloader) and
@@ -73,6 +81,17 @@ const BLEAT_ROLLOFF = 0.7;
 /** How long the goat takes to answer once she hears the call (s, random in range). */
 const BLEAT_REACTION: [number, number] = [0.25, 0.6];
 const SPEED_OF_SOUND = 343;
+/** Gugut drinking: the sprite, and where the cork / gulps / breath are in it ([start, duration] s). */
+const DRINK_SRC = "/audio/drink.webm";
+const DRINK_INDEX = "/audio/drink.json";
+/** When each part of the drink plays, from the pickup (s). */
+const DRINK_TIMES = { open: 0.15, gulps: 0.75, breath: 3.35 };
+/** Temesgen's kirar song, streamed (never decoded whole): about five minutes. */
+const SONG_SRC = `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3")}`;
+/** The song right beside him (dB), before setSongLevel's 0..1. */
+const SONG_DB = -6;
+/** Its echo off the maze walls, relative to the reverb send. */
+const SONG_REVERB = 0.5;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
@@ -101,6 +120,11 @@ class AudioEngine {
   private farSend: GainNode | null = null;
   private bleats: { buffer: AudioBuffer; index: [number, number][] } | null = null;
   private lastBleat = -1;
+  private drinkSounds: { buffer: AudioBuffer; index: Record<"open" | "gulps" | "breath", [number, number]> } | null = null;
+  private master: GainNode | null = null;
+  private song: { element: HTMLAudioElement; gain: GainNode; muffle: BiquadFilterNode; panner: PannerNode } | null = null;
+  private songEnded: (() => void) | null = null;
+  private songStop: ReturnType<typeof setTimeout> | null = null;
 
   private musicOn = true;
   private loadedPreference = false;
@@ -153,6 +177,7 @@ class AudioEngine {
     if (this.active === active) return;
     this.active = active;
     this.applyAmbience();
+    if (!active) this.stopSong();
   }
 
   /* ---------- graph ---------- */
@@ -176,6 +201,7 @@ class AudioEngine {
     const master = ctx.createGain();
     master.gain.value = 0.9;
     master.connect(compressor).connect(ctx.destination);
+    this.master = master;
 
     this.ambience = ctx.createGain();
     this.ambience.gain.value = 0;
@@ -207,6 +233,7 @@ class AudioEngine {
     void this.loadTracks(ctx);
     void this.loadSteps(ctx);
     void this.loadBleats(ctx);
+    void this.loadDrink(ctx);
 
     // A hidden tab goes quiet (and stops using the audio thread).
     document.addEventListener("visibilitychange", () => {
@@ -270,6 +297,21 @@ class AudioEngine {
       this.bleats = { buffer, index };
     } catch {
       // No answer then — the call's map still shows where she is.
+    }
+  }
+
+  /** Decode the drinking sounds. */
+  private async loadDrink(ctx: AudioContext) {
+    try {
+      const [buffer, index] = await Promise.all([
+        fetch(DRINK_SRC)
+          .then((r) => r.arrayBuffer())
+          .then((b) => ctx.decodeAudioData(b)),
+        fetch(DRINK_INDEX).then((r) => r.json() as Promise<Record<"open" | "gulps" | "breath", [number, number]>>),
+      ]);
+      this.drinkSounds = { buffer, index };
+    } catch {
+      // Just the clink then.
     }
   }
 
@@ -512,6 +554,111 @@ class AudioEngine {
     wet.gain.value = Math.min(0.9, 0.12 + distance / 45);
     panner.connect(wet).connect(this.farSend);
     src.start(t0, offset, duration);
+  }
+
+  /* ---------- drinking ---------- */
+
+  /**
+   * Gugut picks up a bottle and drinks: a clink of glass now, then the cork,
+   * the gulps and the breath after (DRINK_TIMES).
+   */
+  drink() {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    // The clink: two glassy partials, a quick ring.
+    for (const [freq, level, decay] of [
+      [2630, 0.16, 0.35],
+      [4180, 0.08, 0.22],
+      [6020, 0.04, 0.12],
+    ]) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq * (0.97 + Math.random() * 0.06);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, now);
+      env.gain.exponentialRampToValueAtTime(level, now + 0.004);
+      env.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+      osc.connect(env).connect(this.calls);
+      if (this.reverbSend) env.connect(this.reverbSend);
+      osc.start(now);
+      osc.stop(now + decay + 0.02);
+    }
+    if (!this.drinkSounds) return;
+    const { buffer, index } = this.drinkSounds;
+    for (const part of ["open", "gulps", "breath"] as const) {
+      const [offset, duration] = index[part];
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = part === "gulps" ? 0.9 : 0.6;
+      src.connect(gain).connect(this.calls);
+      src.start(now + DRINK_TIMES[part], offset, duration);
+    }
+  }
+
+  /* ---------- Temesgen's song ---------- */
+
+  /**
+   * Temesgen starts his song, from the beginning, at (x, y, z). It starts
+   * silent: setSongLevel brings it up as the listener is near. `onEnded` is
+   * called when it plays out.
+   */
+  playSong(x: number, y: number, z: number, onEnded: () => void) {
+    this.unlock();
+    const ctx = this.ctx;
+    if (!ctx || !this.master) return;
+    if (!this.song) {
+      const element = new Audio(SONG_SRC);
+      element.preload = "auto";
+      const source = ctx.createMediaElementSource(element);
+      const muffle = ctx.createBiquadFilter();
+      muffle.type = "lowpass";
+      muffle.frequency.value = 16000;
+      muffle.Q.value = 0.5;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      // Direction only (HRTF): the level is setSongLevel's, so no roll-off here.
+      const panner = new PannerNode(ctx, { panningModel: "HRTF", distanceModel: "linear", rolloffFactor: 0 });
+      source.connect(muffle).connect(gain).connect(panner).connect(this.master);
+      if (this.reverbSend) {
+        const wet = ctx.createGain();
+        wet.gain.value = SONG_REVERB;
+        panner.connect(wet).connect(this.reverbSend);
+      }
+      element.addEventListener("ended", () => this.songEnded?.());
+      this.song = { element, gain, muffle, panner };
+    }
+    if (this.songStop) clearTimeout(this.songStop);
+    const { element, panner } = this.song;
+    panner.positionX.value = x;
+    panner.positionY.value = y;
+    panner.positionZ.value = z;
+    this.songEnded = onEnded;
+    element.currentTime = 0;
+    void element.play().catch(() => {});
+  }
+
+  /**
+   * How loud the song is where the listener is (0 = silent … 1 = right beside
+   * him) and whether walls stand between (muffled). Eased, so steps don't jump.
+   */
+  setSongLevel(level: number, occluded: boolean) {
+    const ctx = this.ctx;
+    if (!ctx || !this.song) return;
+    const now = ctx.currentTime;
+    this.song.gain.gain.setTargetAtTime(level * dbToGain(SONG_DB), now, 0.25);
+    this.song.muffle.frequency.setTargetAtTime(occluded ? 1100 : 16000, now, 0.3);
+  }
+
+  /** He stops playing: the song fades out, then stops. */
+  stopSong() {
+    const ctx = this.ctx;
+    if (!ctx || !this.song) return;
+    const { element, gain } = this.song;
+    this.songEnded = null;
+    gain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+    if (this.songStop) clearTimeout(this.songStop);
+    this.songStop = setTimeout(() => element.pause(), 1000);
   }
 
   /* ---------- footsteps ---------- */

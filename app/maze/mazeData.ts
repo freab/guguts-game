@@ -156,9 +156,25 @@ export function inClearing(x: number, z: number, margin = 0): boolean {
   return Math.hypot(x, z) <= clearingRadius() - margin;
 }
 
-/** Round obstacles the player can't walk through (the tree trunk). */
+/**
+ * Where Temesgen sits playing his kirar (maze/Temesgen): his back to the
+ * maple's trunk, on the side facing the start corner, so a player coming in
+ * from that way finds him face on. `facing` turns a model that faces +Z.
+ */
+export function restingSpot(): { x: number; z: number; facing: number } {
+  const [sx, , sz] = startPosition();
+  const len = Math.hypot(sx, sz) || 1;
+  const d = 0.55 * treeScale() + 0.55;
+  return { x: (sx / len) * d, z: (sz / len) * d, facing: Math.atan2(sx, sz) };
+}
+
+/** Round obstacles the player can't walk through: the tree trunk (first), then Temesgen. */
 export function obstacles(): { x: number; z: number; r: number }[] {
-  return [{ x: 0, z: 0, r: 0.55 * treeScale() }];
+  const rest = restingSpot();
+  return [
+    { x: 0, z: 0, r: 0.55 * treeScale() },
+    { x: rest.x, z: rest.z, r: 0.46 },
+  ];
 }
 
 /** Regenerate a fresh random maze. Call before restarting a run. */

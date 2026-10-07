@@ -28,6 +28,7 @@ export const RESERVED_KEYS = new Set([
   "ArrowRight",
   "ShiftLeft",
   "ShiftRight",
+  "KeyE",
   "KeyM",
   "KeyP",
   "Escape",

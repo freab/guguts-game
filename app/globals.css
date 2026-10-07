@@ -77,3 +77,96 @@ body {
     backdrop-filter: none !important;
   }
 }
+
+/* DrinkVignette: the blue rush rises fast and drains away. */
+@keyframes drink-vignette {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* CallButton: a call pip filling back up. */
+@keyframes pip-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
+ * The game's UI kit: solid, layered grey "hardware" instead of see-through
+ * cards — an outer frame (ui-shell), a darker recess inside it (ui-well),
+ * bordered keys in the recess (ui-tile), a near-black square for an icon
+ * (ui-mark) and one light key for the main action (ui-cta). Opaque, so no
+ * blur behind it: cheap on phones too. Padding and size are left to each use.
+ */
+:root {
+  --ui-frame: #4a4a4a;
+  --ui-well: #383838;
+  --ui-tile: #3e3e3e;
+  --ui-tile-hover: #484848;
+  --ui-line: rgb(255 255 255 / 0.08);
+  --ui-mark: #232323;
+  --ui-cta: #ebebeb;
+  --ui-ink: #ececec;
+}
+
+@utility ui-shell {
+  background-color: var(--ui-frame);
+  border-radius: 18px;
+  color: var(--ui-ink);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+
+@utility ui-well {
+  background-color: var(--ui-well);
+  border-radius: 12px;
+}
+
+@utility ui-tile {
+  background-color: var(--ui-tile);
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  color: var(--ui-ink);
+  transition: background-color 150ms, transform 150ms;
+  &:hover {
+    background-color: var(--ui-tile-hover);
+  }
+}
+
+@utility ui-mark {
+  background-color: var(--ui-mark);
+  border-radius: 12px;
+  color: #f5f5f5;
+}
+
+@utility ui-cta {
+  background-color: var(--ui-cta);
+  border-radius: 12px;
+  color: #151515;
+  font-weight: 600;
+  transition: background-color 150ms, transform 150ms, opacity 150ms;
+  &:hover {
+    background-color: #ffffff;
+  }
+}
+
+/* A key cap, as in the controls help. */
+@utility ui-key {
+  background-color: var(--ui-mark);
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  color: #e5e5e5;
+  font-family: var(--font-mono);
+}

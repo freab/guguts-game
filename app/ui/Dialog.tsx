@@ -45,22 +45,24 @@ export default function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#11140d]/95 p-5 text-[#fdf3d4] shadow-2xl"
+        className="ui-shell flex max-h-[90vh] w-full max-w-md flex-col p-1.5"
       >
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className={`${posterFont.className} text-3xl tracking-wide`}>{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
+        <div className="ui-well min-h-0 overflow-y-auto p-5">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className={`${posterFont.className} text-3xl tracking-wide`}>{title}</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="ui-tile flex h-9 w-9 items-center justify-center"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </div>
   );
