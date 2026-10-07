@@ -58,6 +58,12 @@ export interface RunState {
   calledAt: number;
   /** performance.now() of the last call tried with no voice left (a dry rasp), 0 = none. */
   dryAt: number;
+  /**
+   * performance.now() when Gugut, calmed by Temesgen's song, heard the goat
+   * bleat on her own (game/temesgen) — her direction shows like a call's
+   * answer, without using one. 0 = not yet.
+   */
+  heardAt: number;
   /** Which of the hidden bottles have been drunk. */
   bottlesTaken: readonly boolean[];
   /** The latest message for the player, if any. */
@@ -77,6 +83,7 @@ let state: RunState = {
   callsUsed: 0,
   calledAt: 0,
   dryAt: 0,
+  heardAt: 0,
   bottlesTaken: Array(BOTTLES).fill(false),
   notice: null,
 };
@@ -86,6 +93,7 @@ const freshCalls = () => ({
   callsUsed: 0,
   calledAt: 0,
   dryAt: 0,
+  heardAt: 0,
   bottlesTaken: Array<boolean>(BOTTLES).fill(false),
   notice: null,
 });
@@ -135,6 +143,14 @@ export const runStore = {
           : state.notice,
     });
     return true;
+  },
+  /** Calm at last (listening to Temesgen): Gugut hears the goat bleat on her own. */
+  hearGoat(now = performance.now()) {
+    if (state.phase !== "armed" && state.phase !== "running") return;
+    set({
+      heardAt: now,
+      notice: { text: "Calm at last, you hear her — a bleat, clear across the maze.", at: now },
+    });
   },
   /** Drink hidden bottle `i`: Gugut's voice comes back in full. */
   drink(i: number, now = performance.now()) {

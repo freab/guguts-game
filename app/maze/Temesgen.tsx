@@ -23,7 +23,8 @@ import { fitSkinnedModel } from "../character/fitSkinnedModel";
 import { playerStore } from "../character/playerStore";
 import { WallCollider } from "../character/WallCollider";
 import { temesgen } from "../game/temesgen";
-import { restingSpot } from "./mazeData";
+import { inClearing, restingSpot } from "./mazeData";
+import { runStore } from "../game/runStore";
 import { useDisposable } from "../hooks/useDisposable";
 import { audio } from "../audio/audioEngine";
 
@@ -50,9 +51,9 @@ const NECK = new THREE.Vector3(0, 0.4, -0.12);
 const HIPS = new THREE.Vector3(0, -0.45, -0.12);
 
 /** The strum's swing at the hand (radians about the elbow, at full stroke). */
-const STRUM_SWING = 0.18;
+const STRUM_SWING = 0.11;
 /** How far the right hand moves along the upright (model units, at full reach). */
-const FRET_SLIDE = 0.035;
+const FRET_SLIDE = 0.022;
 /** Seconds per breath, and how much the chest swells. */
 const BREATH_PERIOD = 4.2;
 const BREATH_SWELL = 0.012;
@@ -77,6 +78,8 @@ const SONG_NEAR = 2.5;
 const SONG_FAR = 20;
 /** Seconds between "is there a wall between us?" checks for the song. */
 const OCCLUSION_EVERY = 0.2;
+/** He plays a few bars when Gugut comes into the clearing — not again for this long (s). */
+const PHRASE_AGAIN = 60;
 /** He turns his head to Gugut within this distance (m), up to this far round (radians). */
 const LOOK_RANGE = 8;
 const LOOK_MAX = 0.5;
@@ -190,7 +193,8 @@ class Performer {
     dt = Math.min(dt, 0.1);
     this.t += dt;
     u.time.value = this.t;
-    const playing = temesgen.get().song === "playing";
+    // (His song, or the few bars he plays as Gugut comes into the clearing.)
+    const playing = temesgen.get().song !== "stopped";
 
     // The music's level: a quick follower (plucks) against a slow one (the passage).
     const energy = playing ? audio.songEnergy() : 0;
@@ -257,9 +261,11 @@ class Performer {
 }
 
 /**
- * Whether Gugut can talk to him (close, facing him: game/temesgen `near`),
- * and — while he plays his song — how loud it is where Gugut stands: full
- * beside him, easing to silence across the clearing, muffled behind walls.
+ * Whether Gugut can talk to him (close, facing him: game/temesgen `near`);
+ * a few bars of his song as Gugut comes into the clearing (now and then);
+ * how calm sitting and listening has made Gugut (temesgen.listen); and —
+ * while he plays — how loud it is where Gugut stands: full beside him,
+ * easing to silence across the clearing, muffled behind walls.
  */
 class Presence {
   private readonly spot = restingSpot();
@@ -269,6 +275,9 @@ class Presence {
   private readonly to = new THREE.Vector3();
   private occluded = false;
   private sinceCheck = OCCLUSION_EVERY;
+  private wasInClearing = false;
+  private lastPhrase = -Infinity;
+  private t = 0;
 
   update(camera: THREE.Camera, dt: number) {
     const { talking, song } = temesgen.get();
@@ -282,7 +291,19 @@ class Presence {
     }
     temesgen.setNear(near);
 
-    if (song !== "playing") return;
+    // Coming into the clearing: he plays a few bars (if he isn't already playing).
+    this.t += dt;
+    const { phase } = runStore.get();
+    const inside = inClearing(playerStore.x, playerStore.z);
+    const live = (phase === "armed" || phase === "running") && !runStore.isPaused();
+    if (inside && !this.wasInClearing && live && song === "stopped" && this.t - this.lastPhrase > PHRASE_AGAIN) {
+      this.lastPhrase = this.t;
+      temesgen.playPhrase();
+    }
+    this.wasInClearing = inside;
+
+    temesgen.listen(dt);
+    if (temesgen.get().song === "stopped") return;
     const distance = camera.position.distanceTo(this.head);
     this.sinceCheck += dt;
     if (this.sinceCheck >= OCCLUSION_EVERY) {

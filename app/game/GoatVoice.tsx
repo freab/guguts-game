@@ -25,7 +25,8 @@ const _dir = new THREE.Vector3();
  * really is — muffled if a wall stands between, later and more distant the
  * farther she is — and posts her answer (game/goatAnswer) for the on-screen
  * direction arc and caption. A call with no voice left (runStore.dryAt) gets
- * a rasp.
+ * a rasp. When Gugut, calmed by Temesgen's song, hears her on her own
+ * (runStore.heardAt), her bleat plays the same way without the whistle.
  */
 export default function GoatVoice() {
   const camera = useThree((s) => s.camera);
@@ -38,7 +39,18 @@ export default function GoatVoice() {
   });
 
   useEffect(() => {
-    let { calledAt, dryAt } = runStore.get();
+    /** Her answer: `play` sounds it from where she is and says how long until it's heard. */
+    const answer = (play: (x: number, y: number, z: number, distance: number, occluded: boolean) => number | null) => {
+      const [gx, gz] = exitPosition();
+      camera.getWorldPosition(_origin);
+      _dir.set(gx - _origin.x, BLEAT_HEIGHT - _origin.y, gz - _origin.z);
+      const distance = _dir.length();
+      _dir.normalize();
+      const occluded = walls.raycast(_origin, _dir, distance) < distance - 0.3;
+      const delay = play(gx, BLEAT_HEIGHT, gz, distance, occluded) ?? SILENT_ANSWER_DELAY;
+      goatAnswer.post({ at: performance.now() + delay * 1000, x: gx, z: gz, distance, occluded });
+    };
+    let { calledAt, dryAt, heardAt } = runStore.get();
     return runStore.subscribe(() => {
       const run = runStore.get();
       if (run.calledAt !== calledAt) {
@@ -47,14 +59,15 @@ export default function GoatVoice() {
           goatAnswer.post(null); // a new run
           return;
         }
-        const [gx, gz] = exitPosition();
-        camera.getWorldPosition(_origin);
-        _dir.set(gx - _origin.x, BLEAT_HEIGHT - _origin.y, gz - _origin.z);
-        const distance = _dir.length();
-        _dir.normalize();
-        const occluded = walls.raycast(_origin, _dir, distance) < distance - 0.3;
-        const delay = audio.goatCall(gx, BLEAT_HEIGHT, gz, distance, occluded) ?? SILENT_ANSWER_DELAY;
-        goatAnswer.post({ at: performance.now() + delay * 1000, x: gx, z: gz, distance, occluded });
+        answer((x, y, z, d, o) => audio.goatCall(x, y, z, d, o));
+      }
+      if (run.heardAt !== heardAt) {
+        heardAt = run.heardAt;
+        if (heardAt !== 0) {
+          // The song dips so she comes through it.
+          audio.duckSong(4);
+          answer((x, y, z, d, o) => audio.goatBleat(x, y, z, d, o));
+        }
       }
       if (run.dryAt !== dryAt) {
         dryAt = run.dryAt;

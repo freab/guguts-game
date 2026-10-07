@@ -92,6 +92,8 @@ const SONG_SRC = `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar wit
 const SONG_DB = -6;
 /** Its echo off the maze walls, relative to the reverb send. */
 const SONG_REVERB = 0.5;
+/** How far the song dips (gain) while the goat's bleat comes through it. */
+const SONG_DUCK = 0.3;
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
@@ -125,6 +127,8 @@ class AudioEngine {
   private song: {
     element: HTMLAudioElement;
     gain: GainNode;
+    envelope: GainNode;
+    duck: GainNode;
     muffle: BiquadFilterNode;
     panner: PannerNode;
     analyser: AnalyserNode;
@@ -434,6 +438,19 @@ class AudioEngine {
     return this.bleats ? delay : null;
   }
 
+  /**
+   * The goat bleats on her own (no call), from (x, y, z) — heard once Gugut
+   * is calm (game/temesgen). Returns how long (s) until it's heard, or null
+   * when nothing can play.
+   */
+  goatBleat(x: number, y: number, z: number, distance: number, occluded: boolean): number | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || ctx.state !== "running" || !this.bleats) return null;
+    const delay = 0.3 + distance / SPEED_OF_SOUND;
+    this.bleat(ctx, x, y, z, distance, occluded, delay);
+    return delay;
+  }
+
   /** Gugut tries to call with no voice left: a dry, breathy rasp. */
   dryCall() {
     const ctx = this.ctx;
@@ -605,15 +622,11 @@ class AudioEngine {
 
   /* ---------- Temesgen's song ---------- */
 
-  /**
-   * Temesgen starts his song, from the beginning, at (x, y, z). It starts
-   * silent: setSongLevel brings it up as the listener is near. `onEnded` is
-   * called when it plays out.
-   */
-  playSong(x: number, y: number, z: number, onEnded: () => void) {
+  /** The song's player and its graph, made on first use (its file streams as it plays). */
+  private ensureSong() {
     this.unlock();
     const ctx = this.ctx;
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.master) return null;
     if (!this.song) {
       const element = new Audio(SONG_SRC);
       element.preload = "auto";
@@ -622,11 +635,15 @@ class AudioEngine {
       muffle.type = "lowpass";
       muffle.frequency.value = 16000;
       muffle.Q.value = 0.5;
+      // Distance (setSongLevel), then a phrase's fade in / out, then a dip
+      // while the goat's bleat comes through (duckSong).
       const gain = ctx.createGain();
       gain.gain.value = 0;
+      const envelope = ctx.createGain();
+      const duck = ctx.createGain();
       // Direction only (HRTF): the level is setSongLevel's, so no roll-off here.
       const panner = new PannerNode(ctx, { panningModel: "HRTF", distanceModel: "linear", rolloffFactor: 0 });
-      source.connect(muffle).connect(gain).connect(panner).connect(this.master);
+      source.connect(muffle).connect(gain).connect(envelope).connect(duck).connect(panner).connect(this.master);
       // Listened to as played (before distance), so Temesgen's hands can follow the music.
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
@@ -637,16 +654,60 @@ class AudioEngine {
         panner.connect(wet).connect(this.reverbSend);
       }
       element.addEventListener("ended", () => this.songEnded?.());
-      this.song = { element, gain, muffle, panner, analyser, samples: new Float32Array(analyser.fftSize) };
+      this.song = { element, gain, envelope, duck, muffle, panner, analyser, samples: new Float32Array(analyser.fftSize) };
     }
     if (this.songStop) clearTimeout(this.songStop);
-    const { element, panner } = this.song;
+    return this.song;
+  }
+
+  private placeSong(x: number, y: number, z: number) {
+    const panner = this.song!.panner;
     panner.positionX.value = x;
     panner.positionY.value = y;
     panner.positionZ.value = z;
+  }
+
+  /**
+   * Temesgen starts his song, from the beginning, at (x, y, z). It starts
+   * silent: setSongLevel brings it up as the listener is near. `onEnded` is
+   * called when it plays out.
+   */
+  playSong(x: number, y: number, z: number, onEnded: () => void) {
+    const song = this.ensureSong();
+    if (!song || !this.ctx) return;
+    this.placeSong(x, y, z);
+    const now = this.ctx.currentTime;
+    song.envelope.gain.cancelScheduledValues(now);
+    song.envelope.gain.setTargetAtTime(1, now, 0.05);
     this.songEnded = onEnded;
-    element.currentTime = 0;
-    void element.play().catch(() => {});
+    song.element.currentTime = 0;
+    void song.element.play().catch(() => {});
+  }
+
+  /**
+   * A few bars of it — Temesgen idly playing as Gugut comes into the
+   * clearing: from `offset` s for `length` s, fading in and out. `onEnded`
+   * is called once it has faded.
+   */
+  playPhrase(x: number, y: number, z: number, offset: number, length: number, onEnded: () => void) {
+    const song = this.ensureSong();
+    if (!song || !this.ctx) return;
+    this.placeSong(x, y, z);
+    const now = this.ctx.currentTime;
+    const env = song.envelope.gain;
+    env.cancelScheduledValues(now);
+    env.setValueAtTime(0, now);
+    env.linearRampToValueAtTime(1, now + 0.8);
+    env.setValueAtTime(1, now + length - 1.2);
+    env.linearRampToValueAtTime(0, now + length);
+    this.songEnded = onEnded;
+    song.element.currentTime = offset;
+    void song.element.play().catch(() => {});
+    this.songStop = setTimeout(() => {
+      song.element.pause();
+      this.songEnded = null;
+      onEnded();
+    }, length * 1000 + 100);
   }
 
   /**
@@ -659,6 +720,17 @@ class AudioEngine {
     const now = ctx.currentTime;
     this.song.gain.gain.setTargetAtTime(level * dbToGain(SONG_DB), now, 0.25);
     this.song.muffle.frequency.setTargetAtTime(occluded ? 1100 : 16000, now, 0.3);
+  }
+
+  /** Dip the song for `seconds` (the goat's bleat coming through it), then bring it back. */
+  duckSong(seconds: number) {
+    const ctx = this.ctx;
+    if (!ctx || !this.song) return;
+    const now = ctx.currentTime;
+    const duck = this.song.duck.gain;
+    duck.cancelScheduledValues(now);
+    duck.setTargetAtTime(SONG_DUCK, now, 0.15);
+    duck.setTargetAtTime(1, now + seconds, 0.6);
   }
 
   /**
