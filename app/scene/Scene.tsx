@@ -504,9 +504,10 @@ export default function Scene() {
       camera={{ position: [0, 24, 34], fov: 55, near: 0.05 }}
       // PCF shadows (WebGPU dropped PCFSoft, R3F's default, and warns about it).
       shadows="percentage"
-      // Cap the pixel ratio: on a 2–3x HiDPI display this is a big fillrate win
-      // (phones, with their small screens and GPUs, at 1).
-      dpr={tier<[number, number]>([1, 1.5], [1, 1])}
+      // Cap the pixel ratio: on a 2–3x HiDPI display this is a big fillrate win.
+      // Phones get the same cap — at 1 their 2–3x screens showed the scene
+      // stretched from a third of their resolution, visibly pixelated.
+      dpr={[1, 1.5]}
       // Force the WebGPU renderer. forceWebGL:false = use the WebGPU backend when
       // the browser supports it; init() is async, so R3F awaits the promise.
       gl={async (props) => {
