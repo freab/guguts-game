@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { preload } from "react-dom";
 import { useProgress } from "@react-three/drei";
 import { posterFont } from "../fonts";
 import { LEVELS, type Level } from "../maze/levels";
-import { useLoading, type LoadingStage } from "../scene/bake/loadingStore";
-import DissolveCanvas from "./DissolveCanvas";
+import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
+import DissolveCanvas, { type DissolveStage } from "./DissolveCanvas";
 
 /**
  * How much of the counter each preload stage accounts for (sums to 1).
@@ -23,6 +24,9 @@ const STAGE_WEIGHTS: [Exclude<LoadingStage, "ready">, number][] = [
 const TITLE_SRC = "/preloader/first.webp";
 /** Preloader backdrop (up past the tree at the sky), the story is written on it. */
 const STORY_SRC = "/preloader/second.webp";
+
+/** The "GUGUT & THE GOAT" wordmark (cream, transparent). */
+const LOGO_SRC = "/logo gugut.svg";
 
 /** Soft shadow so the cream lettering holds up over bright sky. */
 const SHADOW = "[text-shadow:0_2px_14px_rgba(20,16,8,0.45)]";
@@ -196,12 +200,13 @@ function Preloader({ onEnter }: { onEnter: () => void }) {
 
 /**
  * Title screen and preloader, over a full-screen canvas. Title screen: the
- * maze entrance, "GUGUT & THE GOAT" on the right and the level chooser on the
+ * maze entrance, the logo on the right and the level chooser on the
  * left. Picking a level burns that image away in a noise dissolve, revealing
  * the sky over the maze, where the story is written and the percentage counts
  * up. It covers the scene (blocking input) until everything is loaded, baked,
  * compiled and warmed up; at 100 the counter becomes an Enter button, and the
- * overlay fades out once the player presses it (`entered`).
+ * story image burns away to the scene in the same dissolve when it is pressed
+ * (then `entered`).
  */
 export default function LoadingOverlay({
   choosing,
@@ -227,12 +232,6 @@ export default function LoadingOverlay({
   const [picked, setPicked] = useState<Level | null>(null);
   // The story and counter wait for the burn to finish; reset on each pick.
   const [dissolveDone, setDissolveDone] = useState(false);
-  const onDissolved = () => {
-    setDissolveDone(true);
-    if (!picked) return;
-    setPicked(null);
-    onChoose(picked);
-  };
   const pick = (level: Level) => {
     if (picked) return;
     onPick();
@@ -240,6 +239,28 @@ export default function LoadingOverlay({
     setPicked(level);
   };
   const titleShown = choosing && !picked;
+  // Enter pressed: the story fades and its image burns away to the scene;
+  // the game starts (onEnter) once that burn is done.
+  const [leaving, setLeaving] = useState(false);
+  const enter = () => {
+    setLeaving(true);
+    setLoading({ sceneHeld: true }); // the burn gets the GPU to itself
+  };
+  // (`picked`: a new level burning in — `entered` may still be set from the last game.)
+  const stage: DissolveStage = titleShown ? 0 : picked ? 1 : leaving || entered ? 2 : 1;
+  const onDissolved = (reached: DissolveStage) => {
+    if (reached === 2) {
+      if (!leaving) return;
+      setLeaving(false);
+      setLoading({ sceneHeld: false });
+      onEnter();
+      return;
+    }
+    setDissolveDone(true);
+    if (!picked) return;
+    setPicked(null);
+    onChoose(picked);
+  };
   // Fetch the preloader image alongside the title one, so the dissolve
   // never waits on it.
   preload(TITLE_SRC, { as: "image", fetchPriority: "high" });
@@ -252,7 +273,7 @@ export default function LoadingOverlay({
         hidden ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
-      <DissolveCanvas fromSrc={TITLE_SRC} toSrc={STORY_SRC} dissolved={!titleShown} onDissolved={onDissolved} />
+      <DissolveCanvas fromSrc={TITLE_SRC} toSrc={STORY_SRC} stage={stage} onDissolved={onDissolved} />
 
       {/* Title screen: chooser left, title right (stacked on portrait phones). */}
       <div
@@ -261,15 +282,25 @@ export default function LoadingOverlay({
         }`}
       >
         <LevelChooser onChoose={pick} />
-        <h1 className={`text-center leading-[0.82] ${SHADOW}`}>
-          <span className="block text-[clamp(4.5rem,min(10vw,20vh),11rem)]">GUGUT</span>
-          <span className="block text-[clamp(2rem,min(4vw,8vh),4.4rem)]">&amp; THE GOAT</span>
+        <h1 className="w-[clamp(15rem,min(26vw,48vh),30rem)]">
+          <Image
+            src={LOGO_SRC}
+            alt="Gugut & the Goat"
+            width={317}
+            height={210}
+            preload
+            className="h-auto w-full drop-shadow-[0_2px_14px_rgba(20,16,8,0.45)]"
+          />
         </h1>
       </div>
 
       {/* Preloader: the story and the counter (then Enter), once the dissolve
-          has finished. */}
-      {!choosing && dissolveDone && <Preloader key={runId} onEnter={onEnter} />}
+          has finished; fades as Enter's burn starts. */}
+      {!choosing && dissolveDone && (
+        <div className={`transition-opacity duration-500 ${leaving || entered ? "pointer-events-none opacity-0" : ""}`}>
+          <Preloader key={runId} onEnter={enter} />
+        </div>
+      )}
     </div>
   );
 }

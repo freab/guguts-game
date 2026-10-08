@@ -169,7 +169,7 @@ export default function SceneClient() {
   // New random maze at the current size.
   const restart = () => {
     regenerateMaze();
-    setLoading({ stage: "assets", bakeProgress: 0 }); // preloader runs again
+    setLoading({ stage: "assets", bakeProgress: 0, sceneHeld: false }); // preloader runs again
     setEntered(false);
     setRunId((n) => n + 1);
   };
@@ -214,7 +214,7 @@ export default function SceneClient() {
     applied.current = { w: next.cellsW, h: next.cellsH, c: next.cell };
     setMazeConfig({ cellsW: next.cellsW, cellsH: next.cellsH, cell: next.cell });
     setGame({ width: next.cellsW, height: next.cellsH, corridor: next.cell }); // keep leva in sync
-    setLoading({ stage: "assets", bakeProgress: 0 });
+    setLoading({ stage: "assets", bakeProgress: 0, sceneHeld: false });
     setRunId((n) => n + 1);
     setEntered(false);
     setLevel(next.id);
@@ -228,7 +228,7 @@ export default function SceneClient() {
     if (width === a.w && height === a.h && corridor === a.c) return;
     applied.current = { w: width, h: height, c: corridor };
     setMazeConfig({ cellsW: width, cellsH: height, cell: corridor });
-    setLoading({ stage: "assets", bakeProgress: 0 }); // preloader runs again
+    setLoading({ stage: "assets", bakeProgress: 0, sceneHeld: false }); // preloader runs again
     setEntered(false);
     setRunId((n) => n + 1);
   }, [width, height, corridor]);

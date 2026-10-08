@@ -7,9 +7,14 @@ import { formatTime } from "../leaderboard/shared";
  * Share cards for one run (or a best time), drawn in the browser on a canvas
  * so they can be saved or handed straight to Instagram, X, Telegram… (the
  * Web Share API). Three shapes: an Instagram post (4:5), a story (9:16) and
- * a wide card (X / Telegram / WhatsApp). The poster above (or beside) a panel
- * in the game's grey UI kit: who, the time in the poster's lettering, stars,
- * level and rank, badges, and an invitation with the game's address.
+ * a wide card (X / Telegram / WhatsApp).
+ *
+ * Styled like the title screen and preloader (ui/LoadingOverlay): the maze
+ * entrance (public/preloader/first.webp) filling the card, darkened where
+ * the words sit; the GUGUT wordmark; everything in the poster's cream
+ * lettering with a soft shadow; level, rank and badges on glass chips; and the
+ * game's address on a gold pill with the cream play button, like "Enter the
+ * maze".
  */
 export type CardFormat = "post" | "story" | "wide";
 
@@ -36,59 +41,79 @@ export interface CardData {
   host: string;
 }
 
+/** The preloader's colours. */
 const C = {
-  bg: "#1c1c1c",
-  frame: "#4a4a4a",
-  well: "#383838",
-  tile: "#3e3e3e",
-  line: "rgba(255,255,255,0.08)",
-  ink: "#ececec",
-  dim: "#a3a3a3",
-  amber: "#fcd34d",
-  faint: "rgba(255,255,255,0.15)",
-  green: "#6ee7b7",
+  cream: "#fdf3d4",
+  creamDim: "rgba(253,243,212,0.72)",
+  creamFaint: "rgba(253,243,212,0.25)",
+  gold: "#c9a45c",
+  goldInk: "#2a2312",
+  glass: "rgba(255,255,255,0.16)",
+  glassEdge: "rgba(255,255,255,0.5)",
+  shade: "20,16,8",
 };
 
-let poster: Promise<HTMLImageElement> | null = null;
-function loadPoster(): Promise<HTMLImageElement> {
-  poster ??= new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("poster"));
-    img.src = "/share/poster.jpg";
-  });
-  return poster;
-}
+const BACKDROP_SRC = "/preloader/first.webp";
+const LOGO_SRC = encodeURI("/logo gugut.svg");
 
-/** The page's fonts (next/font), loaded before drawing. */
-async function fonts() {
-  const title = posterFont.style.fontFamily;
-  const sans = getComputedStyle(document.documentElement).getPropertyValue("--font-geist-sans").trim() || "sans-serif";
-  await Promise.all([document.fonts.load(`100px ${title}`), document.fonts.load(`600 40px ${sans}`), document.fonts.load(`40px ${sans}`)]);
-  return { title, sans };
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string, stroke?: string) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fillStyle = fill;
-  ctx.fill();
-  if (stroke) {
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+const images = new Map<string, Promise<HTMLImageElement>>();
+function loadImage(src: string): Promise<HTMLImageElement> {
+  let p = images.get(src);
+  if (!p) {
+    p = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(src));
+      img.src = src;
+    });
+    images.set(src, p);
   }
+  return p;
 }
 
-/** Draw `text` no wider than `max`, shortened with … if needed. */
-function fitText(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+/** The poster lettering (next/font), loaded before drawing. */
+async function titleFont(): Promise<string> {
+  const family = posterFont.style.fontFamily;
+  await document.fonts.load(`100px ${family}`);
+  return family;
+}
+
+/** Text in the preloader's way: cream (or `color`), with a soft dark shadow so it holds over the scene. */
+function say(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, font: string, color = C.cream) {
+  ctx.save();
+  ctx.font = `${size}px ${font}`;
+  ctx.fillStyle = color;
+  ctx.shadowColor = `rgba(${C.shade},0.5)`;
+  ctx.shadowBlur = size * 0.25;
+  ctx.shadowOffsetY = size * 0.04;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+/** `text` shortened with … to fit `max` at the current font. */
+function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
   if (ctx.measureText(text).width <= max) return text;
   let t = text;
   while (t.length > 1 && ctx.measureText(`${t}…`).width > max) t = t.slice(0, -1);
   return `${t}…`;
 }
 
+function pill(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, fill: string, edge?: string) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, h / 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (edge) {
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
 function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, fill: string) {
+  ctx.save();
+  ctx.shadowColor = `rgba(${C.shade},0.45)`;
+  ctx.shadowBlur = r * 0.5;
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
@@ -98,144 +123,167 @@ function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
   ctx.closePath();
   ctx.fillStyle = fill;
   ctx.fill();
+  ctx.restore();
 }
 
-/** A row of rounded chips (text, colour); wraps to `max` width. Returns the bottom. */
-function chips(
-  ctx: CanvasRenderingContext2D,
-  items: { text: string; color?: string }[],
-  x: number,
-  y: number,
-  max: number,
-  size: number
-): number {
-  const padX = size * 0.7;
-  const h = size * 1.9;
-  let cx = x;
-  let cy = y;
-  ctx.textBaseline = "middle";
-  for (const item of items) {
-    const w = ctx.measureText(item.text).width + padX * 2;
-    if (cx > x && cx + w > x + max) {
-      cx = x;
-      cy += h + size * 0.5;
+/** The cream play circle from the preloader's buttons, centred at (cx, cy). */
+function playButton(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = C.cream;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.2, cy - r * 0.375);
+  ctx.lineTo(cx - r * 0.2, cy + r * 0.375);
+  ctx.lineTo(cx + r * 0.38, cy);
+  ctx.closePath();
+  ctx.fillStyle = C.gold;
+  ctx.fill();
+}
+
+interface Chip {
+  text: string;
+  gold?: boolean;
+}
+
+/** Lay chips out in rows no wider than `max`: their positions, and the total height. */
+function layoutChips(ctx: CanvasRenderingContext2D, chips: Chip[], max: number, size: number) {
+  const h = size * 1.75;
+  const gap = size * 0.4;
+  const placed: { chip: Chip; x: number; row: number; w: number }[] = [];
+  let x = 0;
+  let row = 0;
+  for (const chip of chips) {
+    const w = ctx.measureText(chip.text).width + size * 1.3;
+    if (x > 0 && x + w > max) {
+      x = 0;
+      row++;
     }
-    roundRect(ctx, cx, cy, w, h, size * 0.55, C.tile, C.line);
-    ctx.fillStyle = item.color ?? C.ink;
-    ctx.fillText(item.text, cx + padX, cy + h / 2 + 1);
-    cx += w + size * 0.5;
+    placed.push({ chip, x, row, w });
+    x += w + gap;
   }
-  return items.length ? cy + h : y;
+  return { placed, h, gap, height: chips.length ? (row + 1) * h + row * gap : 0 };
 }
 
-/** The poster, scaled to cover (x, y, w, h), anchored on its top (the figure and title). */
-function drawPoster(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, anchorY: number) {
-  const scale = Math.max(w / img.width, h / img.height);
-  const sw = w / scale;
-  const sh = h / scale;
-  ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) * anchorY, sw, sh, x, y, w, h);
+/** The scene, scaled to cover the card, centred on (fx, fy) of the image (the tree and path). */
+function drawBackdrop(ctx: CanvasRenderingContext2D, img: HTMLImageElement, W: number, H: number, fx: number, fy: number) {
+  const scale = Math.max(W / img.width, H / img.height);
+  const sw = W / scale;
+  const sh = H / scale;
+  const sx = Math.min(Math.max(img.width * fx - sw / 2, 0), img.width - sw);
+  const sy = Math.min(Math.max(img.height * fy - sh / 2, 0), img.height - sh);
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
 }
 
 /** Draw the card; resolves to a PNG. */
 export async function drawCard(format: CardFormat, data: CardData): Promise<Blob> {
   const { width: W, height: H } = CARD_FORMATS[format];
-  const [img, f] = await Promise.all([loadPoster(), fonts()]);
+  const [backdrop, logo, font] = await Promise.all([loadImage(BACKDROP_SRC), loadImage(LOGO_SRC), titleFont()]);
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // The poster: beside the panel on the wide card, above it otherwise (fading into the dark).
   const wide = format === "wide";
-  let px: number, py: number, pw: number, ph: number, k: number;
-  if (wide) {
-    const posterW = Math.round((H * img.width) / img.height);
-    drawPoster(ctx, img, 0, 0, posterW, H, 0);
-    px = posterW + 36;
-    py = 36;
-    pw = W - px - 36;
-    ph = H - 72;
-    k = 0.62;
-  } else {
-    const posterH = format === "story" ? 980 : 640;
-    drawPoster(ctx, img, 0, 0, W, posterH, 0.25);
-    const fade = ctx.createLinearGradient(0, posterH * 0.55, 0, posterH);
-    fade.addColorStop(0, "rgba(28,28,28,0)");
-    fade.addColorStop(1, C.bg);
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, W, posterH);
-    pw = W - 96;
-    ph = format === "story" ? 860 : 740;
-    px = 48;
-    py = H - ph - 48;
-    k = 1;
+  // Type scale: the story is tallest, the wide card smallest.
+  const k = format === "story" ? 1.15 : wide ? 0.62 : 1;
+  const pad = (wide ? 56 : 72) * (wide ? 1 : k);
+
+  // The maze entrance, darkened where the words go: the bottom on tall
+  // cards, the left on the wide one; and a little at the top for the logo.
+  drawBackdrop(ctx, backdrop, W, H, wide ? 0.5 : 0.42, 0.55);
+  const shade = wide ? ctx.createLinearGradient(0, 0, W, 0) : ctx.createLinearGradient(0, H * 0.3, 0, H);
+  shade.addColorStop(0, `rgba(${C.shade},${wide ? 0.82 : 0})`);
+  shade.addColorStop(wide ? 0.55 : 0.45, `rgba(${C.shade},${wide ? 0.55 : 0.45})`);
+  shade.addColorStop(1, `rgba(${C.shade},${wide ? 0.05 : 0.86})`);
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, W, H);
+  if (!wide) {
+    const top = ctx.createLinearGradient(0, 0, 0, H * 0.3);
+    top.addColorStop(0, `rgba(${C.shade},0.45)`);
+    top.addColorStop(1, `rgba(${C.shade},0)`);
+    ctx.fillStyle = top;
+    ctx.fillRect(0, 0, W, H * 0.3);
   }
 
-  // The panel: a frame with a recess (the UI kit).
-  roundRect(ctx, px, py, pw, ph, 40 * k, C.frame);
-  const pad = 14 * k;
-  const ix = px + pad;
-  const iy = py + pad;
-  const iw = pw - pad * 2;
-  const ih = ph - pad * 2;
-  roundRect(ctx, ix, iy, iw, ih, 28 * k, C.well);
-  const inX = ix + 48 * k;
-  const inW = iw - 96 * k;
-  let y = iy + 60 * k;
+  // The wordmark: centred at the top, or top left on the wide card.
+  const logoW = wide ? 190 : W * (format === "story" ? 0.62 : 0.52);
+  const logoH = (logoW * logo.height) / logo.width;
+  ctx.save();
+  ctx.shadowColor = `rgba(${C.shade},0.5)`;
+  ctx.shadowBlur = 28;
+  ctx.drawImage(logo, wide ? pad : (W - logoW) / 2, wide ? pad * 0.8 : H * 0.06, logoW, logoH);
+  ctx.restore();
 
-  // Who.
-  ctx.textBaseline = "alphabetic";
-  ctx.font = `600 ${30 * k}px ${f.sans}`;
-  ctx.fillStyle = C.dim;
-  ctx.letterSpacing = `${6 * k}px`;
-  ctx.fillText(fitText(ctx, `${data.name.toUpperCase()} FOUND HER IN`, inW), inX, y);
-  ctx.letterSpacing = "0px";
+  // Sizes.
+  const nameSize = 56 * k;
+  const timeSize = (wide ? 200 : 270) * k;
+  const starR = 34 * k;
+  const chipSize = 42 * k;
+  const detailSize = 40 * k;
+  const footSize = 44 * k;
+  const contentW = wide ? W * 0.56 : W - pad * 2;
 
-  // The time, in the poster's lettering.
-  const timeSize = (wide ? 190 : 230) * k;
-  y += timeSize * 0.92;
-  ctx.font = `${timeSize}px ${f.title}`;
-  ctx.fillStyle = C.amber;
-  ctx.fillText(formatTime(data.timeMs), inX - 4 * k, y);
-
-  // Stars (for a finished run).
-  if (data.stars > 0) {
-    y += 30 * k;
-    const r = 30 * k;
-    for (let i = 0; i < 3; i++) star(ctx, inX + r + i * r * 2.5, y + r, r, i < data.stars ? C.amber : C.faint);
-    y += r * 2 + 10 * k;
-  }
-
-  // Level, rank, new best; then the badges.
-  y += 28 * k;
-  ctx.font = `600 ${30 * k}px ${f.sans}`;
-  const facts: { text: string; color?: string }[] = [{ text: data.level }];
+  ctx.font = `${chipSize}px ${font}`;
+  const facts: Chip[] = [{ text: data.level }];
   if (data.rank && data.players) facts.push({ text: `#${data.rank} of ${data.players}` });
-  if (data.newBest) facts.push({ text: "New personal best", color: C.green });
-  y = chips(ctx, [...facts, ...data.badges.map((b) => ({ text: b, color: C.amber }))], inX, y, inW, 30 * k);
+  if (data.newBest) facts.push({ text: "New personal best", gold: true });
+  const chips = layoutChips(ctx, [...facts, ...data.badges.map((b) => ({ text: b }))], contentW, chipSize);
+
+  // From the bottom up: the invitation, the detail, the chips, the stars, the time, who.
+  const footH = footSize * 1.7;
+  let y = H - pad - footH;
+  const footY = y;
+  if (data.detail) y -= detailSize * 1.7;
+  const detailY = y;
+  y -= chips.height + (chips.height ? chipSize * 0.7 : 0);
+  const chipsY = y;
+  const starsY = data.stars > 0 ? (y -= starR * 2 + 22 * k) : y;
+  y -= timeSize * 0.88;
+  const timeY = y;
+  y -= nameSize * 1.1;
+  const nameY = y;
+
+  ctx.textBaseline = "top";
+  say(ctx, fit(ctx, `${data.name} found her in`, contentW), pad, nameY, nameSize, font, C.creamDim);
+  say(ctx, formatTime(data.timeMs), pad - 4 * k, timeY - timeSize * 0.12, timeSize, font);
+  if (data.stars > 0) {
+    for (let i = 0; i < 3; i++) star(ctx, pad + starR + i * starR * 2.5, starsY + starR, starR, i < data.stars ? C.gold : C.creamFaint);
+  }
+
+  // Glass chips (gold for a new best).
+  ctx.textBaseline = "middle";
+  for (const { chip, x, row, w } of chips.placed) {
+    const cy = chipsY + row * (chips.h + chips.gap);
+    pill(ctx, pad + x, cy, w, chips.h, chip.gold ? C.gold : C.glass, chip.gold ? undefined : C.glassEdge);
+    ctx.font = `${chipSize}px ${font}`;
+    ctx.fillStyle = chip.gold ? C.goldInk : C.cream;
+    ctx.fillText(chip.text, pad + x + chipSize * 0.65, cy + chips.h / 2 + 2 * k);
+  }
 
   if (data.detail) {
-    y += 52 * k;
-    ctx.textBaseline = "alphabetic";
-    ctx.font = `${30 * k}px ${f.sans}`;
-    ctx.fillStyle = C.dim;
-    ctx.fillText(fitText(ctx, data.detail, inW), inX, y);
+    ctx.textBaseline = "top";
+    ctx.font = `${detailSize}px ${font}`;
+    say(ctx, fit(ctx, data.detail, contentW), pad, detailY + detailSize * 0.35, detailSize, font, C.creamDim);
   }
 
-  // Footer: the invitation, and the address as the light key.
-  const footY = iy + ih - 48 * k;
-  ctx.font = `600 ${30 * k}px ${f.sans}`;
-  const hostW = ctx.measureText(data.host).width + 44 * k;
-  const keyH = 64 * k;
-  roundRect(ctx, ix + iw - 48 * k - hostW, footY - keyH, hostW, keyH, 18 * k, C.ink);
-  ctx.fillStyle = "#151515";
+  // The invitation, and the address on the gold pill with the play button.
+  ctx.font = `${footSize}px ${font}`;
+  const hostW = ctx.measureText(data.host).width;
+  const pillW = hostW + footSize * 0.9 + footH * 0.95;
+  const pillX = wide ? pad + contentW - pillW : W - pad - pillW;
+  ctx.save();
+  ctx.shadowColor = `rgba(${C.shade},0.35)`;
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 6;
+  pill(ctx, pillX, footY, pillW, footH, C.gold);
+  ctx.restore();
   ctx.textBaseline = "middle";
-  ctx.fillText(data.host, ix + iw - 48 * k - hostW + 22 * k, footY - keyH / 2 + 1);
-  ctx.font = `${30 * k}px ${f.sans}`;
-  ctx.fillStyle = C.dim;
-  ctx.fillText(fitText(ctx, "Can you find her faster?", inW - hostW - 24 * k), inX, footY - keyH / 2 + 1);
+  ctx.fillStyle = C.goldInk;
+  ctx.fillText(data.host, pillX + footSize * 0.6, footY + footH / 2 + 2 * k);
+  playButton(ctx, pillX + pillW - footH / 2, footY + footH / 2, footH * 0.38);
+  ctx.font = `${footSize}px ${font}`;
+  const invite = fit(ctx, "Can you find her faster?", pillX - pad - 24 * k);
+  say(ctx, invite, pad, footY + footH / 2 + 2 * k, footSize, font, C.creamDim);
 
   return new Promise((resolve, reject) =>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("card"))), "image/png")

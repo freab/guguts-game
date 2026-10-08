@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { posterFont } from "../fonts";
 import { runStore } from "../game/runStore";
 
@@ -18,13 +18,22 @@ export default function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  // The latest onClose, for Esc. (Callers often pass a fresh arrow each
+  // render: depending on it would un-pause and re-pause the game every
+  // render — and pausing re-renders them — an endless loop.)
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  }, [onClose]);
+
+  // Paused, with the mouse released, for as long as the dialog is open.
   useEffect(() => {
     runStore.setPaused("dialog", true);
     if (document.pointerLockElement) document.exitPointerLock();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault(); // handled: the pause menu leaves this Esc alone
-        onClose();
+        close.current();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -32,7 +41,7 @@ export default function Dialog({
       runStore.setPaused("dialog", false);
       window.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

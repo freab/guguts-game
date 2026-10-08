@@ -17,7 +17,7 @@ import { CELL, COLS, ROWS } from "../maze/mazeData";
 import LightmapBaker from "./bake/LightmapBaker";
 import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
 import { setLightmapStrength } from "./bake/lightmap";
-import { setLoading } from "./bake/loadingStore";
+import { setLoading, useLoading } from "./bake/loadingStore";
 import PostEffects from "./post/PostEffects";
 import GpuProfiler from "./perf/GpuProfiler";
 import { requestProfile } from "./perf/perfStore";
@@ -214,6 +214,18 @@ function applyCameraFar(camera: THREE.Camera, far: number) {
 function CameraFar({ far }: { far: number }) {
   const camera = useThree((s) => s.camera);
   useEffect(() => applyCameraFar(camera, far), [camera, far]);
+  return null;
+}
+
+/**
+ * Pauses rendering while the preloader burns away over the scene (see
+ * loadingStore `sceneHeld`): the last frame stays on screen and the burn gets
+ * the GPU to itself. Every useFrame clamps its delta, so nothing jumps after.
+ */
+function HoldWhileRevealing() {
+  const held = useLoading().sceneHeld;
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  useEffect(() => setFrameloop(held ? "never" : "always"), [held, setFrameloop]);
   return null;
 }
 
@@ -531,6 +543,7 @@ export default function Scene() {
       <PerfProbe />
       <GpuProfiler />
       <ToneMapping mode={TONE_MAPPINGS[toneMapping]} exposure={exposure} />
+      <HoldWhileRevealing />
 
       {/* One Suspense boundary for the whole world: nothing shows until every
           asset has loaded, then Readiness runs the bake / compile / warm-up
