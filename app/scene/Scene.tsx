@@ -18,6 +18,7 @@ import LightmapBaker from "./bake/LightmapBaker";
 import { allBakesSettled, nextFrames } from "./bake/bakeTracker";
 import { setLightmapStrength } from "./bake/lightmap";
 import { setLoading, useLoading } from "./bake/loadingStore";
+import { audio } from "../audio/audioEngine";
 import PostEffects from "./post/PostEffects";
 import GpuProfiler from "./perf/GpuProfiler";
 import { requestProfile } from "./perf/perfStore";
@@ -173,6 +174,7 @@ function Readiness({ onPostReady }: { onPostReady: () => void }) {
       setLoading({ stage: "warming" });
       onPostReady();
       await nextFrames(6); // post-processing compiles + first frames
+      await audio.preloadSong(); // (started at the level pick; usually done by now)
       if (!cancelled) {
         setLoading({ stage: "ready" });
         console.info(

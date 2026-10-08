@@ -211,6 +211,8 @@ export default function SceneClient() {
     if (touch) void enterFullscreen(true);
   };
   const chooseLevel = (next: Level) => {
+    // Temesgen's song downloads alongside the scene's assets (counted by the preloader).
+    void audio.preloadSong();
     applied.current = { w: next.cellsW, h: next.cellsH, c: next.cell };
     setMazeConfig({ cellsW: next.cellsW, cellsH: next.cellsH, cell: next.cell });
     setGame({ width: next.cellsW, height: next.cellsH, corridor: next.cell }); // keep leva in sync

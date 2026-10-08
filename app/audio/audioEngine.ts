@@ -1,3 +1,5 @@
+import { DefaultLoadingManager } from "three/webgpu";
+
 /**
  * The game's sound, on one Web Audio graph:
  *
@@ -136,6 +138,9 @@ class AudioEngine {
   } | null = null;
   private songEnded: (() => void) | null = null;
   private songStop: ReturnType<typeof setTimeout> | null = null;
+  /** The song downloaded whole during the preloader (preloadSong), as a blob URL. */
+  private songUrl: string | null = null;
+  private songDownload: Promise<void> | null = null;
 
   private musicOn = true;
   private loadedPreference = false;
@@ -622,13 +627,38 @@ class AudioEngine {
 
   /* ---------- Temesgen's song ---------- */
 
-  /** The song's player and its graph, made on first use (its file streams as it plays). */
+  /**
+   * Downloads the song whole (once) during the preloader, so it starts the
+   * instant Temesgen plays instead of buffering from the network. Counted by
+   * three's loading manager, so the preloader's counter includes it. Never
+   * rejects: if it fails, the song just streams as before.
+   */
+  preloadSong(): Promise<void> {
+    if (!this.songDownload) {
+      DefaultLoadingManager.itemStart(SONG_SRC);
+      this.songDownload = fetch(SONG_SRC)
+        .then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`);
+          return r.blob();
+        })
+        .then((blob) => {
+          this.songUrl = URL.createObjectURL(blob);
+        })
+        .catch((err) => {
+          console.warn("[gugut] song preload failed, it will stream:", err);
+        })
+        .finally(() => DefaultLoadingManager.itemEnd(SONG_SRC));
+    }
+    return this.songDownload;
+  }
+
+  /** The song's player and its graph, made on first use (from preloadSong's copy, else streamed). */
   private ensureSong() {
     this.unlock();
     const ctx = this.ctx;
     if (!ctx || !this.master) return null;
     if (!this.song) {
-      const element = new Audio(SONG_SRC);
+      const element = new Audio(this.songUrl ?? SONG_SRC);
       element.preload = "auto";
       const source = ctx.createMediaElementSource(element);
       const muffle = ctx.createBiquadFilter();

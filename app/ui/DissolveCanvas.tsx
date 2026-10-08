@@ -41,7 +41,8 @@ export type DissolveStage = 0 | 1 | 2;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 /**
- * Full-screen canvas behind the title screen and preloader: draws `fromSrc`
+ * The canvas behind the title screen and preloader — filling its box (the
+ * whole screen, or a band across the top on portrait phones): draws `fromSrc`
  * (cover-fitted); moving `stage` forward burns the current image away along
  * a fractal-noise front with a glowing ember edge — to `toSrc` (stage 1),
  * then to nothing (stage 2). Moving back jumps there instantly (it happens
@@ -123,16 +124,17 @@ export default function DissolveCanvas({
     let bakeReady = false;
     const bake = () => {
       if (!bakeReady) return;
-      const h = Math.min(512, window.innerHeight);
+      const h = Math.min(512, Math.max(1, canvas.clientHeight));
       fieldTarget.setSize(Math.max(1, Math.round(h * aspect.value)), h);
       renderer.setRenderTarget(fieldTarget);
       bakeQuad.render(renderer);
       renderer.setRenderTarget(null);
     };
 
+    // Sized to its box (it fills its parent), not the window.
     const resize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const w = Math.max(1, canvas.clientWidth);
+      const h = Math.max(1, canvas.clientHeight);
       renderer.setSize(w, h, false);
       aspect.value = w / h;
       cover.value.set(...(aspect.value > imageAspect ? [1, imageAspect / aspect.value] : [aspect.value / imageAspect, 1]) as [number, number]);
@@ -181,6 +183,7 @@ export default function DissolveCanvas({
       resize();
       if (!raf) draw();
     };
+    const observer = new ResizeObserver(() => goRef.current && onResize());
 
     (async () => {
       const loader = new TextureLoader();
@@ -240,8 +243,8 @@ export default function DissolveCanvas({
       material.needsUpdate = true;
 
       resize();
-      window.addEventListener("resize", onResize);
-      goRef.current = go; (window as any).__dzSet = (v: number) => { progress.value = v; draw(); }; // DEBUG-TMP
+      observer.observe(canvas);
+      goRef.current = go;
       setProgress();
       draw();
       go();
@@ -255,7 +258,7 @@ export default function DissolveCanvas({
       disposed = true;
       cancelAnimationFrame(raf);
       goRef.current = null;
-      window.removeEventListener("resize", onResize);
+      observer.disconnect();
       textures.forEach((t) => t.dispose());
       material.dispose();
       bakeMaterial.dispose();

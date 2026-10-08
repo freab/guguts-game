@@ -7,7 +7,7 @@ import { useProgress } from "@react-three/drei";
 import { posterFont } from "../fonts";
 import { LEVELS, type Level } from "../maze/levels";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
-import DissolveCanvas, { type DissolveStage } from "./DissolveCanvas";
+import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
 
 /**
  * How much of the counter each preload stage accounts for (sums to 1).
@@ -125,10 +125,14 @@ function EnterButton({ onEnter }: { onEnter: () => void }) {
   );
 }
 
-/** Easy / Medium / Hard: a glass card with a PLAY pill on hover / focus. */
+/**
+ * Easy / Medium / Hard: a glass card with a PLAY pill on hover / focus —
+ * shown all the time on touch screens, which have no hover (and no blur
+ * there: a backdrop blur is costly on a phone).
+ */
 function LevelChooser({ onChoose }: { onChoose: (level: Level) => void }) {
   return (
-    <div className="w-[min(24rem,85vw)] md:w-[clamp(18rem,22vw,26rem)]">
+    <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
       <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
         Choose your path
       </h2>
@@ -137,15 +141,15 @@ function LevelChooser({ onChoose }: { onChoose: (level: Level) => void }) {
           <button
             key={level.id}
             onClick={() => onChoose(level)}
-            className="group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-white/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-white/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none"
+            className="group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-white/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-white/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-white/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25"
           >
             <span className={SHADOW}>
               <span className="block text-[clamp(2rem,min(3.4vw,7vh),3.6rem)] leading-none">{level.label}</span>
-              <span className="mt-1 block text-[clamp(0.85rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
+              <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
                 {level.blurb}
               </span>
             </span>
-            <span className="flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
+            <span className="flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100">
               PLAY
               <svg viewBox="0 0 24 24" aria-hidden className="size-[1.3em]">
                 <circle cx="12" cy="12" r="12" fill="#fdf3d4" />
@@ -167,7 +171,7 @@ function Story() {
   let word = 0;
   return (
     <div
-      className={`absolute top-[12vh] right-6 left-6 space-y-[2.2vh] text-[clamp(1.25rem,min(1.9vw,4.4vh),2.2rem)] leading-[1.25] tracking-wide text-[#fdf3d4] md:top-[18vh] md:right-[13vw] md:left-[41.5vw] ${SHADOW}`}
+      className={`absolute right-6 left-6 space-y-[2.2vh] leading-[1.25] tracking-wide text-[#fdf3d4] portrait:top-[40svh] portrait:text-[clamp(1.05rem,4.6vw,1.6rem)] landscape:top-[max(18vh,4.5rem)] landscape:right-[13vw] landscape:left-[41.5vw] landscape:text-[clamp(0.95rem,min(1.9vw,4.4vh),2.2rem)] ${SHADOW}`}
     >
       {STORY.map((line) => (
         <p key={line}>
@@ -273,11 +277,26 @@ export default function LoadingOverlay({
         hidden ? "pointer-events-none opacity-0" : "opacity-100"
       }`}
     >
-      <DissolveCanvas fromSrc={TITLE_SRC} toSrc={STORY_SRC} stage={stage} onDissolved={onDissolved} />
-
-      {/* Title screen: chooser left, title right (stacked on portrait phones). */}
+      {/* Portrait phones: the wide images can't fill a tall screen without
+          being blown up (and soft), so — as the old poster preloader did —
+          the image is a band across the top, fading into dark, with the
+          words below. The dark fades away with the last burn (Enter). */}
       <div
-        className={`absolute inset-0 flex flex-col-reverse items-center justify-between px-6 py-[6vh] transition-opacity duration-500 md:flex-row md:px-[8vw] md:py-0 ${
+        className="absolute inset-0 hidden bg-[#0b0d08] transition-opacity ease-in-out portrait:block"
+        style={{ opacity: stage === 2 ? 0 : 1, transitionDuration: `${DISSOLVE_MS}ms` }}
+      />
+      <div className="absolute inset-0 portrait:bottom-auto portrait:h-[46svh]">
+        <DissolveCanvas fromSrc={TITLE_SRC} toSrc={STORY_SRC} stage={stage} onDissolved={onDissolved} />
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[35%] bg-linear-to-b from-transparent to-[#0b0d08] transition-opacity ease-in-out portrait:block"
+          style={{ opacity: stage === 2 ? 0 : 1, transitionDuration: `${DISSOLVE_MS}ms` }}
+        />
+      </div>
+
+      {/* Title screen: chooser left, title right (stacked on portrait: the
+          title on the image, the chooser below). */}
+      <div
+        className={`absolute inset-0 flex flex-col-reverse items-center justify-between px-6 py-[6vh] transition-opacity duration-500 portrait:pt-[10svh] landscape:flex-row landscape:px-[8vw] landscape:py-0 ${
           titleShown ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >

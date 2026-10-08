@@ -25,6 +25,24 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Everything clickable shows the hand (Tailwind 4's preflight leaves buttons
+   on the arrow). In `base`, so a utility class can still override it. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  select,
+  label:has(input:not(:disabled)),
+  input:is([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):not(:disabled) {
+    cursor: pointer;
+  }
+  :is(button, select, input):disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
 /* RotatePrompt: a phone tipping onto its side and back. */
 @keyframes turn-sideways {
   0%,
