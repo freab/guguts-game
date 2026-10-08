@@ -64,7 +64,10 @@ export default function SceneClient() {
   const [runId, setRunId] = useState(0);
   // null = on the title screen, choosing a level (no scene mounted).
   const [level, setLevel] = useState<LevelId | null>(null);
-  const ready = useLoading().stage === "ready" && level !== null;
+  // Loaded, the preloader shows an Enter button so the story can be read;
+  // the game (run, clock, music, HUD) only starts once it's pressed.
+  const [entered, setEntered] = useState(false);
+  const ready = useLoading().stage === "ready" && level !== null && entered;
   // The game shows no UI over the view. The dev/debug UI — leva controls,
   // minimap, FPS meter, view / maze buttons and the key hints — lives on the
   // `/#debug` route (toggles live when the hash changes).
@@ -167,6 +170,7 @@ export default function SceneClient() {
   const restart = () => {
     regenerateMaze();
     setLoading({ stage: "assets", bakeProgress: 0 }); // preloader runs again
+    setEntered(false);
     setRunId((n) => n + 1);
   };
 
@@ -200,14 +204,19 @@ export default function SceneClient() {
   }, [ready, level, runId]);
 
   // Title screen: build the chosen level's maze, then mount the scene.
-  const chooseLevel = (next: Level) => {
-    // Phones: fullscreen and landscape, while this tap still counts as a gesture.
+  // The tap on a level: phones go fullscreen and landscape while it still
+  // counts as a gesture. The level itself is applied (chooseLevel) only once
+  // the preloader's dissolve has played, so loading doesn't make it stutter.
+  const pickLevel = () => {
     if (touch) void enterFullscreen(true);
+  };
+  const chooseLevel = (next: Level) => {
     applied.current = { w: next.cellsW, h: next.cellsH, c: next.cell };
     setMazeConfig({ cellsW: next.cellsW, cellsH: next.cellsH, cell: next.cell });
     setGame({ width: next.cellsW, height: next.cellsH, corridor: next.cell }); // keep leva in sync
     setLoading({ stage: "assets", bakeProgress: 0 });
     setRunId((n) => n + 1);
+    setEntered(false);
     setLevel(next.id);
   };
 
@@ -220,6 +229,7 @@ export default function SceneClient() {
     applied.current = { w: width, h: height, c: corridor };
     setMazeConfig({ cellsW: width, cellsH: height, cell: corridor });
     setLoading({ stage: "assets", bakeProgress: 0 }); // preloader runs again
+    setEntered(false);
     setRunId((n) => n + 1);
   }, [width, height, corridor]);
 
@@ -273,7 +283,14 @@ export default function SceneClient() {
 
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}
-      <LoadingOverlay choosing={level === null} onChoose={chooseLevel} />
+      <LoadingOverlay
+        choosing={level === null}
+        runId={runId}
+        entered={entered}
+        onPick={pickLevel}
+        onChoose={chooseLevel}
+        onEnter={() => setEntered(true)}
+      />
 
       {/* The run: its clock, and the finish screen when you reach the goat. */}
       {ready && <RunTimer />}

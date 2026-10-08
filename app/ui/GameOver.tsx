@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { posterFont } from "../fonts";
 import { getProfile, useProfile } from "../game/profile";
 import { useRun, type RunState } from "../game/runStore";
 import { submitRun } from "../leaderboard/client";
 import { formatTime, type SubmitResponse } from "../leaderboard/shared";
 import LeaderboardTable from "./LeaderboardTable";
+import ShareDialog, { type ShareCard } from "./ShareDialog";
+import { LEVELS } from "../maze/levels";
 
 /**
  * One submission per finished run (and retry): React runs effects twice in
@@ -36,7 +38,7 @@ interface Actions {
  * story (Epilogue — the red berries, the first coffee), then the results:
  * the time, a star rating for how few calls it took, the badges earned, and
  * the level's leaderboard (the time goes to it straight away, while the
- * story is read).
+ * story is read) — and a card to share the time (ui/ShareDialog).
  */
 export default function GameOver(actions: Actions) {
   const run = useRun();
@@ -87,6 +89,24 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { ru
     bottlesFound === run.bottlesTaken.length && { name: "Well watered", detail: "Found every bottle of water" },
     run.calls === 0 && bottlesFound === 0 && run.callsUsed > 0 && { name: "Parched", detail: "Made it with a dry throat" },
   ].filter(Boolean) as { name: string; detail: string }[];
+
+  // The share card: this run, ranked when it's their best on the board.
+  const [sharing, setSharing] = useState(false);
+  const badgeNames = badges.map((b) => b.name).join("|");
+  const card = useMemo<ShareCard>(
+    () => ({
+      name: profile.name,
+      level: LEVELS.find((l) => l.id === run.level)?.label ?? "Custom maze",
+      timeMs,
+      stars,
+      badges: badgeNames ? badgeNames.split("|") : [],
+      rank: data?.newBest ? data.you?.rank : undefined,
+      players: data?.newBest ? data.players : undefined,
+      newBest: data?.newBest,
+      detail: `${run.callsUsed === 0 ? "No calls" : `Called her ${run.callsUsed === 1 ? "once" : run.callsUsed === 2 ? "twice" : `${run.callsUsed} times`}`} · ${bottlesFound} of ${run.bottlesTaken.length} bottles of water`,
+    }),
+    [profile.name, run.level, timeMs, stars, badgeNames, data, run.callsUsed, bottlesFound, run.bottlesTaken.length]
+  );
 
   const button = "px-5 py-2.5 text-sm font-semibold";
   if (chapter === "story") return <Epilogue onContinue={() => setChapter("results")} />;
@@ -169,6 +189,12 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { ru
             <button type="button" onClick={onPlayAgain} className={`${button} ui-cta`}>
               Play again
             </button>
+            <button type="button" onClick={() => setSharing(true)} className={`${button} ui-tile flex items-center gap-2`}>
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+              </svg>
+              Share your time
+            </button>
             <button type="button" onClick={onChangeLevel} className={`${button} ui-tile`}>
               Change level
             </button>
@@ -178,6 +204,9 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { ru
           </div>
         </div>
       </div>
+      {sharing && (
+        <ShareDialog card={card} onBoard={run.ranked && !!data?.you} onClose={() => setSharing(false)} />
+      )}
     </div>
   );
 }

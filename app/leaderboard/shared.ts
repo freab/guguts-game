@@ -31,6 +31,21 @@ export interface SubmitResponse extends LeaderboardResponse {
   newBest: boolean;
 }
 
+/**
+ * A player's public page (app/s/[id]): their name and best time on each
+ * level they've finished, with its rank. Reached by a share id — never the
+ * player id, which is what lets a device submit and rename as that player.
+ */
+export interface ShareProfile {
+  name: string;
+  bests: Partial<Record<LevelId, { timeMs: number; rank: number; players: number }>>;
+}
+
+/** Share ids: 12 URL-safe characters (store.shareIdFor). */
+export function isShareId(raw: unknown): raw is string {
+  return typeof raw === "string" && /^[A-Za-z0-9_-]{12}$/.test(raw);
+}
+
 export const TOP_N = 10;
 export const NAME_MAX = 20;
 

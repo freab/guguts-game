@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { LevelId } from "../maze/levels";
-import { TOP_N, type LeaderboardEntry, type LeaderboardResponse, type SubmitResponse } from "./shared";
+import { LEVELS, type LevelId } from "../maze/levels";
+import { TOP_N, type LeaderboardEntry, type LeaderboardResponse, type ShareProfile, type SubmitResponse } from "./shared";
 
 /**
  * Where the leaderboard lives (server only — imported by the API routes).
@@ -15,12 +16,25 @@ import { TOP_N, type LeaderboardEntry, type LeaderboardResponse, type SubmitResp
  *
  * A player keeps only their best time per level; renaming changes the name
  * shown on every board.
+ *
+ * Sharing: a player's public page is found by a share id (shareIdFor) — a
+ * one-way hash of their player id, remembered so the page can look them up.
+ * The player id itself (which can submit and rename) is never made public.
  */
 export interface LeaderboardStore {
   storage: "global" | "local";
   board(level: LevelId, playerId: string | null): Promise<LeaderboardResponse>;
   submit(level: LevelId, playerId: string, name: string, timeMs: number): Promise<SubmitResponse>;
   rename(playerId: string, name: string): Promise<void>;
+  /** The player's share id (made and remembered on first use). */
+  share(playerId: string): Promise<string>;
+  /** A shared player's name and bests, or null for an unknown share id. */
+  profile(shareId: string): Promise<ShareProfile | null>;
+}
+
+/** A player's share id: the first 12 characters of a hash of their (random, secret) id. */
+export function shareIdFor(playerId: string): string {
+  return createHash("sha256").update(`gugut-share:${playerId}`).digest("base64url").slice(0, 12);
 }
 
 /* ------------------------------------------------------------ Redis (global) */
@@ -28,6 +42,7 @@ export interface LeaderboardStore {
 function redisStore(url: string, token: string): LeaderboardStore {
   const boardKey = (level: LevelId) => `gugut:lb:${level}`;
   const NAMES = "gugut:names";
+  const SHARES = "gugut:shares";
 
   async function pipeline(commands: (string | number)[][]): Promise<unknown[]> {
     const res = await fetch(`${url.replace(/\/$/, "")}/pipeline`, {
@@ -97,6 +112,31 @@ function redisStore(url: string, token: string): LeaderboardStore {
     async rename(playerId, name) {
       await pipeline([["HSET", NAMES, playerId, name]]);
     },
+    async share(playerId) {
+      const id = shareIdFor(playerId);
+      await pipeline([["HSET", SHARES, id, playerId]]);
+      return id;
+    },
+    async profile(shareId) {
+      const [playerId] = await pipeline([["HGET", SHARES, shareId]]);
+      if (typeof playerId !== "string") return null;
+      const results = await pipeline([
+        ["HGET", NAMES, playerId],
+        ...LEVELS.flatMap((l) => [
+          ["ZSCORE", boardKey(l.id), playerId],
+          ["ZRANK", boardKey(l.id), playerId],
+          ["ZCARD", boardKey(l.id)],
+        ]),
+      ]);
+      const bests: ShareProfile["bests"] = {};
+      LEVELS.forEach((l, i) => {
+        const [score, rank, count] = results.slice(1 + i * 3, 4 + i * 3);
+        if (score != null && typeof rank === "number") {
+          bests[l.id] = { timeMs: Number(score), rank: rank + 1, players: Number(count) || 0 };
+        }
+      });
+      return { name: typeof results[0] === "string" ? results[0] : "Anonymous", bests };
+    },
   };
 }
 
@@ -105,6 +145,8 @@ function redisStore(url: string, token: string): LeaderboardStore {
 interface FileData {
   names: Record<string, string>;
   boards: Partial<Record<LevelId, Record<string, number>>>;
+  /** Share id → player id. */
+  shares?: Record<string, string>;
 }
 
 function fileStore(file: string): LeaderboardStore {
@@ -166,6 +208,28 @@ function fileStore(file: string): LeaderboardStore {
         const d = await load();
         d.names[playerId] = name;
         await save(d);
+      }),
+    share: (playerId) =>
+      serial(async () => {
+        const d = await load();
+        const id = shareIdFor(playerId);
+        if ((d.shares ??= {})[id] !== playerId) {
+          d.shares[id] = playerId;
+          await save(d);
+        }
+        return id;
+      }),
+    profile: (shareId) =>
+      serial(async () => {
+        const d = await load();
+        const playerId = d.shares?.[shareId];
+        if (!playerId) return null;
+        const bests: ShareProfile["bests"] = {};
+        for (const l of LEVELS) {
+          const you = boardFrom(d, l.id, playerId).you;
+          if (you) bests[l.id] = { ...you, players: Object.keys(d.boards[l.id] ?? {}).length };
+        }
+        return { name: d.names[playerId] ?? "Anonymous", bests };
       }),
   };
 }
