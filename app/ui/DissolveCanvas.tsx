@@ -241,7 +241,7 @@ export default function DissolveCanvas({
 
       resize();
       window.addEventListener("resize", onResize);
-      goRef.current = go;
+      goRef.current = go; (window as any).__dzSet = (v: number) => { progress.value = v; draw(); }; // DEBUG-TMP
       setProgress();
       draw();
       go();
