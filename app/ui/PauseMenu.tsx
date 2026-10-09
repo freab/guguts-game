@@ -33,14 +33,14 @@ export default function PauseMenu(actions: PauseActions) {
   }, []);
 
   const button =
-    "ui-tile w-full px-5 py-2.5 text-sm font-semibold";
+    "ui-tile w-full px-5 py-2.5 ui-label";
   return (
-    <div className="absolute inset-0 z-[66] flex items-center justify-center bg-black/60 p-4">
+    <div className="absolute inset-0 z-[66] flex items-center justify-center bg-night/70 p-4">
       <div className="ui-shell flex max-h-[92vh] w-full max-w-xs flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-5">
-          <h2 className={`${posterFont.className} text-center text-5xl tracking-wide`}>Paused</h2>
+          <h2 className={`${posterFont.className} text-center text-6xl tracking-wide`}>Paused</h2>
           {run.phase === "running" && (
-            <p className="mt-1 text-center font-mono text-lg tabular-nums text-amber-200">
+            <p className={`${posterFont.className} mt-1 text-center text-3xl leading-none tabular-nums text-gold`}>
               {formatTime(runStore.elapsed())}
             </p>
           )}
@@ -49,7 +49,7 @@ export default function PauseMenu(actions: PauseActions) {
               type="button"
               autoFocus
               onClick={actions.onResume}
-              className="ui-cta w-full px-5 py-2.5 text-sm"
+              className="ui-cta w-full px-5 py-2.5 ui-label"
             >
               Resume
             </button>

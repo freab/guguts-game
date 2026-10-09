@@ -58,7 +58,7 @@ export default function LeaderboardDialog({ initial, onClose }: { initial: Level
         <button
           type="button"
           onClick={() => setSharing(true)}
-          className="ui-tile mt-3 flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold"
+          className="ui-tile mt-3 flex w-full items-center justify-center gap-2 px-4 py-2.5 ui-label"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />

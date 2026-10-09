@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { playerStore } from "../character/playerStore";
 import { CELL, COLS, ROWS, cellAt, exitPosition, worldToCell } from "../maze/mazeData";
 import { mapleTreeLayout } from "../scene/tree/mapleTree";
+import { jebenaPlace } from "../game/jebena";
+import { carvingPlace } from "../game/carving";
 import { ChunkState, grassMapStore } from "../scene/grass/grassMapStore";
 
 // A 2D top-down minimap. The maze is static between regenerations, so it's
@@ -69,6 +71,29 @@ export default function Minimap() {
     const [er, ec] = worldToCell(ex, ez);
     ctx.fillStyle = "#39d98a";
     ctx.fillRect(ec * cw, er * ch, cw, ch);
+
+    // The secrets (#debug only — this map is): the monks' jebena (a red
+    // dot, if this maze has one) and the ጉጉት carving (a gold tick on its wall).
+    const jebena = jebenaPlace();
+    if (jebena) {
+      ctx.fillStyle = "#e0523a";
+      ctx.beginPath();
+      ctx.arc(px(jebena.x), py(jebena.z), Math.max(2.5, cw * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const carving = carvingPlace();
+    if (carving) {
+      ctx.strokeStyle = "#f3c75a";
+      ctx.lineWidth = 2;
+      const nx = Math.sin(carving.facing);
+      const nz = Math.cos(carving.facing);
+      // Along the wall face (perpendicular to the way it faces).
+      const half = Math.max(3, cw * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(px(carving.x) - nz * half, py(carving.z) + nx * half);
+      ctx.lineTo(px(carving.x) + nz * half, py(carving.z) - nx * half);
+      ctx.stroke();
+    }
   }, []);
 
   // Live layer + stats, every frame.
@@ -168,7 +193,7 @@ export default function Minimap() {
   }, []);
 
   return (
-    <div className="absolute bottom-3 right-3 z-10 w-[188px] rounded-lg border border-white/10 bg-black/50 p-1 backdrop-blur">
+    <div className="absolute bottom-3 right-3 z-10 w-[188px] rounded-lg border border-cream/10 bg-black/50 p-1 backdrop-blur">
       <div className="relative" style={{ width: SIZE, height: SIZE }}>
         <canvas ref={mazeRef} style={{ width: SIZE, height: SIZE, display: "block" }} />
         <canvas
@@ -177,9 +202,9 @@ export default function Minimap() {
           style={{ width: SIZE, height: SIZE, display: "block" }}
         />
       </div>
-      <div className="px-1 pt-1 text-[10px] leading-4 text-zinc-300">
+      <div className="px-1 pt-1 text-[10px] leading-4 text-cream/80">
         <div ref={statsRef} />
-        <div className="flex flex-wrap gap-x-2 text-zinc-400">
+        <div className="flex flex-wrap gap-x-2 text-cream/60">
           <span>
             <span className="inline-block h-2 w-2 bg-green-400/60 align-middle" /> drawn
           </span>

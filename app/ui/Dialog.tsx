@@ -45,7 +45,7 @@ export default function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-night/70 p-4"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -58,7 +58,7 @@ export default function Dialog({
       >
         <div className="ui-well min-h-0 overflow-y-auto p-5">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className={`${posterFont.className} text-3xl tracking-wide`}>{title}</h2>
+            <h2 className={`${posterFont.className} text-4xl leading-none tracking-wide`}>{title}</h2>
             <button
               type="button"
               onClick={onClose}

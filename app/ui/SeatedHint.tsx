@@ -14,7 +14,7 @@ export default function SeatedHint({ touch }: { touch: boolean }) {
   const { calm, calmed } = useTemesgen();
   const meter = (
     <span className="ui-well flex min-w-40 flex-col justify-center gap-1.5 px-3.5 py-2">
-      <span className="text-xs text-white/70">{calmed ? "Calm — you heard her" : "Listening… calming down"}</span>
+      <span className="text-xs text-cream/70">{calmed ? "Calm — you heard her" : "Listening… calming down"}</span>
       <span className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <span
           className={`block h-full rounded-full transition-[width] duration-500 ${calmed ? "bg-sky-300" : "bg-amber-200"}`}

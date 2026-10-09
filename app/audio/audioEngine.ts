@@ -96,6 +96,14 @@ const DRINK_INDEX = "/audio/drink.json";
 const DRINK_TIMES = { open: 0.15, gulps: 0.75, breath: 3.35 };
 /** Temesgen's kirar song, streamed (never decoded whole): about five minutes. */
 const SONG_SRC = `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3")}`;
+/**
+ * The other song he knows, if you keep asking (ui/TemesgenDialog): streamed
+ * when it's first played, not preloaded — few will hear it.
+ */
+const SECOND_SONG_SRC = `/audio/${encodeURIComponent("dont do that to me.webm")}`;
+
+/** Temesgen's songs: "Nostalgia" (his usual), and the one he plays when pressed. */
+export type SongTrack = "nostalgia" | "second";
 /** The song right beside him (dB), before setSongLevel's 0..1. */
 const SONG_DB = -6;
 /** Its echo off the maze walls, relative to the reverb send. */
@@ -166,6 +174,8 @@ class AudioEngine {
   private songStop: ReturnType<typeof setTimeout> | null = null;
   /** The song downloaded whole during the preloader (preloadSong), as a blob URL. */
   private songUrl: string | null = null;
+  /** Which of his songs the player is loaded with. */
+  private songTrack: SongTrack = "nostalgia";
   private songDownload: Promise<void> | null = null;
 
   private musicOn = true;
@@ -508,6 +518,27 @@ class AudioEngine {
     return delay;
   }
 
+  /**
+   * A bleat right here, not from anywhere in the maze (the title screen's
+   * Konami secret: the goat on the logo). Twice, the second a little higher.
+   */
+  bleatHere() {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || !this.bleats || ctx.state !== "running") return;
+    const { buffer, index } = this.bleats;
+    for (const [delay, rate] of [
+      [0, 1],
+      [0.55, 1.12],
+    ]) {
+      const [offset, duration] = index[Math.floor(Math.random() * index.length)];
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.playbackRate.value = rate;
+      src.connect(this.calls);
+      src.start(ctx.currentTime + delay, offset, duration);
+    }
+  }
+
   /** Gugut tries to call with no voice left: a dry, breathy rasp. */
   dryCall() {
     const ctx = this.ctx;
@@ -839,12 +870,18 @@ class AudioEngine {
   }
 
   /** The song's player and its graph, made on first use (from preloadSong's copy, else streamed). */
-  private ensureSong() {
+  private ensureSong(track: SongTrack = "nostalgia") {
     this.unlock();
     const ctx = this.ctx;
     if (!ctx || !this.master) return null;
+    // Another of his songs: the same player and graph, a new source.
+    if (this.song && track !== this.songTrack) {
+      this.songTrack = track;
+      this.song.element.src = track === "second" ? SECOND_SONG_SRC : (this.songUrl ?? SONG_SRC);
+    }
     if (!this.song) {
-      const element = new Audio(this.songUrl ?? SONG_SRC);
+      this.songTrack = track;
+      const element = new Audio(track === "second" ? SECOND_SONG_SRC : (this.songUrl ?? SONG_SRC));
       element.preload = "auto";
       const source = ctx.createMediaElementSource(element);
       const muffle = ctx.createBiquadFilter();
@@ -886,10 +923,10 @@ class AudioEngine {
   /**
    * Temesgen starts his song, from the beginning, at (x, y, z). It starts
    * silent: setSongLevel brings it up as the listener is near. `onEnded` is
-   * called when it plays out.
+   * called when it plays out. `track`: which of his songs.
    */
-  playSong(x: number, y: number, z: number, onEnded: () => void) {
-    const song = this.ensureSong();
+  playSong(x: number, y: number, z: number, onEnded: () => void, track: SongTrack = "nostalgia") {
+    const song = this.ensureSong(track);
     if (!song || !this.ctx) return;
     this.placeSong(x, y, z);
     const now = this.ctx.currentTime;

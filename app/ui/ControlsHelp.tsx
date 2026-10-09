@@ -89,11 +89,11 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
       ];
 
   return (
-    <div className="absolute inset-0 z-[66] flex items-center justify-center bg-black/60 p-4">
+    <div className="absolute inset-0 z-[66] flex items-center justify-center bg-night/70 p-4">
       <div className="ui-shell flex max-h-[92vh] w-full max-w-md flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-6">
           <h2 className={`${posterFont.className} text-center text-4xl tracking-wide`}>Find the goat</h2>
-          <p className="mt-2 text-center text-sm text-white/70">
+          <p className="mt-2 text-center text-sm text-cream/70">
             Gugut&apos;s goat is somewhere in the maze. Find her and bring her home. The clock starts on your first
             step, and stops while you&apos;re paused. You can call her three times; after that your throat is dry
             until you find water — two bottles are hidden in the maze: walk up to one, look at it and drink.
@@ -101,8 +101,8 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
           <dl className="mt-5 space-y-2.5">
             {rows.map(([what, does], i) => (
               <div key={i} className="flex items-center gap-4">
-                <dt className="flex w-28 shrink-0 justify-end text-sm font-semibold text-white">{what}</dt>
-                <dd className="text-sm text-white/75">{does}</dd>
+                <dt className="flex w-28 shrink-0 justify-end text-sm font-semibold text-cream">{what}</dt>
+                <dd className="text-sm text-cream/75">{does}</dd>
               </div>
             ))}
           </dl>
@@ -111,7 +111,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
               type="button"
               onClick={close}
               autoFocus
-              className="ui-cta px-6 py-2.5 text-sm"
+              className="ui-cta px-6 py-2.5 ui-label"
             >
               Got it — let&apos;s go
             </button>

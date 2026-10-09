@@ -8,6 +8,8 @@ import { posterFont } from "../fonts";
 import { setPreferences, usePreferences } from "../game/preferences";
 import { LEVELS, type Level } from "../maze/levels";
 import { defaultGraphics, type Graphics } from "../quality";
+import { audio } from "../audio/audioEngine";
+import { KONAMI, sequenceWatcher } from "../game/secrets";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
 import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
 import { SHADOW, STORY_SRC, StoryButton, StoryText } from "./storyParts";
@@ -34,7 +36,7 @@ const STORY = [
   "Long ago, a goat herder named Kaldi saw his goats dancing all night after they ate some red berries. People still tell that story.",
   "This morning, Gugut's goat found the same berries.",
   "Now she's gone wild. She ran past the old stones and into the maze, the one nobody goes into after dark.",
-  "Follow the path. Find her. Bring her home before the sun goes down.",
+  "Follow the path. Find her. Bring her home as the sun goes down.",
 ];
 
 /** Overall 0..1 progress from the current stage and its own progress. */
@@ -105,7 +107,7 @@ function Counter({ onFull }: { onFull: () => void }) {
 
 /** The glass card the title screen's choices are made of (PLAY pill on hover / focus — always on touch). */
 const CARD =
-  "group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-white/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-white/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-white/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25";
+  "group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-cream/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-cream/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-cream/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25";
 const PILL =
   "flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100";
 
@@ -113,7 +115,7 @@ const PILL =
 const CHIP =
   "rounded-full border px-[1.1em] py-[0.45em] text-[clamp(1.1rem,min(1.8vw,4.2vh),1.8rem)] leading-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdf3d4]";
 const CHIP_ON = "border-[#c9a45c] bg-[#c9a45c] text-[#2a2312]";
-const CHIP_OFF = "border-white/50 bg-black/30 text-[#fdf3d4] hover:bg-white/20";
+const CHIP_OFF = "border-cream/50 bg-black/30 text-[#fdf3d4] hover:bg-white/20";
 const HEADING = `pl-1 text-[clamp(1.4rem,min(2.2vw,5vh),2.4rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`;
 const BLURB = `mt-[1vh] min-h-[2.4em] pl-1 text-[clamp(0.9rem,min(1vw,2.2vh),1.1rem)] leading-tight text-[#fdf3d4]/70 ${SHADOW}`;
 
@@ -253,9 +255,10 @@ function Preloader({ onEnter }: { onEnter: () => void }) {
 
 /**
  * Title screen and preloader, over a full-screen canvas. Title screen: the
- * maze entrance, the logo on the right and on the left voiceovers on / off
- * (first, once a visit), then the level chooser. Picking a level burns that image away in a noise dissolve, revealing
- * the sky over the maze, where the story is written and the percentage counts
+ * maze entrance, the logo on the right, and on the left first the setup step
+ * (graphics Low / Medium / High and voiceovers on / off — once a visit, and
+ * from the chooser's link), then the level chooser. Picking a level burns
+ * that image away in a noise dissolve, revealing the sky over the maze, where the story is written and the percentage counts
  * up. It covers the scene (blocking input) until everything is loaded, baked,
  * compiled and warmed up; at 100 the counter becomes an Enter button, and the
  * story image burns away to the scene in the same dissolve when it is pressed
@@ -292,6 +295,18 @@ export default function LoadingOverlay({
     setPicked(level);
   };
   const titleShown = choosing && !picked;
+  // The Konami secret (game/secrets): the logo's goat bleats, the logo flushes cherry red.
+  const [cherry, setCherry] = useState(0);
+  useEffect(() => {
+    if (!titleShown) return;
+    const onKey = sequenceWatcher(KONAMI, () => {
+      audio.unlock();
+      audio.bleatHere();
+      setCherry((n) => n + 1);
+    });
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [titleShown]);
   // Graphics and voiceovers: asked first, once a visit (then changed from the
   // chooser's link or Settings). Chosen before a level loads, so the scene is
   // built for the graphics level (SceneClient applies it as a maze starts).
@@ -365,7 +380,11 @@ export default function LoadingOverlay({
             <SetupChooser onDone={finishSetup} />
           )}
         </div>
-        <h1 className="w-[clamp(15rem,min(26vw,48vh),30rem)]">
+        <h1
+          key={cherry}
+          className="w-[clamp(15rem,min(26vw,48vh),30rem)]"
+          style={cherry ? { animation: "logo-cherry 1100ms ease-in-out" } : undefined}
+        >
           <Image
             src={LOGO_SRC}
             alt="Gugut & the Goat"

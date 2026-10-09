@@ -83,12 +83,21 @@ function createGoatMaterial(source: THREE.MeshStandardMaterial) {
 const TROT_BOB = 0.05;
 const TROT_RATE = 5.5;
 
-/** Put her where she is now, facing her way, bobbing as she trots (model faces +Z). */
+/** Dancing (game/goat): hops (m) and their rate (per s), a swing from side to side (radians) and a rock. */
+const DANCE_HOP = 0.14;
+const DANCE_RATE = 2.4;
+const DANCE_SWING = 0.45;
+const DANCE_ROCK = 0.1;
+
+/** Put her where she is now, facing her way, bobbing as she trots, hopping as she dances (model faces +Z). */
 function placeGoat(group: THREE.Group) {
   const [x, z] = goat.position();
-  const bob = goat.moving() ? Math.abs(Math.sin((performance.now() / 1000) * TROT_RATE * Math.PI)) * TROT_BOB : 0;
-  group.position.set(x, bob, z);
-  group.rotation.y = goat.facing();
+  const t = performance.now() / 1000;
+  const bob = goat.moving() ? Math.abs(Math.sin(t * TROT_RATE * Math.PI)) * TROT_BOB : 0;
+  const d = goat.dance();
+  const beat = t * DANCE_RATE * Math.PI;
+  group.position.set(x, bob + Math.abs(Math.sin(beat)) * DANCE_HOP * d, z);
+  group.rotation.set(0, goat.facing() + Math.sin(beat / 2) * DANCE_SWING * d, Math.sin(beat) * DANCE_ROCK * d);
 }
 
 /**

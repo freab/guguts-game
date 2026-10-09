@@ -33,6 +33,17 @@ interface GoatState {
   path: [number, number][];
 }
 
+/**
+ * The berries are still in her: watched for DANCE_AFTER s by a Gugut who
+ * stands still, she starts to dance (the Kaldi legend's dancing goats) —
+ * until he moves, or she runs. Easing in and out over DANCE_FADE s.
+ */
+const DANCE_AFTER = 10;
+const DANCE_FADE = 0.8;
+let watched = 0;
+let dancing = false;
+let dance = 0;
+
 const state: GoatState = { x: 0, z: 0, facing: 0, heading: 0, path: [] };
 
 const NEIGHBOURS: [number, number][] = [
@@ -71,8 +82,30 @@ export const goat = {
   /** Is she trotting off right now? */
   moving: () => state.path.length > 0,
 
+  /** How much she's dancing (0 … 1). */
+  dance: () => dance,
+
+  /**
+   * Each frame: is Gugut watching her (`seen`) and standing still? Watched
+   * long enough, she dances; he moves (or she runs), she stops.
+   */
+  observe(dt: number, seen: boolean, still: boolean) {
+    const step = Math.min(dt, 0.1);
+    if (state.path.length > 0 || !still) {
+      watched = 0;
+      dancing = false;
+    } else if (seen) {
+      watched += step;
+      if (watched >= DANCE_AFTER) dancing = true;
+    }
+    dance = dancing ? Math.min(1, dance + step / DANCE_FADE) : Math.max(0, dance - step / DANCE_FADE);
+  },
+
   /** A new maze: on her tile by the bush, looking back into the maze (towards its centre). */
   reset() {
+    watched = 0;
+    dancing = false;
+    dance = 0;
     const [x, z] = exitPosition();
     state.x = x;
     state.z = z;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { audio } from "../audio/audioEngine";
+import { audio, type SongTrack } from "../audio/audioEngine";
 import { exitPosition, restingSpot } from "../maze/mazeData";
 import { sun } from "../scene/sunUniforms";
 import { runStore } from "./runStore";
@@ -46,6 +46,8 @@ const initial: TemesgenState = { seen: false, near: false, talking: false, song:
 let state = initial;
 /** Seconds listened so far, sitting (kept if he gets up and sits again). */
 let listened = 0;
+/** How many times Gugut has asked for another song (ui/TemesgenDialog: the third time, he gives in). */
+let otherSongAsks = 0;
 const listeners = new Set<() => void>();
 const set = (next: Partial<TemesgenState>) => {
   state = { ...state, ...next };
@@ -72,9 +74,9 @@ export const temesgen = {
     if (state.talking) set({ talking: false });
   },
   /** He plays his song, from the start, and Gugut sits down to listen. */
-  playSong() {
+  playSong(track: SongTrack = "nostalgia") {
     const spot = restingSpot();
-    audio.playSong(spot.x, SONG_HEIGHT, spot.z, () => set({ song: "stopped", seated: false }));
+    audio.playSong(spot.x, SONG_HEIGHT, spot.z, () => set({ song: "stopped", seated: false }), track);
     set({ song: "playing", seated: true });
   },
   /** A few bars, as Gugut comes into the clearing (only while he isn't already playing). */
@@ -110,9 +112,15 @@ export const temesgen = {
     } else if (calm - state.calm >= 0.02) set({ calm });
   },
   /** He's gone (the scene unmounted — a new run): no prompt, no conversation, no song, not calm. */
+  /** Gugut asks if he knows any other songs; returns how many times he has now. */
+  askOtherSong(): number {
+    return ++otherSongAsks;
+  },
+  otherSongAsks: () => otherSongAsks,
   reset() {
     audio.stopSong();
     listened = 0;
+    otherSongAsks = 0;
     set(initial);
   },
   subscribe(l: () => void) {

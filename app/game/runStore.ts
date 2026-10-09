@@ -72,6 +72,10 @@ export interface RunState {
   heardAt: number;
   /** performance.now() when Gugut first caught sight of her (game/GoatVoice), 0 = not yet. */
   sawAt: number;
+  /** Found the monks' jebena (a secret: game/jebena) — the "First buna" badge. */
+  jebenaFound: boolean;
+  /** Typed BUNA (a secret: game/secrets) — a faster Gugut, so the run isn't ranked. */
+  caffeinated: boolean;
   /** Which of the hidden bottles have been drunk. */
   bottlesTaken: readonly boolean[];
   /** The latest message for the player, if any. */
@@ -93,6 +97,8 @@ let state: RunState = {
   dryAt: 0,
   heardAt: 0,
   sawAt: 0,
+  jebenaFound: false,
+  caffeinated: false,
   bottlesTaken: Array(BOTTLES).fill(false),
   notice: null,
 };
@@ -104,6 +110,8 @@ const freshCalls = () => ({
   dryAt: 0,
   heardAt: 0,
   sawAt: 0,
+  jebenaFound: false,
+  caffeinated: false,
   bottlesTaken: Array<boolean>(BOTTLES).fill(false),
   notice: null,
 });
@@ -160,6 +168,23 @@ export const runStore = {
     set({
       heardAt: now,
       notice: { text: "Calm at last, you hear her — a bleat, clear across the maze.", at: now },
+    });
+  },
+  /** Gugut picks up the monks' jebena (game/jebena). */
+  findJebena(now = performance.now()) {
+    if (state.jebenaFound || (state.phase !== "armed" && state.phase !== "running")) return;
+    set({
+      jebenaFound: true,
+      notice: { text: "A jebena on a stone — still warm. The monks were here. You keep it safe for later.", at: now },
+    });
+  },
+  /** The coffee kicks in (game/secrets): faster for a while — and off the leaderboard. */
+  caffeinate(now = performance.now()) {
+    if (state.phase !== "running") return;
+    set({
+      caffeinated: true,
+      ranked: false,
+      notice: { text: "BUNA! The coffee kicks in — Gugut flies. (This run won't be ranked.)", at: now },
     });
   },
   /** A message for the player (GameNotice). */

@@ -21,6 +21,10 @@ const FLEE_NEAREST = 4;
 const SIGHT_RANGE = 16;
 const SIGHT_CONE = 0.85;
 const SIGHT_EVERY = 0.2;
+/** Watching her (for her dance): this close and this centred, standing (under this speed, m/s). */
+const DANCE_SEE_RANGE = 14;
+const DANCE_SEE_CONE = 0.75;
+const STILL_SPEED = 0.15;
 
 const _forward = new THREE.Vector3();
 const _origin = new THREE.Vector3();
@@ -46,21 +50,38 @@ export default function GoatVoice() {
 
   // Catching sight of her: checked now and then (s since the last check).
   const sight = useRef(0);
+  const watch = useRef(0);
+  const inView = useRef(false);
+  /** Is she in view of the camera: within `range` m, inside the `cone`, no wall between? */
+  const canSee = (range: number, cone: number) => {
+    camera.getWorldDirection(_forward);
+    const [gx, gz] = goat.position();
+    _dir.set(gx - camera.position.x, BLEAT_HEIGHT - camera.position.y, gz - camera.position.z);
+    const distance = _dir.length();
+    if (distance > range) return false;
+    _dir.normalize();
+    return _dir.dot(_forward) > cone && walls.raycast(camera.position, _dir, distance) >= distance - 0.3;
+  };
   useFrame((_, dt) => {
     camera.getWorldDirection(_forward);
     audio.setListener(camera.position.x, camera.position.y, camera.position.z, _forward.x, _forward.y, _forward.z);
+
+    // Watched, standing still, she may dance (game/goat). In view: checked
+    // now and then (it's a ray through the walls); in photo mode it's the
+    // photo camera that watches.
+    watch.current += dt;
+    if (watch.current >= SIGHT_EVERY) {
+      watch.current = 0;
+      inView.current = canSee(DANCE_SEE_RANGE, DANCE_SEE_CONE);
+    }
+    goat.observe(dt, inView.current && runStore.get().phase === "running", playerStore.speed < STILL_SPEED);
 
     // The first time she's in view — close enough, and no wall between.
     sight.current += dt;
     const run = runStore.get();
     if (run.sawAt || run.phase !== "running" || sight.current < SIGHT_EVERY) return;
     sight.current = 0;
-    const [gx, gz] = goat.position();
-    _dir.set(gx - camera.position.x, BLEAT_HEIGHT - camera.position.y, gz - camera.position.z);
-    const distance = _dir.length();
-    if (distance > SIGHT_RANGE) return;
-    _dir.normalize();
-    if (_dir.dot(_forward) > SIGHT_CONE && walls.raycast(camera.position, _dir, distance) >= distance - 0.3) runStore.seeGoat();
+    if (canSee(SIGHT_RANGE, SIGHT_CONE)) runStore.seeGoat();
   });
 
   useEffect(() => {

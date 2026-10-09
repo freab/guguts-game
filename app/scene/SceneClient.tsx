@@ -40,6 +40,8 @@ import { intro, useIntro } from "../game/intro";
 import IntroOverlay from "../ui/IntroOverlay";
 import PhotoOverlay from "../ui/PhotoOverlay";
 import { photo, usePhoto } from "../game/photo";
+import { BUNA, buna, sequenceWatcher } from "../game/secrets";
+import BunaGlow from "../ui/BunaGlow";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 import { applyGraphicsToPanel } from "../quality";
@@ -55,7 +57,7 @@ function isTyping(target: EventTarget | null): boolean {
 const Scene = dynamic(() => import("./Scene"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full items-center justify-center text-zinc-400">
+    <div className="flex h-full w-full items-center justify-center text-cream/60">
       Loading scene…
     </div>
   ),
@@ -145,10 +147,19 @@ export default function SceneClient() {
   useEffect(() => {
     runStore.setPaused("intro", cinematic);
   }, [cinematic]);
-  // Leaving the maze ends photo mode.
+  // Leaving the maze ends photo mode (and any coffee).
   useEffect(() => {
-    if (!ready) photo.close();
+    if (!ready) {
+      photo.close();
+      buna.reset();
+    }
   }, [ready]);
+  // The BUNA secret: typed during a run (game/secrets).
+  useEffect(() => {
+    const onKey = sequenceWatcher(BUNA, () => buna.drink());
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Gugut's voiceovers, as chosen on the title screen (or in Settings).
   const { voice } = usePreferences();
@@ -282,13 +293,13 @@ export default function SceneClient() {
         <div className="ui-shell absolute left-3 top-3 z-10 flex items-center gap-1.5 p-1.5">
           <button
             onClick={() => setLevel(null)}
-            className="ui-tile h-9 whitespace-nowrap px-3 text-sm font-medium"
+            className="ui-tile h-9 whitespace-nowrap px-3 ui-label"
           >
             {LEVELS.find((l) => l.id === level)?.label ?? "Level"} · Change
           </button>
           <button
             onClick={restart}
-            className="ui-tile h-9 whitespace-nowrap px-3 text-sm font-medium"
+            className="ui-tile h-9 whitespace-nowrap px-3 ui-label"
           >
             New maze
           </button>
@@ -297,12 +308,12 @@ export default function SceneClient() {
 
       {/* Controls hint. */}
       {debug && (
-        <div className="ui-shell pointer-events-none absolute bottom-3 left-3 z-10 px-3 py-2 text-xs leading-5 text-zinc-300">
+        <div className="ui-shell pointer-events-none absolute bottom-3 left-3 z-10 px-3 py-2 text-xs leading-5 text-cream/80">
           <div>
-            <b className="text-zinc-100">Click</b> to look around · <b className="text-zinc-100">Esc</b> to release
+            <b className="text-cream">Click</b> to look around · <b className="text-cream">Esc</b> to release
           </div>
           <div>
-            <b className="text-zinc-100">WASD / Arrows</b> move · <b className="text-zinc-100">Shift</b> run
+            <b className="text-cream">WASD / Arrows</b> move · <b className="text-cream">Shift</b> run
           </div>
         </div>
       )}
@@ -344,6 +355,7 @@ export default function SceneClient() {
       {/* The run: its clock, and the finish screen when you reach the goat. */}
       {ready && !cinematic && !photoActive && <RunTimer />}
       {ready && !photoActive && <GameNotice />}
+      {ready && <BunaGlow />}
       {ready && <PhotoOverlay touch={touch} />}
       {ready && <BleatIndicator />}
       {ready && <Monologue key={`voice-${runId}`} />}

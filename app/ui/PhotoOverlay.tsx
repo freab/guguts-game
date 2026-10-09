@@ -48,7 +48,7 @@ export default function PhotoOverlay({ touch }: { touch: boolean }) {
 
   if (!p.active) return null;
   const dusk = p.dusk ?? duskForRun();
-  const label = "text-xs uppercase tracking-wider text-white/50";
+  const label = "text-xs uppercase tracking-wider text-cream/50";
   return (
     <div className="pointer-events-none absolute inset-0 z-[58]">
       {/* The saved flash. */}
@@ -93,19 +93,19 @@ export default function PhotoOverlay({ touch }: { touch: boolean }) {
             </label>
 
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => photo.capture()} className="ui-cta px-4 py-2 text-sm">
+              <button type="button" onClick={() => photo.capture()} className="ui-cta px-4 py-2 ui-label">
                 Save photo
               </button>
-              <button type="button" onClick={() => photo.togglePanel()} className="ui-tile px-3 py-2 text-sm" title="Hide panel (H)">
+              <button type="button" onClick={() => photo.togglePanel()} className="ui-tile px-3 py-2 ui-label" title="Hide panel (H)">
                 Hide
               </button>
-              <button type="button" onClick={() => photo.close()} className="ui-tile px-3 py-2 text-sm" title="Leave (F / Esc)">
+              <button type="button" onClick={() => photo.close()} className="ui-tile px-3 py-2 ui-label" title="Leave (F / Esc)">
                 Done
               </button>
             </div>
 
             {!touch && (
-              <p className="w-full text-xs text-white/45">
+              <p className="w-full text-xs text-cream/45">
                 WASD fly · Space / Q up and down · Shift faster · click and move the mouse to look · Enter saves · H hides
                 this · F or Esc leaves
               </p>
@@ -117,7 +117,7 @@ export default function PhotoOverlay({ touch }: { touch: boolean }) {
           <button
             type="button"
             onClick={() => photo.togglePanel()}
-            className="ui-tile pointer-events-auto absolute right-4 bottom-4 px-3 py-2 text-sm"
+            className="ui-tile pointer-events-auto absolute right-4 bottom-4 px-3 py-2 ui-label"
           >
             Show panel
           </button>

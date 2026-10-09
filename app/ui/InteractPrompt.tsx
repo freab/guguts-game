@@ -39,7 +39,7 @@ export default function InteractPrompt({
           {icon}
         </svg>
       </span>
-      <span className={touch ? "ui-cta flex items-center px-5" : "ui-tile flex items-center px-3.5"}>{label}</span>
+      <span className={touch ? "ui-cta ui-label flex items-center px-5" : "ui-tile ui-label flex items-center px-3.5"}>{label}</span>
       {!touch && <kbd className="ui-cta flex min-w-10 items-center justify-center px-2 font-mono text-sm">E</kbd>}
     </button>
   );

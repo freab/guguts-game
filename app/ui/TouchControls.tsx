@@ -137,7 +137,7 @@ export default function TouchControls() {
       {/* Where to put your thumb, until you do. */}
       <div
         ref={idle}
-        className="pointer-events-none absolute bottom-10 left-10 h-28 w-28 rounded-full border-2 border-white/25 bg-white/5 transition-opacity duration-300"
+        className="pointer-events-none absolute bottom-10 left-10 h-28 w-28 rounded-full border-2 border-cream/25 bg-white/5 transition-opacity duration-300"
       >
         <div className="absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/20" />
       </div>
@@ -145,7 +145,7 @@ export default function TouchControls() {
       {/* The stick, drawn where the thumb landed. */}
       <div
         ref={base}
-        className="pointer-events-none absolute left-0 top-0 hidden rounded-full border-2 border-white/35 bg-black/15 backdrop-blur-[2px]"
+        className="pointer-events-none absolute left-0 top-0 hidden rounded-full border-2 border-cream/35 bg-black/15 backdrop-blur-[2px]"
         style={{ width: STICK_RADIUS * 2, height: STICK_RADIUS * 2 }}
       >
         <div

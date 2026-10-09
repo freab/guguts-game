@@ -52,14 +52,14 @@ export default function CallButton({
       } ${className}`}
     >
       {/* A cupped-hands call: a horn shape with sound lines. */}
-      <span className={`ui-mark flex items-center justify-center ${large ? "h-12 w-12" : "h-10 w-10"} ${dry ? "text-zinc-500!" : ""}`}>
+      <span className={`ui-mark flex items-center justify-center ${large ? "h-12 w-12" : "h-10 w-10"} ${dry ? "text-cream/45!" : ""}`}>
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 10v4h3l6 4V6L6 10H3Z" />
           <path d="M16 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11" />
         </svg>
       </span>
-      <span className={`ui-tile flex items-center gap-2.5 px-3.5 ${dry ? "text-zinc-400!" : ""}`}>
-        <span className="whitespace-nowrap">Call the goat</span>
+      <span className={`ui-tile flex items-center gap-2.5 px-3.5 ${dry ? "text-cream/60!" : ""}`}>
+        <span className="ui-label whitespace-nowrap">Call the goat</span>
         <span className="flex items-center gap-1" aria-hidden>
           {dry ? (
             // A water drop: go find a bottle.
@@ -70,7 +70,7 @@ export default function CallButton({
             Array.from({ length: GOAT_CALLS }, (_, i) => (
               <span
                 key={i}
-                className={`h-2 w-2 rounded-full ${i < calls ? "bg-amber-300" : "bg-white/15"}`}
+                className={`h-2 w-2 rounded-full ${i < calls ? "bg-gold" : "bg-cream/15"}`}
                 style={i === popped && i < calls ? { animation: "pip-pop 320ms ease-out" } : undefined}
               />
             ))

@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { posterFont } from "../fonts";
 import { runStore } from "../game/runStore";
 import { mazeHint, temesgen } from "../game/temesgen";
 
-type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin" | "hint";
+type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin" | "hint" | "other" | "otherPlaying";
 
 interface Choice {
   text: string;
@@ -21,8 +22,13 @@ interface Line {
   /** Temesgen's words (or made when shown), or a stage direction when `narration`. */
   says: string | (() => string);
   narration?: boolean;
-  choices: Choice[];
+  /** (Or made when shown.) */
+  choices: Choice[] | (() => Choice[]);
 }
+
+/** Asking for another song: he gives in the third time. */
+const GIVES_IN_AT = 3;
+const askOther: Choice = { text: "Do you know any other songs?", then: "other", act: () => void temesgen.askOtherSong() };
 
 const LINES: Record<Step, Line> = {
   greet: {
@@ -30,8 +36,30 @@ const LINES: Record<Step, Line> = {
     choices: [
       { text: "Have you seen my goat?", then: "invite" },
       { text: "You know these walls — where would a goat go?", then: "hint", afterWater: true },
+      askOther,
       { text: "Goodbye", then: "close" },
     ],
+  },
+  other: {
+    asked: "Do you know any other songs?",
+    says: () =>
+      [
+        "Other songs? Tonight my fingers remember only the one.",
+        "Again? You are as stubborn as that goat of yours.",
+        "Alright, alright — don't do that to me! Here. This one is for stubborn goatherds.",
+      ][Math.min(temesgen.otherSongAsks(), GIVES_IN_AT) - 1],
+    choices: () =>
+      temesgen.otherSongAsks() >= GIVES_IN_AT
+        ? [{ text: "Sit and listen", then: "otherPlaying", act: () => temesgen.playSong("second") }]
+        : [
+            { text: "Please? Just one more", then: "other", act: () => void temesgen.askOtherSong() },
+            { text: "Never mind", then: "greet" },
+          ],
+  },
+  otherPlaying: {
+    says: "Temesgen laughs, shakes his head, and tunes the kirar to something else entirely. You sit down in the grass to listen.",
+    narration: true,
+    choices: [{ text: "Listen", then: "close" }],
   },
   hint: {
     asked: "You know these walls — where would a goat go?",
@@ -62,6 +90,7 @@ const LINES: Record<Step, Line> = {
     says: "Stay as long as you like, little brother. The song is not finished yet.",
     choices: [
       { text: "Keep playing", then: "close" },
+      askOther,
       { text: "You know these walls — where would a goat go?", then: "hint", afterWater: true },
       { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
     ],
@@ -86,6 +115,7 @@ const LINES: Record<Step, Line> = {
  * number keys (Enter = the first, Esc = leave). The game is paused while it's open; `onClose` returns to it.
  */
 export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
+  const [turn, setTurn] = useState(0);
   const [step, setStep] = useState<Step>(() => {
     const { song, seated } = temesgen.get();
     return song !== "playing" ? "greet" : seated ? "listening" : "rejoin";
@@ -93,7 +123,9 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
   // (Asked once, when the conversation opens.)
   const [foundWater] = useState(() => runStore.get().bottlesTaken.some(Boolean));
   const line = LINES[step];
-  const choices = line.choices.filter((c) => !c.afterWater || foundWater);
+  const choices = (typeof line.choices === "function" ? line.choices() : line.choices).filter(
+    (c) => !c.afterWater || foundWater
+  );
   const says = typeof line.says === "function" ? line.says() : line.says;
 
   useEffect(() => {
@@ -109,7 +141,11 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
       if (choice.then === "close") {
         temesgen.endTalk();
         onClose();
-      } else setStep(choice.then);
+      } else {
+        setStep(choice.then);
+        // (A turn on the same step — asking him again — still shows his new answer.)
+        setTurn((n) => n + 1);
+      }
     },
     [onClose]
   );
@@ -138,10 +174,10 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
         className="ui-shell flex w-full max-w-xl flex-col gap-1.5 p-1.5"
         style={{ animation: "notice-in 200ms ease-out" }}
       >
-        <div key={step} className="ui-well px-5 py-4" style={{ animation: "notice-in 260ms ease-out" }}>
-          {line.asked && <p className="mb-2 text-sm text-white/50">You: “{line.asked}”</p>}
-          {!line.narration && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200/80">Temesgen</p>}
-          <p className={`text-base leading-relaxed ${line.narration ? "italic text-white/70" : "text-white"}`}>
+        <div key={turn} className="ui-well px-5 py-4" style={{ animation: "notice-in 260ms ease-out" }}>
+          {line.asked && <p className="mb-2 text-sm text-cream/50">You: “{line.asked}”</p>}
+          {!line.narration && <p className={`${posterFont.className} mb-1 text-2xl leading-none text-gold`}>Temesgen</p>}
+          <p className={`font-poster text-2xl leading-snug tracking-wide ${line.narration ? "italic text-cream/70" : "text-cream"}`}>
             {line.narration ? says : `“${says}”`}
           </p>
         </div>
@@ -152,7 +188,7 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
               type="button"
               autoFocus={i === 0}
               onClick={() => pick(choice)}
-              className={`flex min-h-11 flex-1 items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium ${
+              className={`flex min-h-11 flex-1 items-center gap-2.5 rounded-2xl! px-3.5 py-2 text-left font-poster text-lg leading-tight tracking-wide ${
                 i === 0 ? "ui-cta" : "ui-tile"
               }`}
             >

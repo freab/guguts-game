@@ -13,6 +13,8 @@ import GustLeaves from "./atmosphere/GustLeaves";
 import WinShot from "./WinShot";
 import PhotoCamera from "./PhotoCamera";
 import GoatReveal from "../maze/GoatReveal";
+import Jebena from "../maze/Jebena";
+import Carving from "../maze/Carving";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
 import Temesgen from "../maze/Temesgen";
@@ -612,6 +614,8 @@ export default function Scene() {
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <CoffeeBush />
+        <Jebena />
+        <Carving />
         <GoatReveal />
         <Temesgen />
         <Particles />

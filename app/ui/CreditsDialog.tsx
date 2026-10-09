@@ -25,16 +25,16 @@ export default function CreditsDialog({ onClose }: { onClose: () => void }) {
       <dl className="space-y-3">
         {CREDITS.map((c) => (
           <div key={c.role}>
-            <dt className="text-xs uppercase tracking-wider text-white/45">{c.role}</dt>
-            <dd className="text-sm text-white/85">
+            <dt className="text-xs uppercase tracking-wider text-cream/45">{c.role}</dt>
+            <dd className="text-sm text-cream/85">
               {c.href ? (
-                <a href={c.href} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-4 hover:text-white">
+                <a href={c.href} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-4 hover:text-cream">
                   {c.who}
                 </a>
               ) : (
                 <span className="font-semibold">{c.who}</span>
               )}
-              {c.detail && <span className="block text-xs text-white/50">{c.detail}</span>}
+              {c.detail && <span className="block text-xs text-cream/50">{c.detail}</span>}
             </dd>
           </div>
         ))}

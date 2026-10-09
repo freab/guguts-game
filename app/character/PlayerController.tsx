@@ -17,6 +17,7 @@ import { writePlayerStore } from "./playerStore";
 import { touchInput } from "./touchInput";
 import { runStore } from "../game/runStore";
 import { photo } from "../game/photo";
+import { buna } from "../game/secrets";
 
 export type Control = "forward" | "backward" | "left" | "right" | "run";
 
@@ -112,7 +113,9 @@ export default function PlayerController() {
       keys.forward = keys.backward = keys.left = keys.right = keys.run = false;
       keys.stickX = keys.stickY = 0;
     }
-    motor.update(dt, keys, look.yaw, collider, { walkSpeed, runSpeed });
+    // (Faster for a while after the BUNA secret: game/secrets.)
+    const boost = buna.boost();
+    motor.update(dt, keys, look.yaw, collider, { walkSpeed: walkSpeed * boost, runSpeed: runSpeed * boost });
     motor.faceCamera(look.yaw);
     if (body.current) placeBody(body.current, motor);
     rig.update(camera, motor, look, { headBob, fov });

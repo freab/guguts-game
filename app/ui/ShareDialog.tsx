@@ -117,12 +117,12 @@ export default function ShareDialog({
             // eslint-disable-next-line @next/next/no-img-element -- (a generated image in memory)
             <img src={image.url} alt="Your share card" className="max-h-full max-w-full rounded-lg object-contain" />
           ) : (
-            <span className="text-sm text-white/50">Drawing your card…</span>
+            <span className="text-sm text-cream/50">Drawing your card…</span>
           )}
         </div>
 
         {canNativeShare && (
-          <button type="button" disabled={!ready} onClick={() => void nativeShare()} className="ui-cta w-full px-5 py-2.5 text-sm disabled:opacity-40">
+          <button type="button" disabled={!ready} onClick={() => void nativeShare()} className="ui-cta w-full px-5 py-2.5 ui-label disabled:opacity-40">
             Share… (Instagram, Telegram, WhatsApp…)
           </button>
         )}
@@ -146,7 +146,7 @@ export default function ShareDialog({
             Copy link
           </ShareButton>
         </div>
-        <p className="text-xs leading-relaxed text-white/45">
+        <p className="text-xs leading-relaxed text-cream/45">
           {status ??
             (canNativeShare
               ? "For Instagram, use Share… and pick Instagram — or save the image and post it."
@@ -159,7 +159,7 @@ export default function ShareDialog({
 
 function ShareButton({ disabled, onClick, children }: { disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" disabled={disabled} onClick={onClick} className="ui-tile px-3 py-2 text-sm font-medium disabled:opacity-40">
+    <button type="button" disabled={disabled} onClick={onClick} className="ui-tile px-3 py-2 ui-label disabled:opacity-40">
       {children}
     </button>
   );

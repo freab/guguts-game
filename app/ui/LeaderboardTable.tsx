@@ -1,6 +1,7 @@
 "use client";
 
 import { formatTime, type LeaderboardResponse } from "../leaderboard/shared";
+import { isGugut } from "../game/secrets";
 
 /**
  * A level's board: the top times, the player's row highlighted — and shown
@@ -19,17 +20,26 @@ export default function LeaderboardTable({
   youName: string;
 }) {
   if (error) return <p className="py-6 text-center text-sm text-amber-200/90">{error}</p>;
-  if (!data) return <p className="py-6 text-center text-sm text-white/50">{loading ? "Loading…" : ""}</p>;
+  if (!data) return <p className="py-6 text-center text-sm text-cream/50">{loading ? "Loading…" : ""}</p>;
   if (data.entries.length === 0) {
-    return <p className="py-6 text-center text-sm text-white/60">No times yet — be the first to bring her home.</p>;
+    return <p className="py-6 text-center text-sm text-cream/60">No times yet — be the first to bring her home.</p>;
   }
 
   const youShown = data.entries.some((e) => e.you);
   const row = (rank: number, name: string, timeMs: number, you: boolean) => (
     <tr key={`${rank}-${name}`} className={you ? "bg-amber-300/15 text-amber-100" : "odd:bg-white/[0.03]"}>
-      <td className="w-10 py-1.5 pl-3 pr-2 text-right tabular-nums text-white/60">{rank}</td>
+      <td className="w-10 py-1.5 pl-3 pr-2 text-right tabular-nums text-cream/60">{rank}</td>
       <td className="max-w-0 truncate py-1.5 pr-3">
-        {you ? youName : name}
+        {/* The original goatherd's name, in gold (game/secrets). */}
+        {isGugut(you ? youName : name) ? (
+          <span className="font-poster text-lg leading-none tracking-wide text-gold" title="The original goatherd">
+            ✦ {you ? youName : name}
+          </span>
+        ) : you ? (
+          youName
+        ) : (
+          name
+        )}
         {you && <span className="ml-1.5 text-xs text-amber-200/80">(you)</span>}
       </td>
       <td className="py-1.5 pr-3 text-right font-mono tabular-nums">{formatTime(timeMs)}</td>
@@ -44,7 +54,7 @@ export default function LeaderboardTable({
           {!youShown && data.you && (
             <>
               <tr>
-                <td colSpan={3} className="py-0.5 text-center text-white/30">
+                <td colSpan={3} className="py-0.5 text-center text-cream/30">
                   ⋯
                 </td>
               </tr>
@@ -53,7 +63,7 @@ export default function LeaderboardTable({
           )}
         </tbody>
       </table>
-      <p className="mt-2 text-right text-xs text-white/40">
+      <p className="mt-2 text-right text-xs text-cream/40">
         {data.players} {data.players === 1 ? "player" : "players"}
         {data.storage === "local" && " · local board (this server only)"}
       </p>

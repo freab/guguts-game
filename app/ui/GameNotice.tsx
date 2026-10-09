@@ -39,7 +39,7 @@ function Message({ notice }: { notice: Notice }) {
       }`}
       style={{ transitionDuration: `${FADE_MS}ms`, animation: "notice-in 250ms ease-out" }}
     >
-      <div className="ui-well px-4 py-2.5">{notice.text}</div>
+      <div className="ui-well px-4 py-2.5 font-poster text-xl leading-snug tracking-wide">{notice.text}</div>
     </div>
   );
 }

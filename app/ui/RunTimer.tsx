@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { posterFont } from "../fonts";
 import { runStore, useRun } from "../game/runStore";
 import { formatTime } from "../leaderboard/shared";
 
@@ -26,10 +27,10 @@ export default function RunTimer() {
   if (run.phase === "idle") return null;
   return (
     <div className="ui-shell pointer-events-none absolute left-1/2 top-18 z-20 -translate-x-1/2 p-1.5 sm:top-3">
-      <div className="ui-well flex h-10 items-center px-4 font-mono text-lg font-semibold tabular-nums text-zinc-100">
+      <div className={`${posterFont.className} ui-well flex h-10 items-center px-5 text-3xl leading-none tabular-nums text-cream`}>
         <span ref={text}>0:00.00</span>
         {run.phase === "armed" && (
-          <span className="ml-2 hidden font-sans text-xs font-normal text-zinc-400 md:inline">starts when you move</span>
+          <span className="ml-2 hidden font-sans text-xs font-normal text-cream/60 md:inline">starts when you move</span>
         )}
       </div>
     </div>

@@ -27,7 +27,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog title="Settings" onClose={onClose}>
       <form onSubmit={save} className="space-y-3">
-        <label className="block text-sm text-white/70" htmlFor="player-name">
+        <label className="block text-sm text-cream/70" htmlFor="player-name">
           Your name on the leaderboard
         </label>
         <div className="flex gap-2">
@@ -38,12 +38,12 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             autoComplete="nickname"
             spellCheck={false}
             onChange={(e) => setName(e.target.value)}
-            className="min-w-0 flex-1 rounded-[10px] border border-[var(--ui-line)] bg-[var(--ui-mark)] px-3 py-2 text-base text-white outline-none focus:border-white/40"
+            className="min-w-0 flex-1 rounded-[10px] border border-[var(--ui-line)] bg-[var(--ui-mark)] px-3 py-2 text-base text-cream outline-none focus:border-cream/40"
           />
           <button
             type="submit"
             disabled={status.saving || name.trim() === profile.name}
-            className="ui-cta px-4 py-2 text-sm disabled:opacity-40"
+            className="ui-cta px-4 py-2 ui-label disabled:opacity-40"
           >
             {status.saving ? "Saving…" : "Save"}
           </button>
@@ -51,7 +51,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         {status.message && (
           <p className={`text-sm ${status.ok ? "text-emerald-300" : "text-amber-200"}`}>{status.message}</p>
         )}
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-cream/40">
           Up to {NAME_MAX} characters. Your times stay with you when you rename.
         </p>
       </form>
@@ -87,9 +87,9 @@ function GameplaySettings() {
   }, [listening]);
 
   return (
-    <div className="mt-6 space-y-3 border-t border-white/10 pt-5">
+    <div className="mt-6 space-y-3 border-t border-cream/10 pt-5">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-white/70">Call the goat key</span>
+        <span className="text-sm text-cream/70">Call the goat key</span>
         <button
           type="button"
           onClick={() => {
@@ -103,41 +103,41 @@ function GameplaySettings() {
       </div>
       {message && <p className="text-sm text-amber-200">{message}</p>}
       <label className="flex cursor-pointer items-center justify-between gap-3">
-        <span className="text-sm text-white/70">
+        <span className="text-sm text-cream/70">
           Sound captions
-          <span className="block text-xs text-white/40">Show which way the goat&apos;s bleat came from</span>
+          <span className="block text-xs text-cream/40">Show which way the goat&apos;s bleat came from</span>
         </span>
         <input
           type="checkbox"
           checked={prefs.captions}
           onChange={(e) => setPreferences({ captions: e.target.checked })}
-          className="h-5 w-5 accent-neutral-200"
+          className="h-5 w-5 accent-gold"
         />
       </label>
       <label className="flex cursor-pointer items-center justify-between gap-3">
-        <span className="text-sm text-white/70">
+        <span className="text-sm text-cream/70">
           Voiceovers
-          <span className="block text-xs text-white/40">Gugut talks to himself, calls her and cheers</span>
+          <span className="block text-xs text-cream/40">Gugut talks to himself, calls her and cheers</span>
         </span>
         <input
           type="checkbox"
           checked={prefs.voice}
           onChange={(e) => setPreferences({ voice: e.target.checked })}
-          className="h-5 w-5 accent-neutral-200"
+          className="h-5 w-5 accent-gold"
         />
       </label>
       <label className="flex items-center justify-between gap-3">
-        <span className="text-sm text-white/70">
+        <span className="text-sm text-cream/70">
           Graphics
-          <span className="block text-xs text-white/40">Takes effect on your next maze</span>
+          <span className="block text-xs text-cream/40">Takes effect on your next maze</span>
         </span>
         <select
           value={prefs.graphics ?? defaultGraphics()}
           onChange={(e) => setPreferences({ graphics: e.target.value as Graphics })}
-          className="ui-tile h-9 px-3 text-sm"
+          className="ui-tile h-9 px-3 ui-label"
         >
           {GRAPHICS_LEVELS.map((g) => (
-            <option key={g} value={g} className="bg-neutral-900">
+            <option key={g} value={g} className="bg-night">
               {g[0].toUpperCase() + g.slice(1)}
             </option>
           ))}

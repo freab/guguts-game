@@ -18,7 +18,7 @@ export default function PerfReadout({ className = "" }: { className?: string }) 
 
   return (
     <div
-      className={`pointer-events-auto rounded-md bg-black/70 px-3 py-2 font-mono text-[11px] leading-snug text-white ${className}`}
+      className={`pointer-events-auto rounded-md bg-night/70 px-3 py-2 font-mono text-[11px] leading-snug text-cream ${className}`}
     >
       <div>
         frame {perf.frameMs.toFixed(1)} ms ({perf.frameMs ? (1000 / perf.frameMs).toFixed(0) : "–"} fps) · GPU {gpu}
@@ -36,7 +36,7 @@ export default function PerfReadout({ className = "" }: { className?: string }) 
                 <td className="text-right">{g.draws} draws</td>
               </tr>
             ))}
-            <tr className="text-white/60">
+            <tr className="text-cream/60">
               <td className="pr-3">total</td>
               <td className="pr-3 text-right">{formatCount(perf.geometry.reduce((a, g) => a + g.triangles, 0))} tris</td>
               <td className="text-right">{perf.geometry.reduce((a, g) => a + g.draws, 0)} draws</td>
@@ -53,7 +53,7 @@ export default function PerfReadout({ className = "" }: { className?: string }) 
       )}
       {perf.rows && base && (
         <table className="mt-1">
-          <thead className="text-white/60">
+          <thead className="text-cream/60">
             <tr>
               <th className="pr-3 text-left font-normal">step</th>
               <th className="pr-3 text-right font-normal">fps</th>

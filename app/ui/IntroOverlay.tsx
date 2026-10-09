@@ -64,13 +64,13 @@ export default function IntroOverlay({ title, subtitle, touch }: { title: string
           <span className="ml-3 text-[clamp(0.9rem,min(1.2vw,2.4vh),1.2rem)] text-[#fdf3d4]/60">{subtitle}</span>
         </div>
         <div
-          className={`flex items-center gap-2 text-[clamp(0.8rem,min(1vw,2.2vh),1rem)] tracking-wide text-white/70 transition-opacity duration-500 ${prompt && phase === "playing" ? "opacity-100" : "opacity-0"}`}
+          className={`flex items-center gap-2 text-[clamp(0.8rem,min(1vw,2.2vh),1rem)] tracking-wide text-cream/70 transition-opacity duration-500 ${prompt && phase === "playing" ? "opacity-100" : "opacity-0"}`}
         >
           {touch ? (
             "Tap to skip"
           ) : (
             <>
-              <kbd className="rounded border border-white/40 px-1.5 py-0.5 font-sans text-[0.85em] text-white/85">Space</kbd>
+              <kbd className="rounded border border-cream/40 px-1.5 py-0.5 font-sans text-[0.85em] text-cream/85">Space</kbd>
               Skip
             </>
           )}

@@ -28,23 +28,23 @@ export default function RotatePrompt({ onDismiss }: { onDismiss: () => void }) {
             <path d="M29 46h6" strokeLinecap="round" />
           </svg>
           <h2 className={`${posterFont.className} text-4xl tracking-wide`}>Turn your phone sideways</h2>
-          <p className="max-w-xs text-sm text-white/70">The maze plays best in landscape, with room for both thumbs.</p>
+          <p className="max-w-xs text-sm text-cream/70">The maze plays best in landscape, with room for both thumbs.</p>
           {canFullscreen ? (
             <button
               type="button"
               onClick={() => void enterFullscreen(true)}
-              className="ui-cta px-6 py-2.5 text-sm"
+              className="ui-cta px-6 py-2.5 ui-label"
             >
               Go fullscreen
             </button>
           ) : (
             !isStandalone() && (
-              <p className="max-w-xs text-xs text-white/55">
+              <p className="max-w-xs text-xs text-cream/55">
                 Tip: tap Share, then “Add to Home Screen” to play fullscreen.
               </p>
             )
           )}
-          <button type="button" onClick={onDismiss} className="text-sm text-white/60 underline">
+          <button type="button" onClick={onDismiss} className="text-sm text-cream/60 underline">
             Play in portrait
           </button>
         </div>
