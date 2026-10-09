@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { audio, type SongTrack } from "../audio/audioEngine";
+import { audio, SONG_ORDER, type SongTrack } from "../audio/audioEngine";
 import { exitPosition, restingSpot } from "../maze/mazeData";
 import { sun } from "../scene/sunUniforms";
 import { runStore } from "./runStore";
@@ -10,8 +10,8 @@ import { runStore } from "./runStore";
 const SONG_HEIGHT = 0.6;
 /** Seconds of sitting and listening before Gugut is calm enough to hear the goat. */
 export const CALM_AFTER = 30;
-/** The bars he plays as Gugut comes into the clearing: where in the song (s), and how long. */
-const PHRASE_FROM = 21;
+/** The bars he plays as Gugut comes into the clearing: where in the main song (s), and how long. */
+const PHRASE_FROM = 30;
 const PHRASE_LENGTH = 7;
 
 /**
@@ -46,8 +46,8 @@ const initial: TemesgenState = { seen: false, near: false, talking: false, song:
 let state = initial;
 /** Seconds listened so far, sitting (kept if he gets up and sits again). */
 let listened = 0;
-/** How many times Gugut has asked for another song (ui/TemesgenDialog: the third time, he gives in). */
-let otherSongAsks = 0;
+/** The song he last played this run (SONG_ORDER), null before he has played one. */
+let lastSong: SongTrack | null = null;
 const listeners = new Set<() => void>();
 const set = (next: Partial<TemesgenState>) => {
   state = { ...state, ...next };
@@ -73,8 +73,9 @@ export const temesgen = {
   endTalk() {
     if (state.talking) set({ talking: false });
   },
-  /** He plays his song, from the start, and Gugut sits down to listen. */
-  playSong(track: SongTrack = "nostalgia") {
+  /** He plays a song (his main one unless told), and Gugut sits down to listen. */
+  playSong(track: SongTrack = "main") {
+    lastSong = track;
     const spot = restingSpot();
     audio.playSong(spot.x, SONG_HEIGHT, spot.z, () => set({ song: "stopped", seated: false }), track);
     set({ song: "playing", seated: true });
@@ -111,16 +112,20 @@ export const temesgen = {
       runStore.hearGoat();
     } else if (calm - state.calm >= 0.02) set({ calm });
   },
-  /** He's gone (the scene unmounted — a new run): no prompt, no conversation, no song, not calm. */
-  /** Gugut asks if he knows any other songs; returns how many times he has now. */
-  askOtherSong(): number {
-    return ++otherSongAsks;
+  /** Has he played Gugut a song this run? (Then, back with him, Gugut can ask for a different one.) */
+  hasPlayed: () => lastSong !== null,
+  /** The song he last played (null before any). */
+  lastSong: () => lastSong,
+  /** A different song: the next one in SONG_ORDER after the last, round again after the third. */
+  playDifferentSong() {
+    const next = SONG_ORDER[(SONG_ORDER.indexOf(lastSong ?? "main") + 1) % SONG_ORDER.length];
+    this.playSong(next);
   },
-  otherSongAsks: () => otherSongAsks,
+  /** He's gone (the scene unmounted — a new run): no prompt, no conversation, no song, not calm. */
   reset() {
     audio.stopSong();
     listened = 0;
-    otherSongAsks = 0;
+    lastSong = null;
     set(initial);
   },
   subscribe(l: () => void) {

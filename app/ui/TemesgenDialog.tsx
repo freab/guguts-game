@@ -6,7 +6,7 @@ import { runStore } from "../game/runStore";
 import { mazeHint, temesgen } from "../game/temesgen";
 import { getProfile } from "../game/profile";
 
-type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin" | "hint" | "other" | "otherPlaying";
+type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin" | "hint" | "different";
 
 interface Choice {
   text: string;
@@ -15,6 +15,8 @@ interface Choice {
   act?: () => void;
   /** Only offered once Gugut has found a bottle of water. */
   afterWater?: boolean;
+  /** Only offered once he has played Gugut a song (coming back to him). */
+  afterSong?: boolean;
 }
 
 interface Line {
@@ -27,9 +29,8 @@ interface Line {
   choices: Choice[] | (() => Choice[]);
 }
 
-/** Asking for another song: he gives in the third time. */
-const GIVES_IN_AT = 3;
-const askOther: Choice = { text: "Do you know any other songs?", then: "other", act: () => void temesgen.askOtherSong() };
+/** Back with him after a song: the next one he knows (game/temesgen playDifferentSong). */
+const differentSong: Choice = { text: "Play a different song", then: "different", act: () => temesgen.playDifferentSong(), afterSong: true };
 
 /**
  * His hello — by the player's name, if they have chosen one (a secret):
@@ -51,30 +52,19 @@ const LINES: Record<Step, Line> = {
     choices: [
       { text: "Have you seen my goat?", then: "invite" },
       { text: "You know these walls — where would a goat go?", then: "hint", afterWater: true },
-      askOther,
+      differentSong,
       { text: "Goodbye", then: "close" },
     ],
   },
-  other: {
-    asked: "Do you know any other songs?",
+  different: {
+    asked: "Play a different song",
     says: () =>
-      [
-        "Other songs? Tonight my fingers remember only the one.",
-        "Again? You are as stubborn as that goat of yours.",
-        "Alright, alright — don't do that to me! Here. This one is for stubborn goatherds.",
-      ][Math.min(temesgen.otherSongAsks(), GIVES_IN_AT) - 1],
-    choices: () =>
-      temesgen.otherSongAsks() >= GIVES_IN_AT
-        ? [{ text: "Sit and listen", then: "otherPlaying", act: () => temesgen.playSong("second") }]
-        : [
-            { text: "Please? Just one more", then: "other", act: () => void temesgen.askOtherSong() },
-            { text: "Never mind", then: "greet" },
-          ],
-  },
-  otherPlaying: {
-    says: "Temesgen laughs, shakes his head, and tunes the kirar to something else entirely. You sit down in the grass to listen.",
-    narration: true,
-    choices: [{ text: "Listen", then: "close" }],
+      ({
+        main: "Back to the first one, then. Some songs sound better the second time.",
+        nostalgia: "Another one? Then something slower — an old song my fingers know well.",
+        dont: "Again? You are as stubborn as that goat of yours. Alright, alright — don't do that to me! This one is for stubborn goatherds.",
+      })[temesgen.lastSong() ?? "main"],
+    choices: [{ text: "Sit and listen", then: "close" }],
   },
   hint: {
     asked: "You know these walls — where would a goat go?",
@@ -105,7 +95,7 @@ const LINES: Record<Step, Line> = {
     says: "Stay as long as you like, little brother. The song is not finished yet.",
     choices: [
       { text: "Keep playing", then: "close" },
-      askOther,
+      differentSong,
       { text: "You know these walls — where would a goat go?", then: "hint", afterWater: true },
       { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
     ],
@@ -114,6 +104,7 @@ const LINES: Record<Step, Line> = {
     says: "You came back to listen? Good. Sit — the song is not finished yet.",
     choices: [
       { text: "Sit and listen", then: "close", act: () => temesgen.sit() },
+      differentSong,
       { text: "Could you stop for now?", then: "close", act: () => temesgen.stopSong() },
     ],
   },
@@ -126,7 +117,8 @@ const LINES: Record<Step, Line> = {
  * (heard in 3D from where he sits), Gugut sitting down in front of him to
  * listen. Back while he's playing, Gugut can sit again or ask him to stop.
  * Once Gugut has found water, Temesgen also tells him which way he heard a
- * goat this morning (game/temesgen mazeHint). Choices by click / tap or the
+ * goat this morning (game/temesgen mazeHint). Back with him after a song,
+ * Gugut can ask for a different one (the next he knows). Choices by click / tap or the
  * number keys (Enter = the first, Esc = leave). The game is paused while it's open; `onClose` returns to it.
  */
 export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
@@ -137,9 +129,10 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
   });
   // (Asked once, when the conversation opens.)
   const [foundWater] = useState(() => runStore.get().bottlesTaken.some(Boolean));
+  const [heardSong] = useState(() => temesgen.hasPlayed());
   const line = LINES[step];
   const choices = (typeof line.choices === "function" ? line.choices() : line.choices).filter(
-    (c) => !c.afterWater || foundWater
+    (c) => (!c.afterWater || foundWater) && (!c.afterSong || heardSong)
   );
   const says = typeof line.says === "function" ? line.says() : line.says;
 

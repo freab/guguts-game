@@ -14,6 +14,11 @@ encoded by `npm run audio` (`scripts/build-audio.mjs`) from sources kept in
 
 `wind.webm` is the project's own wind recording (source in `assets-src/music/`).
 
-`Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3` is "Nostalgia" by
-Temesgen ([temesgen.com](https://temesgen.com)), the song Temesgen plays by the maple.
-It is **not** CC0: all rights stay with the artist.
+Temesgen's songs, played by the maple, are by Temesgen ([temesgen.com](https://temesgen.com)).
+They are **not** CC0: all rights stay with the artist.
+
+| File | Song |
+|---|---|
+| `Yibellahalla vocals.webm` | "Yibellahalla" (Ethiopian begena fusion), vocals only: his main song. Separated from the full mix (`Yibellahalla_Ethiopian_Begena_Fusion_Temesgen_temesgen_com.mp3`, kept but unused) with Demucs (htdemucs_ft), loudness matched to it |
+| `Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3` | "Nostalgia": the second, asked for a different song |
+| `dont do that to me.webm` | "Don't do that to me": the third |

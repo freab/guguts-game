@@ -35,8 +35,8 @@ import { gustAt, windNow } from "../scene/wind";
  *   their own bus — one line at a time, the ambience and the song dipping
  *   under it. Only when the player chose voiceovers (setVoice). With them on,
  *   a call is Gugut shouting for her instead of the whistle.
- * - Temesgen's song (playSong): his kirar recording, streamed from
- *   public/audio when he's asked to play, HRTF-panned from where he sits
+ * - Temesgen's songs (playSong): his recordings in public/audio (the main
+ *   one preloaded, the others streamed), played when he's asked, HRTF-panned from where he sits
  *   straight into the master. Its level is set from outside (setSongLevel):
  *   full beside him, fading to silence across the clearing, muffled when walls
  *   stand between.
@@ -94,16 +94,22 @@ const DRINK_SRC = "/audio/drink.webm";
 const DRINK_INDEX = "/audio/drink.json";
 /** When each part of the drink plays, from the pickup (s). */
 const DRINK_TIMES = { open: 0.15, gulps: 0.75, breath: 3.35 };
-/** Temesgen's kirar song, streamed (never decoded whole): about five minutes. */
-const SONG_SRC = `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3")}`;
 /**
- * The other song he knows, if you keep asking (ui/TemesgenDialog): streamed
- * when it's first played, not preloaded — few will hear it.
+ * Temesgen's songs, in the order he plays them (ui/TemesgenDialog):
+ * "Yibellahalla", his main one (preloaded); then, asked for a different song,
+ * "Nostalgia", then "Don't do that to me" (streamed when first played).
  */
-const SECOND_SONG_SRC = `/audio/${encodeURIComponent("dont do that to me.webm")}`;
-
-/** Temesgen's songs: "Nostalgia" (his usual), and the one he plays when pressed. */
-export type SongTrack = "nostalgia" | "second";
+export type SongTrack = "main" | "nostalgia" | "dont";
+export const SONG_ORDER: SongTrack[] = ["main", "nostalgia", "dont"];
+const SONG_SRCS: Record<SongTrack, string> = {
+  // (Its vocals only: separated from the full mix, which stays alongside.)
+  main: `/audio/${encodeURIComponent("Yibellahalla vocals.webm")}`,
+  nostalgia: `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3")}`,
+  dont: `/audio/${encodeURIComponent("dont do that to me.webm")}`,
+};
+const SONG_SRC = SONG_SRCS.main;
+/** Where each song starts when he plays it (s): the main one skips its intro. */
+const SONG_START: Record<SongTrack, number> = { main: 30, nostalgia: 0, dont: 0 };
 /** The song right beside him (dB), before setSongLevel's 0..1. */
 const SONG_DB = -6;
 /** Its echo off the maze walls, relative to the reverb send. */
@@ -175,7 +181,7 @@ class AudioEngine {
   /** The song downloaded whole during the preloader (preloadSong), as a blob URL. */
   private songUrl: string | null = null;
   /** Which of his songs the player is loaded with. */
-  private songTrack: SongTrack = "nostalgia";
+  private songTrack: SongTrack = "main";
   private songDownload: Promise<void> | null = null;
 
   private musicOn = true;
@@ -903,18 +909,18 @@ class AudioEngine {
   }
 
   /** The song's player and its graph, made on first use (from preloadSong's copy, else streamed). */
-  private ensureSong(track: SongTrack = "nostalgia") {
+  private ensureSong(track: SongTrack = "main") {
     this.unlock();
     const ctx = this.ctx;
     if (!ctx || !this.master) return null;
     // Another of his songs: the same player and graph, a new source.
     if (this.song && track !== this.songTrack) {
       this.songTrack = track;
-      this.song.element.src = track === "second" ? SECOND_SONG_SRC : (this.songUrl ?? SONG_SRC);
+      this.song.element.src = this.songSrc(track);
     }
     if (!this.song) {
       this.songTrack = track;
-      const element = new Audio(track === "second" ? SECOND_SONG_SRC : (this.songUrl ?? SONG_SRC));
+      const element = new Audio(this.songSrc(track));
       element.preload = "auto";
       const source = ctx.createMediaElementSource(element);
       const muffle = ctx.createBiquadFilter();
@@ -946,6 +952,11 @@ class AudioEngine {
     return this.song;
   }
 
+  /** A song's source: the main one from preloadSong's copy when there is one. */
+  private songSrc(track: SongTrack): string {
+    return track === "main" ? (this.songUrl ?? SONG_SRC) : SONG_SRCS[track];
+  }
+
   private placeSong(x: number, y: number, z: number) {
     const panner = this.song!.panner;
     panner.positionX.value = x;
@@ -954,11 +965,11 @@ class AudioEngine {
   }
 
   /**
-   * Temesgen starts his song, from the beginning, at (x, y, z). It starts
+   * Temesgen starts a song, from its start (SONG_START), at (x, y, z). It starts
    * silent: setSongLevel brings it up as the listener is near. `onEnded` is
    * called when it plays out. `track`: which of his songs.
    */
-  playSong(x: number, y: number, z: number, onEnded: () => void, track: SongTrack = "nostalgia") {
+  playSong(x: number, y: number, z: number, onEnded: () => void, track: SongTrack = "main") {
     const song = this.ensureSong(track);
     if (!song || !this.ctx) return;
     this.placeSong(x, y, z);
@@ -966,7 +977,7 @@ class AudioEngine {
     song.envelope.gain.cancelScheduledValues(now);
     song.envelope.gain.setTargetAtTime(1, now, 0.05);
     this.songEnded = onEnded;
-    song.element.currentTime = 0;
+    song.element.currentTime = SONG_START[track];
     void song.element.play().catch(() => {});
   }
 

@@ -41,6 +41,7 @@ There is no time limit. The timer starts when you take your first step and just 
 - **Meet Temesgen.** A man named Temesgen sits under the tree, playing the *kirar*, a traditional Ethiopian string instrument.
   - Ask him about your goat. He hasn't seen her, but he offers to play you a song to calm you down.
   - Say yes and you sit on the grass and listen. The music is loud next to him and gets quieter as you walk away.
+  - Come back to him after a song and you can ask him to play a different one. He knows three.
   - If you listen long enough, you calm down and hear your goat on your own, without using a call.
   - After you find water, he can give you a hint about which way the goat went.
 - **Stars and badges.** You get up to 3 stars: the fewer calls you use, the more stars. You can also earn badges, like *Silent tracker* for finding her without calling at all.
@@ -71,7 +72,7 @@ Some things I'm proud of:
 
 - **Designs:** by **Eman Issae**.
 - **Voice of Gugut:** the voiceovers are performed by **Surafel Yimam**.
-- **Music:** "Nostalgia" by **Temesgen** ([temesgen.com](https://temesgen.com)). All rights belong to the artist.
+- **Music:** "Yibellahalla", "Nostalgia" and "Don't do that to me" by **Temesgen** ([temesgen.com](https://temesgen.com)). All rights belong to the artist.
 - **Sound effects:** free (public domain) recordings from [BigSoundBank](https://bigsoundbank.com) by Joseph Sardin: birds, footsteps, goat bleats and drinking.
 - **Textures:** free (public domain) textures from [Poly Haven](https://polyhaven.com) and [ambientCG](https://ambientcg.com).
 - **Grass:** based on [FluffyGrass](https://github.com/thebenezer/FluffyGrass) by Ebenezer (MIT license).
