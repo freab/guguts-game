@@ -19,6 +19,6 @@ They are **not** CC0: all rights stay with the artist.
 
 | File | Song |
 |---|---|
-| `Yibellahalla vocals.webm` | "Yibellahalla" (Ethiopian begena fusion), vocals only: his main song. Separated from the full mix (`Yibellahalla_Ethiopian_Begena_Fusion_Temesgen_temesgen_com.mp3`, kept but unused) with Demucs (htdemucs_ft), loudness matched to it |
+| `Yibellahalla kirar.webm` | "Yibellahalla" (Ethiopian begena fusion), his main song, rearranged: its vocals over the kirar from "Nostalgia". Both were separated with Demucs (htdemucs_ft) from the full mixes (`Yibellahalla_Ethiopian_Begena_Fusion_Temesgen_temesgen_com.mp3`, kept but unused, and the Nostalgia mp3); the kirar slowed to Yibellahalla's 112 BPM, raised a semitone and beat-aligned. Loudness matched to the original |
 | `Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3` | "Nostalgia": the second, asked for a different song |
 | `dont do that to me.webm` | "Don't do that to me": the third |

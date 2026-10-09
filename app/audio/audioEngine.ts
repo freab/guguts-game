@@ -102,8 +102,9 @@ const DRINK_TIMES = { open: 0.15, gulps: 0.75, breath: 3.35 };
 export type SongTrack = "main" | "nostalgia" | "dont";
 export const SONG_ORDER: SongTrack[] = ["main", "nostalgia", "dont"];
 const SONG_SRCS: Record<SongTrack, string> = {
-  // (Its vocals only: separated from the full mix, which stays alongside.)
-  main: `/audio/${encodeURIComponent("Yibellahalla vocals.webm")}`,
+  // (Its vocals, separated from the full mix, over the kirar from "Nostalgia"
+  // — public/audio/LICENSE.md.)
+  main: `/audio/${encodeURIComponent("Yibellahalla kirar.webm")}`,
   nostalgia: `/audio/${encodeURIComponent("Nostalgia  Learn To Play Krar with Temesgen - temesgen.com.mp3")}`,
   dont: `/audio/${encodeURIComponent("dont do that to me.webm")}`,
 };
