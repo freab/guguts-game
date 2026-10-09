@@ -7,6 +7,7 @@ import { useControls, folder, monitor, button } from "leva";
 import * as THREE from "three/webgpu";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import IntroFlight from "./IntroFlight";
+import { intro } from "../game/intro";
 import Sunset from "./Sunset";
 import { DUSK, useDuskStep } from "./dusk";
 import GustLeaves from "./atmosphere/GustLeaves";
@@ -161,6 +162,9 @@ function SunLight({
  * post-processing (it needs the shadow map) and let it render a few frames →
  * "ready", which fades the loading screen out.
  */
+/** Where along the intro flight (0..1) the loading rehearsal stops to draw a few frames. */
+const INTRO_REHEARSAL = [0.1, 0.22, 0.34, 0.46, 0.58, 0.7, 0.82, 0.94, 1];
+
 function Readiness({ onPostReady }: { onPostReady: () => void }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
@@ -185,6 +189,18 @@ function Readiness({ onPostReady }: { onPostReady: () => void }) {
       setLoading({ stage: "warming" });
       onPostReady();
       await nextFrames(6); // post-processing compiles + first frames
+
+      // Fly the intro once, unseen behind the preloader: the wall chunks,
+      // grass, flowers and tree detail it passes are only drawn once the
+      // camera is near them, so without this their shaders would compile
+      // (and their buffers upload) mid-flight, as the player watches.
+      for (const u of INTRO_REHEARSAL) {
+        intro.rehearse(u);
+        await nextFrames(3);
+        if (cancelled) return;
+      }
+      intro.rehearse(null);
+      await nextFrames(2); // back on the first shot
       await audio.preloadSong(); // (started at the level pick; usually done by now)
       if (!cancelled) {
         setLoading({ stage: "ready" });
@@ -200,6 +216,7 @@ function Readiness({ onPostReady }: { onPostReady: () => void }) {
     });
     return () => {
       cancelled = true;
+      intro.rehearse(null);
     };
   }, [gl, scene, camera, onPostReady]);
 

@@ -16,6 +16,8 @@ import { useSyncExternalStore } from "react";
 export type IntroPhase = "idle" | "ready" | "playing" | "skipping" | "done";
 
 let phase: IntroPhase = "idle";
+/** While loading: where along the flight (0..1) the camera is put for the rehearsal, or null. */
+let rehearsal: number | null = null;
 const listeners = new Set<() => void>();
 const set = (next: IntroPhase) => {
   if (phase === next) return;
@@ -45,6 +47,15 @@ export const intro = {
   reset() {
     set("idle");
   },
+  /**
+   * Loading (scene/Scene Readiness): put the camera at `u` (0..1) along the
+   * flight, unseen behind the preloader, so everything the flight will pass
+   * is drawn before the player presses Enter. null: back to the first shot.
+   */
+  rehearse(u: number | null) {
+    rehearsal = u;
+  },
+  rehearsing: () => rehearsal,
   /** Is the intro holding the camera? */
   active: () => phase === "ready" || phase === "playing" || phase === "skipping",
   subscribe(l: () => void) {

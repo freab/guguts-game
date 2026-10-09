@@ -81,16 +81,23 @@ export default function IntroFlight() {
 
   useFrame((_, delta) => {
     const phase = intro.get();
-    if (!intro.active()) return;
+    const rehearsal = intro.rehearsing();
+    if (!intro.active() && rehearsal === null) return;
     // The player's view this frame: where the flight lands.
     _endPos.copy(camera.position);
     _endQuat.copy(camera.quaternion);
-    // Waiting for the preloader: hold the first shot. Skipping: hold while it fades to black.
-    if (phase === "playing") progress.current += Math.min(delta, 0.05) / flight.duration;
-    const u = Math.min(1, progress.current);
-    if (u >= 1) {
-      intro.finish();
-      return;
+    let u: number;
+    if (rehearsal !== null) {
+      // Loading: flown once ahead of time, unseen (see intro.rehearse).
+      u = rehearsal;
+    } else {
+      // Waiting for the preloader: hold the first shot. Skipping: hold while it fades to black.
+      if (phase === "playing") progress.current += Math.min(delta, 0.05) / flight.duration;
+      u = Math.min(1, progress.current);
+      if (u >= 1) {
+        intro.finish();
+        return;
+      }
     }
     flight.curve.getPoint(ease(u), _pos);
     _pos.lerp(_endPos, smoothstep(LAND, 1, u));

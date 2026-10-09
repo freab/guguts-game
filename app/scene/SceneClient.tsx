@@ -38,6 +38,7 @@ import { getPreferences, usePreferences } from "../game/preferences";
 import Monologue from "../game/Monologue";
 import { intro, useIntro } from "../game/intro";
 import IntroOverlay from "../ui/IntroOverlay";
+import StudioSplash from "../ui/StudioSplash";
 import PhotoOverlay from "../ui/PhotoOverlay";
 import { photo, usePhoto } from "../game/photo";
 import { BUNA, buna, sequenceWatcher } from "../game/secrets";
@@ -450,6 +451,9 @@ export default function SceneClient() {
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {creditsOpen && <CreditsDialog onClose={closeCredits} />}
       {boardOpen && <LeaderboardDialog initial={level ?? "easy"} onClose={closeBoard} />}
+
+      {/* "made by GUGUT STUDIOS": over everything, first thing on a page load. */}
+      <StudioSplash />
     </div>
   );
 }

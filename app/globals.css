@@ -285,3 +285,47 @@ body {
     filter: none;
   }
 }
+
+/* Studio splash (ui/StudioSplash): the letters draw on, the rules either
+   side of STUDIOS grow out, the whole slowly rises. */
+.studio-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: studio-draw 500ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes studio-draw {
+  to { stroke-dashoffset: 0; }
+}
+/* A wordmark letter: its outline traces round, then it fills in. */
+.studio-glyph {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  fill-opacity: 0;
+  animation: studio-glyph 900ms cubic-bezier(0.45, 0, 0.3, 1) forwards;
+}
+@keyframes studio-glyph {
+  60% { stroke-dashoffset: 0; fill-opacity: 0; }
+  to { stroke-dashoffset: 0; fill-opacity: 1; }
+}
+.studio-rule {
+  transform: scaleX(0);
+  animation: studio-rule 700ms cubic-bezier(0.65, 0, 0.35, 1) 1500ms forwards;
+}
+@keyframes studio-rule {
+  to { transform: scaleX(1); }
+}
+.studio-rise {
+  animation: studio-rise 4500ms cubic-bezier(0.2, 0.6, 0.3, 1) both;
+}
+@keyframes studio-rise {
+  from { transform: translateY(1.2rem) scale(0.97); }
+  to { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-stroke, .studio-glyph, .studio-rule, .studio-rise {
+    animation: none;
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+    transform: none;
+  }
+}
