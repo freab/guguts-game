@@ -1,5 +1,9 @@
 # Foot Locking + IK — Implementation Plan
 
+> **History.** This was for the old animated character (`Character.tsx`,
+> `twoBoneIK.ts`), which has been removed. The game is now first person only
+> (see [controllers.md](controllers.md)). Kept as a record of the work.
+
 Re-implementing Daniel Holden's foot-locking method
 (<https://theorangeduck.com/page/inverse-kinematics-foot-locking>) in this
 three.js / React Three Fiber project.
