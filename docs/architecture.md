@@ -41,9 +41,10 @@ app/
 │   ├── intro.ts           # Intro fly-in phases
 │   ├── temesgen.ts        # Temesgen: near / talking / song / seated / calm, mazeHint
 │   ├── bottles.ts, bottleFocus.ts   # Where the water is, and drinking it
+│   ├── goat.ts            # Where the goat is; on Hard she runs from calls
 │   ├── goatAnswer.ts      # Where and when the goat's last answer came from
 │   ├── GoalWatcher.tsx    # Starts the clock, detects reaching her
-│   ├── GoatVoice.tsx      # Calls, bleats, first sight of her
+│   ├── GoatVoice.tsx      # Calls, bleats, first sight of her, her flight on Hard
 │   ├── Monologue.tsx      # Gugut's voiceover triggers
 │   ├── preferences.ts     # Call key, captions, voice, graphics (localStorage)
 │   └── profile.ts         # Player id and name
@@ -79,6 +80,12 @@ Build scripts are in `scripts/`: `build-audio.mjs` (`npm run audio`, see
 - **One maze, many readers.** `maze/mazeData.ts` holds the grid in a module
   variable. Walls, collision, grass, flowers, bottles, the minimap, the call
   map and the intro flight all read it, so they always agree.
+
+- **One goat position.** `game/goat.ts` holds where the goat is (the exit
+  tile, until she runs on Hard). The goal check, her bleat, first sight, the
+  call map, the reveal and the win shot read `goat.position()`;
+  `maze/Goat.tsx` resets it per maze and moves her each frame
+  (`goat.update`).
 
 - **Level pick and restart remount the scene.** `SceneClient` keeps a `runId`
   that is part of `<Scene key>`. Picking a level calls `setMazeConfig()`;

@@ -8,7 +8,7 @@ The code is the source of truth; these docs point into it.
 
 | Doc | What it covers |
 |-----|----------------|
-| [gameplay.md](gameplay.md) | A run start to finish: setup and levels, controls, the run store, goat calls, water bottles, Temesgen, the intro fly-in, the goat reveal and win shot, results and sharing, the sunset, wind and leaf shadows, voiceovers, graphics presets. Old unbuilt ideas at the end. |
+| [gameplay.md](gameplay.md) | A run start to finish: setup and levels, controls, the run store, goat calls, water bottles, Temesgen, the runaway goat on Hard, the intro fly-in, the goat reveal and win shot, results and sharing, the sunset, wind and leaf shadows, voiceovers, graphics presets. Old unbuilt ideas at the end. |
 | [audio.md](audio.md) | The Web Audio graph, every sound, Gugut's voice (`say` / `hush`), the music swell, and building the audio sprites with `npm run audio`. |
 | [architecture.md](architecture.md) | The `app/` folder structure, the stores and how the pieces fit together, loading, rendering notes, `#debug`. |
 | [ui.md](ui.md) | Title screen and preloader, intro overlay, HUD, dialogs, the end of a run, and the `#debug` tools (leva, minimap). |

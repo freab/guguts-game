@@ -32,14 +32,15 @@ results: time, stars, badges, leaderboard, share
    goes on to the level chooser. The chooser has a small
    "Medium graphics · Voice on · change" link back to the setup step.
 2. **Levels** (`maze/levels.ts`): Easy 8 × 8, Medium 14 × 14, Hard 20 × 20
-   cells, all with 2 m corridors. Picking one burns the title picture away
-   (`ui/DissolveCanvas.tsx`) to the story, while the scene loads, bakes and
-   compiles behind it. At 100% the counter becomes **Enter the maze**.
+   cells, all with 2 m corridors. On Hard the goat runs when you call (see
+   [section 4.4](#44-hard-she-runs-when-you-call--gamegoatts)). Picking one
+   burns the title picture away (`ui/DissolveCanvas.tsx`) to the story, while
+   the scene loads, bakes and compiles behind it. At 100% the counter becomes **Enter the maze**.
 3. **Intro fly-in** (see [section 5](#5-the-intro-fly-in)). The game is
    paused while it plays.
 4. **The search.** The run is *armed*; the clock starts on the first step.
-5. **The goat** waits on the exit tile at the far corner, next to the coffee
-   bush. Seeing her and reaching her both get a reveal (see
+5. **The goat** starts on the exit tile at the far corner, next to the coffee
+   bush. On Easy and Medium she stays there; on Hard she moves. Seeing her and reaching her both get a reveal (see
    [section 6](#6-finding-her)).
 6. **Results** (`ui/GameOver.tsx`), after the outro story.
 
@@ -75,7 +76,8 @@ idle ─(scene ready)→ armed ─(first step)→ running ─(reach the goat)→
   `ranked` is false when the maze size was changed in `#debug`: only a
   level's own size goes on the leaderboard.
 - `game/GoalWatcher.tsx` starts the clock when the player's ground speed goes
-  over 0.3 m/s, and finishes the run within 1.4 m of the goat.
+  over 0.3 m/s, and finishes the run within 1.4 m of the goat, wherever she
+  is (`goat.position()`).
 - **Pausing.** `setPaused(reason, on)` with reasons `menu`, `dialog`, `help`,
   `rotate`, `talk` and `intro`. The clock stops while any reason holds, and
   `elapsed()` leaves the paused time out. `inputBlocked()` is true while
@@ -85,7 +87,8 @@ idle ─(scene ready)→ armed ─(first step)→ running ─(reach the goat)→
   her), `startedAt` / `finishedAt`. Other parts of the game watch these
   change through `runStore.subscribe`.
 - **Notices.** `notice` is a short message (calls used up, water found, heard
-  her) shown by `ui/GameNotice.tsx`.
+  her) shown by `ui/GameNotice.tsx`. `notify(text)` posts any other one
+  (the goat bolting on Hard).
 - `WIN_SHOT_MS = 3800`: how long after reaching her the outro story starts to
   burn in.
 
@@ -100,7 +103,7 @@ idle ─(scene ready)→ armed ─(first step)→ running ─(reach the goat)→
   Gugut (an arrow) and the goat (pulsing). It stays up for `CALL_MAP_MS`
   (3.2 s) and fades over `CALL_MAP_FADE_MS` (1.2 s).
 - **Her answer.** `game/GoatVoice.tsx` plays the call, then her bleat from
-  where she really is: HRTF-panned, later and quieter with distance, muffled
+  where she is now: HRTF-panned, later and quieter with distance, muffled
   if a wall is in the way (a `WallCollider` raycast). With voiceovers on, the
   call is Gugut shouting her name; otherwise it is a two-note whistle.
 - **On screen.** `ui/BleatIndicator.tsx` draws an arc on a ring around the
@@ -158,6 +161,33 @@ sways, in time with the song's energy (`audio.songEnergy()`).
 - **Standing up.** Any move key, the stick, or the "Stand up" button. The
   song keeps playing behind you.
 
+### 4.4 Hard: she runs when you call — `game/goat.ts`
+
+The goat's position lives in a small module, `goat`. `goat.reset()` puts
+her on the exit tile facing back into the maze (`maze/Goat.tsx` calls it per
+maze). On Easy and Medium she never moves.
+
+On **Hard**, each call makes her run (`GoatVoice` `fleeAfter`):
+
+- 0.6 s after her answer is heard, unless Gugut is within 4 m of her.
+- `goat.flee(px, pz)` walks the maze from her tile, out to 10 tiles, and
+  picks the tile that is furthest from Gugut by walking distance. Her route
+  never comes within 3 tiles of him, so she may dart a little his way into a
+  side passage but never runs past him. She never leaves through the exit gap
+  or enters the clearing. Cornered in a dead end with him at its mouth, she
+  stays.
+- She trots there at 1.9 m/s, turning to face her way, with a small bob
+  (`maze/Goat.tsx`). A call while she is already running does nothing more.
+- The first time she bolts, a notice says "She heard you — and bolted deeper
+  into the maze. Call less, follow more."
+- Hearing her while calm at Temesgen's does **not** make her run.
+
+Everything that needs her reads `goat.position()`: reaching her, her bleat,
+first sight, the call map, the reveal and the win shot. Three things stay with
+the exit tile, where she started: the coffee bush, the bottle placement, and
+Temesgen's hint (`mazeHint()` points from the tree to the exit, so on Hard
+it tells you where she began, not where she is).
+
 ## 5. The intro fly-in
 
 `game/intro.ts` is a small store:
@@ -183,13 +213,14 @@ idle ─(scene mounts)→ ready ─(preloader gone)→ playing ─(flight ends)�
 
 ## 6. Finding her
 
-- **First sight** (`game/GoatVoice.tsx`): within 16 m, in view, with no wall
+- **First sight** (`game/GoatVoice.tsx`): her current position within 16 m, in view, with no wall
   between, checked every 0.2 s while running. `runStore.seeGoat()` sets
   `sawAt`. Gugut says "found her!" (interrupting anything else), and the music
   swells (`audio.swell(1)`).
 - **The reveal** (`maze/GoatReveal.tsx`): a warm pool of light on the ground,
-  a faint shaft from above and 70 motes drifting up around her and the coffee
-  bush. All of it is additive and shader-driven, scaled by `revealGlow`. The
+  a faint shaft from above and 70 motes drifting up around her. While she is
+  home it is centred between her and the coffee bush; once she has run, it
+  follows her. All of it is additive and shader-driven, scaled by `revealGlow`. The
   glow rises over 2.5 s after first sight and settles to 0.6. The goat gets a
   matching rim light (`revealRim()`, used by `maze/Goat.tsx`). These meshes
   are always drawn (black until needed) so the loading warm-up compiles them.
@@ -198,7 +229,7 @@ idle ─(scene mounts)→ ready ─(preloader gone)→ playing ─(flight ends)�
   her yet, then "congrats".
 - **The win shot** (`scene/WinShot.tsx`, mounted after the
   `PlayerController`, which holds Gugut still): the view turns onto her face
-  over 1.6 s and pushes in 0.3 m (never closer than 0.85 m), then flies up 8 m
+  (where she is now) over 1.6 s and pushes in 0.3 m (never closer than 0.85 m), then flies up 8 m
   and back 6 m over 5 s, looking down at the two of them.
 - **The outro story** (`ui/OutroStory.tsx`): `GameOver` waits `WIN_SHOT_MS`,
   then the preloader's sky picture burns in over the maze (`DissolveCanvas`,
@@ -318,6 +349,7 @@ because leva keeps a control's old value across remounts.
 | Collision radius | 0.3 m | `character/config.ts` |
 | Calls / bottles | 3 / 2 | `game/runStore.ts` |
 | Reach the goat | 1.4 m | `game/GoalWatcher.tsx` |
+| Goat runs (Hard) | 0.6 s after her answer, if you are 4 m+ away; up to 10 tiles; keeps 3 tiles from you; 1.9 m/s | `game/GoatVoice.tsx`, `game/goat.ts` |
 | See the goat | 16 m | `game/GoatVoice.tsx` |
 | Talk to Temesgen | 2.3 m | `maze/Temesgen.tsx` |
 | Calm after | 30 s | `game/temesgen.ts` |

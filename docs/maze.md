@@ -27,8 +27,10 @@ Landmarks:
 
 - **Start**: top-left interior cell `[1, 1]`.
 - **Exit**: the goat's tile at `[ROWS-2, COLS-2]`, with an opening through
-  the border at `[ROWS-2, COLS-1]`. The goat (`Goat.tsx`) and the coffee bush
-  (`CoffeeBush.tsx`) are here.
+  the border at `[ROWS-2, COLS-1]`. The coffee bush (`CoffeeBush.tsx`) is
+  here, and the goat (`Goat.tsx`) starts here. On Hard she runs off when
+  called, so her live position is `game/goat.ts` `goat.position()`, not
+  `exitPosition()`.
 - **Clearing**: a round meadow at the centre (the origin) where the maple
   grows and Temesgen sits.
 
@@ -71,8 +73,9 @@ pathNetwork(), distanceToPath(x, z)   // the walkway centrelines (the footpath)
 ```
 
 `isWalkable`, `exitRadius` and `atExit` (and `isWallAtWorld`, used only by
-`isWalkable`) are still exported but unused: collision is done by `character/WallCollider.ts`, and reaching the
-goat by `game/GoalWatcher.tsx` (see below).
+`isWalkable`) are still exported but unused: collision is done by
+`character/WallCollider.ts`, and reaching the goat by `game/GoalWatcher.tsx`
+(see below).
 
 ## Collision
 
@@ -83,7 +86,9 @@ overlaps, removing only the part of the move into the wall, so it slides.
 `WallCollider.raycast()` answers "is a wall between these points?" for sound
 and sight checks. See [controllers.md](controllers.md).
 
-The run is won within 1.4 m of `exitPosition()` (`game/GoalWatcher.tsx`).
+The run is won within 1.4 m of the goat, wherever she is (`goat.position()`,
+checked by `game/GoalWatcher.tsx`). Her escape route on Hard is a
+breadth-first walk over the open tiles (`game/goat.ts`).
 
 ## Rendering
 
