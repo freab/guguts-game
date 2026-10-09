@@ -80,6 +80,10 @@ const SONG_FAR = 20;
 const OCCLUSION_EVERY = 0.2;
 /** He plays a few bars when Gugut comes into the clearing — not again for this long (s). */
 const PHRASE_AGAIN = 60;
+/** Catching sight of him: within SEE_RANGE m (but not already beside him), in view (SEE_CONE), no wall between. */
+const SEE_RANGE = 18;
+const SEE_NEAREST = 3;
+const SEE_CONE = 0.85;
 /** He turns his head to Gugut within this distance (m), up to this far round (radians). */
 const LOOK_RANGE = 8;
 const LOOK_MAX = 0.5;
@@ -275,6 +279,7 @@ class Presence {
   private readonly to = new THREE.Vector3();
   private occluded = false;
   private sinceCheck = OCCLUSION_EVERY;
+  private sinceSight = 0;
   private wasInClearing = false;
   private lastPhrase = -Infinity;
   private t = 0;
@@ -301,6 +306,20 @@ class Presence {
       temesgen.playPhrase();
     }
     this.wasInClearing = inside;
+
+    // The first time Gugut sees him, from a way off.
+    this.sinceSight += dt;
+    if (live && !temesgen.get().seen && this.sinceSight >= OCCLUSION_EVERY) {
+      this.sinceSight = 0;
+      const distance = camera.position.distanceTo(this.head);
+      if (distance <= SEE_RANGE && distance >= SEE_NEAREST) {
+        camera.getWorldDirection(this.forward);
+        this.to.copy(this.head).sub(camera.position).normalize();
+        if (this.to.dot(this.forward) > SEE_CONE && this.walls.raycast(camera.position, this.to, distance) >= distance - 0.3) {
+          temesgen.see();
+        }
+      }
+    }
 
     temesgen.listen(dt);
     if (temesgen.get().song === "stopped") return;

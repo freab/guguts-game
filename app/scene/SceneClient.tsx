@@ -33,7 +33,8 @@ import SeatedHint from "../ui/SeatedHint";
 import { temesgen, useTemesgen } from "../game/temesgen";
 import DrinkVignette from "../ui/DrinkVignette";
 import { bottleFocus } from "../game/bottleFocus";
-import { getPreferences } from "../game/preferences";
+import { getPreferences, usePreferences } from "../game/preferences";
+import Monologue from "../game/Monologue";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 
@@ -123,6 +124,12 @@ export default function SceneClient() {
   useEffect(() => {
     audio.setActive(ready);
   }, [ready]);
+
+  // Gugut's voiceovers, as chosen on the title screen (or in Settings).
+  const { voice } = usePreferences();
+  useEffect(() => {
+    audio.setVoice(voice);
+  }, [voice]);
 
   // Browsers only allow audio after a user gesture: set it up on the first
   // click or key press anywhere (picking a level, clicking into the game…).
@@ -298,6 +305,7 @@ export default function SceneClient() {
       {ready && <RunTimer />}
       {ready && <GameNotice />}
       {ready && <BleatIndicator />}
+      {ready && <Monologue key={`voice-${runId}`} />}
       {ready && <DrinkVignette />}
       {playing && <DrinkPrompt touch={touch} />}
       {playing && <TalkPrompt touch={touch} />}

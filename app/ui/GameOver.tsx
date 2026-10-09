@@ -223,10 +223,10 @@ function starsFor(callsUsed: number): number {
  * last; Continue (or Enter) goes on to the results.
  */
 const EPILOGUE = [
-  "You find her at the far end of the maze, beside the strange bush — still dancing, her lips red with its berries.",
-  "Gugut picks one and tastes it. The long day's tiredness lifts; his heart runs quick and bright. He fills his pockets and leads her home as the sun goes down.",
-  "That night he brings the berries to the monks on the hill. One throws them in the fire — and a wonderful smell fills the dark. Roasted, ground and steeped in hot water, they make a bitter, warming drink that keeps the monks awake through their night prayers.",
-  "They call it buna. The world calls it coffee.",
+  "There she is, at the far end of the maze, next to the berry bush. Still dancing. Her mouth is red from the berries.",
+  "Gugut tries one. Right away, he isn't tired anymore. He fills his pockets and walks her home as the sun sets.",
+  "That night he takes the berries to the monks up on the hill. One of them tosses a handful into the fire, and the room fills with a warm, rich smell. They roast the beans, grind them and pour hot water over them. The drink is bitter, but it keeps them awake all night.",
+  "They call it buna. You know it as coffee.",
 ];
 
 function Epilogue({ onContinue }: { onContinue: () => void }) {

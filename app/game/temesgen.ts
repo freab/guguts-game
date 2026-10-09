@@ -28,9 +28,12 @@ const PHRASE_LENGTH = 7;
  * - `calm`: how calm sitting and listening has made him (0..1, over
  *   CALM_AFTER s; ui/SeatedHint shows it). At 1 (`calmed`, once a run) he
  *   hears the goat bleat on her own — her direction shows like a call's
- *   answer, without using one (runStore.hearGoat).
+ *   answer, without using one (runStore.hearGoat);
+ * - `seen`: Gugut has caught sight of him (once a run, from a way off — his
+ *   voiceover, game/Monologue).
  */
 export interface TemesgenState {
+  seen: boolean;
   near: boolean;
   talking: boolean;
   song: "stopped" | "playing" | "phrase";
@@ -39,7 +42,7 @@ export interface TemesgenState {
   calmed: boolean;
 }
 
-const initial: TemesgenState = { near: false, talking: false, song: "stopped", seated: false, calm: 0, calmed: false };
+const initial: TemesgenState = { seen: false, near: false, talking: false, song: "stopped", seated: false, calm: 0, calmed: false };
 let state = initial;
 /** Seconds listened so far, sitting (kept if he gets up and sits again). */
 let listened = 0;
@@ -53,6 +56,10 @@ export const temesgen = {
   get: () => state,
   setNear(near: boolean) {
     if (state.near !== near) set({ near });
+  },
+  /** Gugut sees him for the first time. */
+  see() {
+    if (!state.seen) set({ seen: true });
   },
   /** Start talking to him (if he's in front of Gugut and the run is on). */
   talk(): boolean {

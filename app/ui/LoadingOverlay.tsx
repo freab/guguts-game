@@ -5,6 +5,7 @@ import Image from "next/image";
 import { preload } from "react-dom";
 import { useProgress } from "@react-three/drei";
 import { posterFont } from "../fonts";
+import { setPreferences, usePreferences } from "../game/preferences";
 import { LEVELS, type Level } from "../maze/levels";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
 import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
@@ -32,10 +33,10 @@ const LOGO_SRC = "/logo gugut.svg";
 const SHADOW = "[text-shadow:0_2px_14px_rgba(20,16,8,0.45)]";
 
 const STORY = [
-  "They say it began with Kaldi, a goatherd of the old highlands, whose goats danced all night after eating the red berries of a strange bush.",
-  "This morning, Gugut's goat found that same bush.",
-  "Wild-eyed and bleating, she bolted past the old stones and into the maze, the walled labyrinth no one enters after dark.",
-  "Take up your staff. Follow the worn path. Bring her home before the sun goes down.",
+  "Long ago, a goat herder named Kaldi saw his goats dancing all night after they ate some red berries. People still tell that story.",
+  "This morning, Gugut's goat found the same berries.",
+  "Now she's gone wild. She ran past the old stones and into the maze, the one nobody goes into after dark.",
+  "Follow the path. Find her. Bring her home before the sun goes down.",
 ];
 
 /** Overall 0..1 progress from the current stage and its own progress. */
@@ -125,12 +126,52 @@ function EnterButton({ onEnter }: { onEnter: () => void }) {
   );
 }
 
+/** The glass card the title screen's choices are made of (PLAY pill on hover / focus — always on touch). */
+const CARD =
+  "group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-white/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-white/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-white/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25";
+const PILL =
+  "flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100";
+
+/**
+ * First on the title screen: Gugut's voiceovers, on or off (remembered, and
+ * in Settings too); the level chooser follows. The saved choice is focused,
+ * so Enter keeps it.
+ */
+function VoiceChooser({ onChoose }: { onChoose: (on: boolean) => void }) {
+  const { voice } = usePreferences();
+  const options = [
+    { on: true, label: "Voice on", blurb: "Hear Gugut's thoughts as he searches", pill: "ON" },
+    { on: false, label: "Voice off", blurb: "Just the maze, the wind and the birds", pill: "OFF" },
+  ];
+  return (
+    <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
+      <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
+        Voiceovers
+      </h2>
+      <div className="flex flex-col gap-[1.5vh]">
+        {options.map((o) => (
+          <button key={o.label} autoFocus={o.on === voice} onClick={() => onChoose(o.on)} className={CARD}>
+            <span className={SHADOW}>
+              <span className="block text-[clamp(2rem,min(3.4vw,7vh),3.6rem)] leading-none">{o.label}</span>
+              <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
+                {o.blurb}
+              </span>
+            </span>
+            <span className={PILL}>{o.pill}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Easy / Medium / Hard: a glass card with a PLAY pill on hover / focus —
  * shown all the time on touch screens, which have no hover (and no blur
  * there: a backdrop blur is costly on a phone).
  */
-function LevelChooser({ onChoose }: { onChoose: (level: Level) => void }) {
+function LevelChooser({ onChoose, onVoice }: { onChoose: (level: Level) => void; onVoice: () => void }) {
+  const { voice } = usePreferences();
   return (
     <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
       <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
@@ -138,18 +179,14 @@ function LevelChooser({ onChoose }: { onChoose: (level: Level) => void }) {
       </h2>
       <div className="flex flex-col gap-[1.5vh]">
         {LEVELS.map((level) => (
-          <button
-            key={level.id}
-            onClick={() => onChoose(level)}
-            className="group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-white/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-white/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-white/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25"
-          >
+          <button key={level.id} autoFocus={level === LEVELS[0]} onClick={() => onChoose(level)} className={CARD}>
             <span className={SHADOW}>
               <span className="block text-[clamp(2rem,min(3.4vw,7vh),3.6rem)] leading-none">{level.label}</span>
               <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
                 {level.blurb}
               </span>
             </span>
-            <span className="flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100">
+            <span className={PILL}>
               PLAY
               <svg viewBox="0 0 24 24" aria-hidden className="size-[1.3em]">
                 <circle cx="12" cy="12" r="12" fill="#fdf3d4" />
@@ -159,6 +196,12 @@ function LevelChooser({ onChoose }: { onChoose: (level: Level) => void }) {
           </button>
         ))}
       </div>
+      <button
+        onClick={onVoice}
+        className={`mt-[1.5vh] pl-6 text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] text-[#fdf3d4]/60 transition-colors hover:text-[#fdf3d4] focus-visible:text-[#fdf3d4] focus-visible:outline-none ${SHADOW}`}
+      >
+        Voiceovers {voice ? "on" : "off"} · <span className="underline underline-offset-4">change</span>
+      </button>
     </div>
   );
 }
@@ -204,8 +247,8 @@ function Preloader({ onEnter }: { onEnter: () => void }) {
 
 /**
  * Title screen and preloader, over a full-screen canvas. Title screen: the
- * maze entrance, the logo on the right and the level chooser on the
- * left. Picking a level burns that image away in a noise dissolve, revealing
+ * maze entrance, the logo on the right and on the left voiceovers on / off
+ * (first, once a visit), then the level chooser. Picking a level burns that image away in a noise dissolve, revealing
  * the sky over the maze, where the story is written and the percentage counts
  * up. It covers the scene (blocking input) until everything is loaded, baked,
  * compiled and warmed up; at 100 the counter becomes an Enter button, and the
@@ -243,6 +286,13 @@ export default function LoadingOverlay({
     setPicked(level);
   };
   const titleShown = choosing && !picked;
+  // Voiceovers on or off: asked first, once a visit (then changed from the
+  // chooser's link or Settings).
+  const [voiceAsked, setVoiceAsked] = useState(false);
+  const chooseVoice = (on: boolean) => {
+    setPreferences({ voice: on });
+    setVoiceAsked(true);
+  };
   // Enter pressed: the story fades and its image burns away to the scene;
   // the game starts (onEnter) once that burn is done.
   const [leaving, setLeaving] = useState(false);
@@ -300,7 +350,14 @@ export default function LoadingOverlay({
           titleShown ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <LevelChooser onChoose={pick} />
+        {/* Keyed, so each step fades in as the other goes. */}
+        <div key={voiceAsked ? "levels" : "voice"} className="opacity-0" style={{ animation: "notice-in 500ms ease-out forwards" }}>
+          {voiceAsked ? (
+            <LevelChooser onChoose={pick} onVoice={() => setVoiceAsked(false)} />
+          ) : (
+            <VoiceChooser onChoose={chooseVoice} />
+          )}
+        </div>
         <h1 className="w-[clamp(15rem,min(26vw,48vh),30rem)]">
           <Image
             src={LOGO_SRC}

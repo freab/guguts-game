@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { audio } from "../audio/audioEngine";
@@ -13,6 +13,10 @@ import { runStore } from "./runStore";
 const BLEAT_HEIGHT = 0.8;
 /** When there's no sound (muted, not loaded), how long until she "answers" on screen (s). */
 const SILENT_ANSWER_DELAY = 1.2;
+/** Seeing her: within SIGHT_RANGE m, in view (SIGHT_CONE), checked every SIGHT_EVERY s. */
+const SIGHT_RANGE = 16;
+const SIGHT_CONE = 0.85;
+const SIGHT_EVERY = 0.2;
 
 const _forward = new THREE.Vector3();
 const _origin = new THREE.Vector3();
@@ -27,15 +31,31 @@ const _dir = new THREE.Vector3();
  * direction arc and caption. A call with no voice left (runStore.dryAt) gets
  * a rasp. When Gugut, calmed by Temesgen's song, hears her on her own
  * (runStore.heardAt), her bleat plays the same way without the whistle.
+ * It also notices when Gugut first catches sight of her (runStore.seeGoat —
+ * his "found her!" voiceover, game/Monologue).
  */
 export default function GoatVoice() {
   const camera = useThree((s) => s.camera);
   // The walls, for "is there a wall between us?" (a fresh maze remounts this).
   const walls = useMemo(() => new WallCollider(), []);
 
-  useFrame(() => {
+  // Catching sight of her: checked now and then (s since the last check).
+  const sight = useRef(0);
+  useFrame((_, dt) => {
     camera.getWorldDirection(_forward);
     audio.setListener(camera.position.x, camera.position.y, camera.position.z, _forward.x, _forward.y, _forward.z);
+
+    // The first time she's in view — close enough, and no wall between.
+    sight.current += dt;
+    const run = runStore.get();
+    if (run.sawAt || run.phase !== "running" || sight.current < SIGHT_EVERY) return;
+    sight.current = 0;
+    const [gx, gz] = exitPosition();
+    _dir.set(gx - camera.position.x, BLEAT_HEIGHT - camera.position.y, gz - camera.position.z);
+    const distance = _dir.length();
+    if (distance > SIGHT_RANGE) return;
+    _dir.normalize();
+    if (_dir.dot(_forward) > SIGHT_CONE && walls.raycast(camera.position, _dir, distance) >= distance - 0.3) runStore.seeGoat();
   });
 
   useEffect(() => {

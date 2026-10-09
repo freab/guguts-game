@@ -6,15 +6,18 @@ import { useSyncExternalStore } from "react";
  * The player's game preferences, kept on this device (Settings):
  * - `callKey`: the key that calls the goat (a KeyboardEvent.code), C by default;
  * - `captions`: sound captions on screen (which way the goat's bleat came
- *   from), for playing without sound — on by default.
+ *   from), for playing without sound — on by default;
+ * - `voice`: Gugut's voiceovers (game/Monologue) — asked on the title
+ *   screen, on by default.
  */
 export interface Preferences {
   callKey: string;
   captions: boolean;
+  voice: boolean;
 }
 
 const KEY = "gugut.preferences";
-const DEFAULTS: Preferences = { callKey: "KeyC", captions: true };
+const DEFAULTS: Preferences = { callKey: "KeyC", captions: true, voice: true };
 
 /** Keys the game already uses: these can't call the goat. */
 export const RESERVED_KEYS = new Set([
@@ -45,6 +48,7 @@ function current(): Preferences {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Preferences> | null;
     if (saved && typeof saved.callKey === "string" && !RESERVED_KEYS.has(saved.callKey)) prefs.callKey = saved.callKey;
     if (saved && typeof saved.captions === "boolean") prefs.captions = saved.captions;
+    if (saved && typeof saved.voice === "boolean") prefs.voice = saved.voice;
   } catch {
     // Storage blocked or garbled: the defaults.
   }

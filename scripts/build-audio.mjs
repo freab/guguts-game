@@ -15,6 +15,9 @@
 // - public/audio/drink.webm + drink.json: Gugut drinking a bottle he finds —
 //   the cork, the gulps and the breath after, cut from "Drink from the gourd
 //   #1" (#3247).
+// - public/audio/voice.webm + voice.json: Gugut's voiceovers (the user's own
+//   recordings, assets-src/voice), trimmed, levelled and packed by when they
+//   play — see VOICE below.
 //
 // Prints each output's RMS level: the ambience's goes into TRACKS in
 // app/audio/audioEngine.ts (loudness matching).
@@ -294,7 +297,110 @@ function buildDrink() {
   console.log(`drink.webm: ${(pcm.length / RATE).toFixed(2)} s (open, gulps, breath)`);
 }
 
-buildBirds();
-buildFootsteps();
-buildBleats();
-buildDrink();
+/* ------------------------------------------------------------------ voice */
+
+/**
+ * Gugut's voiceovers (the user's recordings, in assets-src/voice), grouped by
+ * when they play (app/game/Monologue): [file, from s, to s] — no range = the
+ * whole take, its silence trimmed. The call is one take of four shouts, cut
+ * apart (found with silencedetect at -40 dB) so each call gets its own.
+ */
+const VOICE = {
+  call: [
+    ["1. calling out the goat.mp3", 0, 0.86],
+    ["1. calling out the goat.mp3", 1.12, 2.2],
+    ["1. calling out the goat.mp3", 2.96, 4.32],
+    ["1. calling out the goat.mp3", 4.78, 6.12],
+  ],
+  murmur: [
+    ["2. oneself.mp3"],
+    ["2 oneself - 2.mp3"],
+    ["2-3 murmurs to self.mp3"],
+    ["murmur to self.ogg"],
+    ["murmur to self 2.ogg"],
+    ["murmur to self 3.ogg"],
+  ],
+  parched: [["3 - dehydrated.mp3"], ["3 - 2 dehydrated.mp3"], ["hydration.ogg"]],
+  temesgen: [["temesgen track.ogg"]],
+  hum: [["4 - humms.mp3"], ["humming.ogg"]],
+  found: [
+    ["5 - 1 finding gugut.mp3"],
+    ["5 - 2 finding gugut.mp3"],
+    ["found gugut.ogg"],
+    ["found gugut 2.ogg"],
+    ["found gugut 3.ogg"],
+  ],
+  congrats: [["6 congrats.mp3"], ["congrats.ogg"]],
+};
+/** Speech is levelled to this RMS (over its voiced part, dBFS); humming sits under it. */
+const VOICE_RMS_DB = -20;
+const HUM_RMS_DB = -25;
+
+/** A take trimmed to its voiced part (with a little air), levelled and faded. */
+function voiceClip(a, from, to, targetDb) {
+  const FRAME = Math.round(RATE * 0.01);
+  const lo = Math.round(from * RATE);
+  const hi = Math.min(a.length, Math.round(to * RATE));
+  const loud = [];
+  for (let i = lo; i + FRAME <= hi; i += FRAME) loud.push(db(rms(a, i, i + FRAME)) > -45);
+  const first = loud.indexOf(true);
+  const last = loud.lastIndexOf(true);
+  if (first < 0) throw new Error("silent voice clip");
+  const start = Math.max(lo, lo + first * FRAME - Math.round(RATE * 0.05));
+  const end = Math.min(hi, lo + (last + 1) * FRAME + Math.round(RATE * 0.15));
+  const clip = a.slice(start, end);
+  // Loudness of the voiced frames only, so pauses don't make a line louder.
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i + FRAME <= clip.length; i += FRAME) {
+    const r = rms(clip, i, i + FRAME);
+    if (db(r) > -40) (sum += r * r), n++;
+  }
+  const level = Math.sqrt(sum / Math.max(1, n));
+  const gain = Math.min(10 ** (targetDb / 20) / Math.max(level, 1e-6), 10 ** (-2 / 20) / Math.max(peak(clip), 1e-6));
+  const fadeIn = Math.round(RATE * 0.01);
+  const fadeOut = Math.round(RATE * 0.08);
+  for (let i = 0; i < clip.length; i++) {
+    let g = gain;
+    if (i < fadeIn) g *= i / fadeIn;
+    if (i > clip.length - fadeOut) g *= (clip.length - i) / fadeOut;
+    clip[i] *= g;
+  }
+  return clip;
+}
+
+function buildVoice() {
+  const dir = path.join(root, "assets-src", "voice");
+  const GAP = Math.round(RATE * 0.15);
+  const LEAD = Math.round(RATE * 0.1);
+  const decoded = new Map();
+  const parts = [new Float32Array(LEAD)];
+  let cursor = LEAD;
+  const index = {};
+  for (const [line, takes] of Object.entries(VOICE)) {
+    index[line] = takes.map(([file, from = 0, to = Infinity]) => {
+      if (!decoded.has(file)) decoded.set(file, decodeMono(path.join(dir, file)));
+      const clip = voiceClip(decoded.get(file), from, to, line === "hum" ? HUM_RMS_DB : VOICE_RMS_DB);
+      const entry = [+(cursor / RATE).toFixed(4), +(clip.length / RATE).toFixed(4)];
+      parts.push(clip, new Float32Array(GAP));
+      cursor += clip.length + GAP;
+      return entry;
+    });
+  }
+  const pcm = new Float32Array(cursor);
+  let at = 0;
+  for (const part of parts) (pcm.set(part, at), (at += part.length));
+  ffmpeg(
+    ["-f", "f32le", "-ar", String(RATE), "-ac", "1", "-i", "-", "-c:a", "libopus", "-b:a", "32k", path.join(out, "voice.webm")],
+    Buffer.from(pcm.buffer)
+  );
+  writeFileSync(path.join(out, "voice.json"), JSON.stringify(index) + "\n");
+  const counts = Object.entries(index).map(([k, v]) => `${k} ${v.length}`);
+  console.log(`voice.webm: ${(pcm.length / RATE).toFixed(2)} s (${counts.join(", ")})`);
+}
+
+// `npm run audio` builds everything; `npm run audio -- voice` (or any of
+// birds, footsteps, bleats, drink, voice) just those.
+const builds = { birds: buildBirds, footsteps: buildFootsteps, bleats: buildBleats, drink: buildDrink, voice: buildVoice };
+const only = process.argv.slice(2);
+for (const [name, build] of Object.entries(builds)) if (only.length === 0 || only.includes(name)) build();

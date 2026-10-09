@@ -6,7 +6,7 @@ import { setPlayerName, useProfile } from "../game/profile";
 import { NAME_MAX } from "../leaderboard/shared";
 import Dialog from "./Dialog";
 
-/** Settings: the player's name on the leaderboard, the call key and sound captions. */
+/** Settings: the player's name on the leaderboard, the call key, sound captions and voiceovers. */
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const profile = useProfile();
   const [name, setName] = useState(profile.name);
@@ -59,7 +59,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** The call-the-goat key (press to rebind) and the sound captions switch. */
+/** The call-the-goat key (press to rebind), and the sound captions and voiceovers switches. */
 function GameplaySettings() {
   const prefs = usePreferences();
   const [listening, setListening] = useState(false);
@@ -110,6 +110,18 @@ function GameplaySettings() {
           type="checkbox"
           checked={prefs.captions}
           onChange={(e) => setPreferences({ captions: e.target.checked })}
+          className="h-5 w-5 accent-neutral-200"
+        />
+      </label>
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="text-sm text-white/70">
+          Voiceovers
+          <span className="block text-xs text-white/40">Gugut talks to himself, calls her and cheers</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={prefs.voice}
+          onChange={(e) => setPreferences({ voice: e.target.checked })}
           className="h-5 w-5 accent-neutral-200"
         />
       </label>

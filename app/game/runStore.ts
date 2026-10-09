@@ -64,6 +64,8 @@ export interface RunState {
    * answer, without using one. 0 = not yet.
    */
   heardAt: number;
+  /** performance.now() when Gugut first caught sight of her (game/GoatVoice), 0 = not yet. */
+  sawAt: number;
   /** Which of the hidden bottles have been drunk. */
   bottlesTaken: readonly boolean[];
   /** The latest message for the player, if any. */
@@ -84,6 +86,7 @@ let state: RunState = {
   calledAt: 0,
   dryAt: 0,
   heardAt: 0,
+  sawAt: 0,
   bottlesTaken: Array(BOTTLES).fill(false),
   notice: null,
 };
@@ -94,6 +97,7 @@ const freshCalls = () => ({
   calledAt: 0,
   dryAt: 0,
   heardAt: 0,
+  sawAt: 0,
   bottlesTaken: Array<boolean>(BOTTLES).fill(false),
   notice: null,
 });
@@ -151,6 +155,11 @@ export const runStore = {
       heardAt: now,
       notice: { text: "Calm at last, you hear her — a bleat, clear across the maze.", at: now },
     });
+  },
+  /** Gugut sees her for the first time this run. */
+  seeGoat(now = performance.now()) {
+    if (state.sawAt || (state.phase !== "armed" && state.phase !== "running")) return;
+    set({ sawAt: now });
   },
   /** Drink hidden bottle `i`: Gugut's voice comes back in full. */
   drink(i: number, now = performance.now()) {

@@ -29,6 +29,11 @@ import { DefaultLoadingManager } from "three/webgpu";
  * - Drinking a bottle he finds (drink): a glass clink as he picks it up
  *   (synthesised), then the cork, the gulps and a breath after (a real
  *   recording, public/audio/drink.webm), on the calls bus.
+ * - Gugut's voice (say): his voiceovers (public/audio/voice.webm, packed by
+ *   scripts/build-audio.mjs, triggered by game/Monologue), centred and dry on
+ *   their own bus — one line at a time, the ambience and the song dipping
+ *   under it. Only when the player chose voiceovers (setVoice). With them on,
+ *   a call is Gugut shouting for her instead of the whistle.
  * - Temesgen's song (playSong): his kirar recording, streamed from
  *   public/audio when he's asked to play, HRTF-panned from where he sits
  *   straight into the master. Its level is set from outside (setSongLevel):
@@ -96,6 +101,15 @@ const SONG_DB = -6;
 const SONG_REVERB = 0.5;
 /** How far the song dips (gain) while the goat's bleat comes through it. */
 const SONG_DUCK = 0.3;
+/** Gugut's voiceovers: the sprite, and where each take of each line is in it ([start, duration] s). */
+const VOICE_SRC = "/audio/voice.webm";
+const VOICE_INDEX = "/audio/voice.json";
+/** The voice bus (dB): over the ambience, which dips by VOICE_DUCK (gain) while he speaks. */
+const VOICE_DB = -3;
+const VOICE_DUCK = 0.5;
+
+/** What Gugut says, by when (game/Monologue): each has a few takes. */
+export type VoiceLine = "call" | "murmur" | "parched" | "temesgen" | "hum" | "found" | "congrats";
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
@@ -126,6 +140,17 @@ class AudioEngine {
   private lastBleat = -1;
   private drinkSounds: { buffer: AudioBuffer; index: Record<"open" | "gulps" | "breath", [number, number]> } | null = null;
   private master: GainNode | null = null;
+  /** Between the ambience bus and the master: dips while Gugut speaks. */
+  private ambienceDuck: GainNode | null = null;
+  private voice: GainNode | null = null;
+  private voiceLines: { buffer: AudioBuffer; index: Record<VoiceLine, [number, number][]> } | null = null;
+  private voiceLoad: Promise<void> | null = null;
+  private voiceOn = false;
+  /** ctx time when the line being spoken ends. */
+  private voiceUntil = 0;
+  private voiceSource: AudioBufferSourceNode | null = null;
+  private voiceLine: VoiceLine | null = null;
+  private readonly lastTake = new Map<VoiceLine, number>();
   private song: {
     element: HTMLAudioElement;
     gain: GainNode;
@@ -221,7 +246,12 @@ class AudioEngine {
 
     this.ambience = ctx.createGain();
     this.ambience.gain.value = 0;
-    this.ambience.connect(master);
+    this.ambienceDuck = ctx.createGain();
+    this.ambience.connect(this.ambienceDuck).connect(master);
+
+    this.voice = ctx.createGain();
+    this.voice.gain.value = dbToGain(VOICE_DB);
+    this.voice.connect(master);
 
     this.footsteps = ctx.createGain();
     this.footsteps.gain.value = dbToGain(FOOTSTEPS_DB);
@@ -250,6 +280,7 @@ class AudioEngine {
     void this.loadSteps(ctx);
     void this.loadBleats(ctx);
     void this.loadDrink(ctx);
+    if (this.voiceOn) void this.loadVoice(ctx);
 
     // A hidden tab goes quiet (and stops using the audio thread).
     document.addEventListener("visibilitychange", () => {
@@ -329,6 +360,24 @@ class AudioEngine {
     } catch {
       // Just the clink then.
     }
+  }
+
+  /** Decode Gugut's voiceovers (once, and only if they're wanted). */
+  private loadVoice(ctx: AudioContext): Promise<void> {
+    this.voiceLoad ??= (async () => {
+      try {
+        const [buffer, index] = await Promise.all([
+          fetch(VOICE_SRC)
+            .then((r) => r.arrayBuffer())
+            .then((b) => ctx.decodeAudioData(b)),
+          fetch(VOICE_INDEX).then((r) => r.json() as Promise<Record<VoiceLine, [number, number][]>>),
+        ]);
+        this.voiceLines = { buffer, index };
+      } catch {
+        // No voice then: the game plays as it does with voiceovers off.
+      }
+    })();
+    return this.voiceLoad;
   }
 
   /** Fade the ambience bus to where the switch and the game say it should be. */
@@ -434,7 +483,8 @@ class AudioEngine {
   goatCall(x: number, y: number, z: number, distance: number, occluded: boolean): number | null {
     const ctx = this.ctx;
     if (!ctx || !this.calls || ctx.state !== "running") return null;
-    const whistle = this.whistle(ctx);
+    // With voiceovers on, Gugut shouts for her; otherwise, his whistle.
+    const whistle = this.say("call", { interrupt: true, far: true }) ?? this.whistle(ctx);
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
     const delay = whistle + distance / SPEED_OF_SOUND + rand(...BLEAT_REACTION);
     this.bleat(ctx, x, y, z, distance, occluded, delay);
@@ -583,6 +633,84 @@ class AudioEngine {
     wet.gain.value = Math.min(0.9, 0.12 + distance / 45);
     panner.connect(wet).connect(this.farSend);
     src.start(t0, offset, duration);
+  }
+
+  /* ---------- Gugut's voice ---------- */
+
+  /** Voiceovers on or off (the player's choice, on the title screen or in Settings). */
+  setVoice(on: boolean) {
+    this.voiceOn = on;
+    if (!on) this.hush();
+    else if (this.ctx) void this.loadVoice(this.ctx);
+  }
+
+  /** Is Gugut saying something right now? */
+  isSpeaking(): boolean {
+    return !!this.ctx && this.ctx.currentTime < this.voiceUntil;
+  }
+
+  /** What Gugut is saying right now, if anything. */
+  speaking(): VoiceLine | null {
+    return this.isSpeaking() ? this.voiceLine : null;
+  }
+
+  /**
+   * Gugut says one of `line`'s takes (never the same one twice running).
+   * Returns how long it lasts (s), or null when it can't play: voiceovers
+   * off or not loaded yet, sound locked, or (unless `interrupt`) he's already
+   * speaking. `far`: it carries across the maze (a shout). `duck`: the
+   * ambience and the song dip under it.
+   */
+  say(line: VoiceLine, { interrupt = false, far = false, duck = true } = {}): number | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.voice || !this.voiceOn || !this.voiceLines || ctx.state !== "running") return null;
+    if (!interrupt && this.isSpeaking()) return null;
+    const takes = this.voiceLines.index[line];
+    if (!takes?.length) return null;
+    let pick = Math.floor(Math.random() * takes.length);
+    if (takes.length > 1 && pick === this.lastTake.get(line)) pick = (pick + 1) % takes.length;
+    this.lastTake.set(line, pick);
+    const [offset, duration] = takes[pick];
+    this.hush();
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.voiceLines.buffer;
+    src.connect(this.voice);
+    if (far && this.farSend) {
+      const wet = ctx.createGain();
+      wet.gain.value = 0.35;
+      src.connect(wet).connect(this.farSend);
+    }
+    src.start(now, offset, duration);
+    this.voiceSource = src;
+    this.voiceLine = line;
+    this.voiceUntil = now + duration;
+    if (duck && this.ambienceDuck) {
+      const g = this.ambienceDuck.gain;
+      g.cancelScheduledValues(now);
+      g.setTargetAtTime(VOICE_DUCK, now, 0.12);
+      g.setTargetAtTime(1, now + duration, 0.5);
+      this.duckSong(duration);
+    }
+    return duration;
+  }
+
+  /** Stop whatever Gugut is saying. */
+  hush() {
+    const ctx = this.ctx;
+    if (!ctx || !this.voiceSource) return;
+    try {
+      this.voiceSource.stop();
+    } catch {
+      // Already ended.
+    }
+    this.voiceSource = null;
+    this.voiceUntil = 0;
+    if (this.ambienceDuck) {
+      const g = this.ambienceDuck.gain;
+      g.cancelScheduledValues(ctx.currentTime);
+      g.setTargetAtTime(1, ctx.currentTime, 0.3);
+    }
   }
 
   /* ---------- drinking ---------- */
