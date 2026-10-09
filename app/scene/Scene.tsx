@@ -7,6 +7,11 @@ import { useControls, folder, monitor, button } from "leva";
 import * as THREE from "three/webgpu";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
 import IntroFlight from "./IntroFlight";
+import Sunset from "./Sunset";
+import { DUSK, useDuskStep } from "./dusk";
+import GustLeaves from "./atmosphere/GustLeaves";
+import WinShot from "./WinShot";
+import GoatReveal from "../maze/GoatReveal";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
 import Temesgen from "../maze/Temesgen";
@@ -292,6 +297,8 @@ export default function Scene() {
     cloudDensity,
     skyBrightness,
     liveClouds,
+    sunsetOn,
+    duskPreview,
     bakedShadow,
     bakedAO,
     skyLight,
@@ -326,6 +333,9 @@ export default function Scene() {
         cloudDensity: { value: 1, min: 0, max: 1, step: 0.01, label: "Cloud density" },
         skyBrightness: { value: 0.55, min: 0.1, max: 1.5, step: 0.05, label: "Sky brightness" },
         liveClouds: { value: false, label: "Live clouds (costly)" },
+        // The sun going down over the run (scene/dusk); the preview holds it at a point.
+        sunsetOn: { value: true, label: "Sunset over the run" },
+        duskPreview: { value: -1, min: -1, max: 1, step: 0.01, label: "Dusk preview (<0: run)" },
       },
       { collapsed: true }
     ),
@@ -497,18 +507,36 @@ export default function Scene() {
   // …and the materials that react to the sun directly (sunUniforms).
   useEffect(() => setSunUniforms(sunDirection, sunColor), [sunDirection, sunColor]);
 
+  // The sky, hazier and more orange as dusk comes on — re-baked a step at a
+  // time (scene/dusk); the sun stays where it is (its light is baked).
+  const duskStep = useDuskStep();
   const skyParams = useMemo(
     () => ({
       sunDirection,
-      turbidity,
-      rayleigh,
-      mieCoefficient,
-      mieDirectionalG,
+      turbidity: turbidity + DUSK.turbidity * duskStep,
+      rayleigh: rayleigh * THREE.MathUtils.lerp(1, DUSK.rayleigh, duskStep),
+      mieCoefficient: mieCoefficient + DUSK.mieCoefficient * duskStep,
+      mieDirectionalG: THREE.MathUtils.lerp(mieDirectionalG, DUSK.mieDirectionalG, duskStep),
       cloudCoverage: clouds,
       cloudDensity,
-      brightness: skyBrightness,
+      brightness: skyBrightness * THREE.MathUtils.lerp(1, DUSK.skyBrightness, duskStep),
     }),
-    [sunDirection, turbidity, rayleigh, mieCoefficient, mieDirectionalG, clouds, cloudDensity, skyBrightness]
+    [sunDirection, turbidity, rayleigh, mieCoefficient, mieDirectionalG, clouds, cloudDensity, skyBrightness, duskStep]
+  );
+  // The lights the sunset moves (from these tuned values: Sunset).
+  const [ambientLight, setAmbientLight] = useState<THREE.AmbientLight | null>(null);
+  const [hemisphereLight, setHemisphereLight] = useState<THREE.HemisphereLight | null>(null);
+  const sunsetBase = useMemo(
+    () => ({
+      sunColor,
+      sunIntensity: directional,
+      ambientColor,
+      ambientIntensity: ambient,
+      skyFill,
+      groundFill,
+      hemisphereIntensity: hemisphere,
+    }),
+    [sunColor, directional, ambientColor, ambient, skyFill, groundFill, hemisphere]
   );
 
   return (
@@ -564,9 +592,17 @@ export default function Scene() {
         {/* Fog off: no fog, no draw-distance cut, the tree visible from anywhere. */}
         <CameraFar far={fogEnabled ? viewDistance * 1.03 + 0.5 : 1000} />
 
-        <ambientLight intensity={ambient} color={ambientColor} />
-        <hemisphereLight args={[skyFill, groundFill, hemisphere]} />
+        <ambientLight ref={setAmbientLight} intensity={ambient} color={ambientColor} />
+        <hemisphereLight ref={setHemisphereLight} args={[skyFill, groundFill, hemisphere]} />
         <SunLight direction={sunDirection} intensity={directional} color={sunColor} onLight={setSun} />
+        <Sunset
+          light={sun}
+          ambient={ambientLight}
+          hemisphere={hemisphereLight}
+          base={sunsetBase}
+          enabled={sunsetOn}
+          preview={duskPreview}
+        />
         <LightmapBaker sunDirection={sunDirection} />
 
         <InfiniteGrid />
@@ -575,8 +611,10 @@ export default function Scene() {
         <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Goat />
         <CoffeeBush />
+        <GoatReveal />
         <Temesgen />
         <Particles />
+        <GustLeaves />
         <Birds />
         <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
@@ -584,6 +622,8 @@ export default function Scene() {
         <PlayerController />
         {/* After the player: the intro fly-in starts from (and lands in) his view. */}
         <IntroFlight />
+        {/* …and so does the turn onto the goat as you reach her. */}
+        <WinShot />
         {/* After the player: a bottle being drunk is held in front of the camera
             the controller has just placed. */}
         <WaterBottles />

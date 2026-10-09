@@ -27,6 +27,7 @@ import { bloom } from "three/examples/jsm/tsl/display/BloomNode.js";
 import { depthAwareBlend } from "three/examples/jsm/tsl/display/depthAwareBlend.js";
 import { godrays } from "./godrays/GodraysNode.js";
 import type GodraysNode from "./godrays/GodraysNode.js";
+import { DUSK, dusk } from "../dusk";
 import { useDisposable } from "../../hooks/useDisposable";
 
 /** Structural options — changing these rebuilds the effect graph. */
@@ -127,7 +128,8 @@ function buildGraph(
     rays.resolutionScale = t.raysResolution;
     const blurred = bilateralBlur(rays.getTextureNode());
     const withRays = depthAwareBlend(color, blurred.getTextureNode(), depth, camera, {
-      blendColor: u.raysColor,
+      // (Warmer as the sun goes down: scene/dusk.)
+      blendColor: mix(u.raysColor, uniform(DUSK.raysColor), dusk),
       edgeRadius: int(2),
       edgeStrength: float(2),
     });
@@ -229,6 +231,11 @@ function applyParams(graph: PostGraph, u: PostUniforms, p: PostParams) {
   }
 }
 
+/** Thicker rays as the sun goes down (scene/dusk): each frame, over the tuned density. */
+function applyDusk(graph: PostGraph, p: PostParams) {
+  if (graph.rays) graph.rays.density.value = p.raysDensity * THREE.MathUtils.lerp(1, DUSK.raysDensity, dusk.value);
+}
+
 /**
  * Post-processing on WebGPU (three's RenderPipeline). Mount only once the sun's
  * shadow map exists (the godrays read it) — the preloader handles that. While
@@ -269,6 +276,7 @@ export default function PostEffects({
 
   useFrame(() => {
     updateSunView(uniforms, light, camera);
+    applyDusk(graph, params);
     pipeline.render();
   }, 1);
   return null;

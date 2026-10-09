@@ -26,6 +26,7 @@ import { LEAF_LOD_MIN, LEAF_LOD_NEAR } from "./VineField";
 import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
 import { BULGE_CLEARANCE, wallBulge } from "../../maze/wallRelief";
 import { IVY_COLS, IVY_ROWS, grassTinted, ivyLook } from "./ivySurface";
+import { gustScale } from "../wind";
 
 /** Mean linear luminance of the bark texture (measured), for recolouring it. */
 const BARK_MEAN_LUMINANCE = 0.107;
@@ -71,7 +72,9 @@ export function createVineMaterials(
   const flutter = sin(uniforms.time.mul(4.3).add(hash(rank.mul(7919)).mul(6.283)))
     .mul(0.006)
     .mul(tipWeight)
-    .mul(uniforms.wind);
+    .mul(uniforms.wind)
+    // (…more in the gusts you hear: scene/wind.)
+    .mul(gustScale(attribute<"vec4">("leafOrigin", "vec4").xz));
   // Distance LOD, per leaf: beyond lodNear only near/distance of the leaves
   // are drawn (those whose rank is under it; the rest collapse to their stalk
   // point — no area, never rasterised), each grown about its stalk by

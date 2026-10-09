@@ -12,6 +12,7 @@ import {
   vertexColor,
 } from "three/tsl";
 import { lightmapFactor } from "../bake/lightmap";
+import { gustScale } from "../wind";
 
 /** Live-tunable flower look (no shader rebuild needed). */
 export interface FlowerLook {
@@ -51,8 +52,10 @@ export function createFlowerMaterial() {
   const bend = positionLocal.y.div(uniforms.maxHeight).clamp(0, 1).pow(2);
   // (A fixed random phase per head, packed with it — see FlowerField.)
   const phase = attribute<"float">("headPhase", "float").mul(6.283).add(uniforms.time.mul(1.7));
-  const swayX = sin(phase).mul(uniforms.windStrength).mul(bend);
-  const swayZ = sin(phase.mul(0.77).add(1.3)).mul(uniforms.windStrength).mul(bend).mul(0.6);
+  // (…harder as a gust rolls through: scene/wind.)
+  const gust = gustScale(positionLocal.xz);
+  const swayX = sin(phase).mul(uniforms.windStrength).mul(bend).mul(gust);
+  const swayZ = sin(phase.mul(0.77).add(1.3)).mul(uniforms.windStrength).mul(bend).mul(0.6).mul(gust);
 
   const material = new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide });
   material.positionNode = vec3(

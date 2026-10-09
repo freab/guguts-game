@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { posterFont } from "../fonts";
 import { getProfile, useProfile } from "../game/profile";
-import { useRun, type RunState } from "../game/runStore";
+import { WIN_SHOT_MS, useRun, type RunState } from "../game/runStore";
 import { submitRun } from "../leaderboard/client";
 import { formatTime, type SubmitResponse } from "../leaderboard/shared";
 import LeaderboardTable from "./LeaderboardTable";
@@ -45,7 +45,21 @@ export default function GameOver(actions: Actions) {
   const run = useRun();
   if (run.phase !== "won") return null;
   // A fresh panel (and submission) for every finished run.
-  return <Panel key={run.finishedAt} run={run} {...actions} />;
+  return (
+    <AfterWinShot key={run.finishedAt}>
+      <Panel run={run} {...actions} />
+    </AfterWinShot>
+  );
+}
+
+/** Holds the end back while the view settles on her and the light blooms (WIN_SHOT_MS). */
+function AfterWinShot({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(true), WIN_SHOT_MS);
+    return () => clearTimeout(t);
+  }, []);
+  return shown ? children : null;
 }
 
 function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Actions & { run: RunState }) {
@@ -246,7 +260,10 @@ function Epilogue({ onContinue }: { onContinue: () => void }) {
   }, [onContinue]);
 
   return (
-    <div className="absolute inset-0 z-[65] flex items-center justify-center bg-black/75 p-4">
+    <div
+      className="absolute inset-0 z-[65] flex items-center justify-center bg-black/75 p-4"
+      style={{ animation: "notice-in 900ms ease-out both" }}
+    >
       <div className="ui-shell flex max-h-[92vh] w-full max-w-xl flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-6 sm:p-9">
           {/* A coffee cherry: the red berry, its leaf. */}

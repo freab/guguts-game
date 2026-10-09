@@ -153,7 +153,7 @@ function growBush(seed: number): BushParts {
 const VISIBLE_DISTANCE = 18;
 
 /** Where the bush stands: in the goat's tile, against one of its walls, off to one side. */
-function bushPlace(): { x: number; z: number; rotation: number } {
+export function bushPlace(): { x: number; z: number; rotation: number } {
   const [gx, gz] = exitPosition();
   const [r, c] = worldToCell(gx, gz);
   const sides: [number, number][] = [

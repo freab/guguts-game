@@ -26,6 +26,12 @@ export const BOTTLES = 2;
 /** How long the call's map stays up, then fades (ms). */
 export const CALL_MAP_MS = 3200;
 export const CALL_MAP_FADE_MS = 1200;
+/**
+ * Reaching her: the view eases onto her and the light blooms up
+ * (scene/WinShot, maze/GoatReveal, ui/WinFlash) for this long before the
+ * story's end comes up (ui/GameOver).
+ */
+export const WIN_SHOT_MS = 2400;
 
 /** A short message to the player (a call used up, water found…). */
 export interface Notice {

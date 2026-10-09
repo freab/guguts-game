@@ -26,6 +26,7 @@ import {
 import { lightmapFactor } from "../bake/lightmap";
 import { grassColors, setGrassColors } from "./grassColors";
 import { sunTranslucency } from "../translucency";
+import { gustScale } from "../wind";
 
 /** Live-tunable grass look (no shader rebuild needed). */
 export interface GrassLook {
@@ -119,7 +120,9 @@ export function createGrassMaterial(alphaMap: THREE.Texture) {
     .add(uniforms.time.mul(uniforms.windSpeed));
   const sway = sin(phase)
     .mul(uniforms.windStrength)
-    .mul(lifted.div(SWAY_REF_HEIGHT));
+    .mul(lifted.div(SWAY_REF_HEIGHT))
+    // …harder as a gust rolls through (the one you hear: scene/wind).
+    .mul(gustScale(positionLocal.xz));
 
   const material = new THREE.MeshLambertNodeMaterial({
     side: THREE.DoubleSide,

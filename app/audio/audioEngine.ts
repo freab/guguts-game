@@ -1,4 +1,5 @@
 import { DefaultLoadingManager } from "three/webgpu";
+import { gustAt, windNow } from "../scene/wind";
 
 /**
  * The game's sound, on one Web Audio graph:
@@ -404,7 +405,8 @@ class AudioEngine {
       const [birds, wind] = this.tracks;
       if (wind) {
         // Gusts: layered slow sines; stronger gusts are louder and brighter.
-        const gust = 0.5 + 0.5 * (0.6 * Math.sin(t * 0.19) + 0.4 * Math.sin(t * 0.53 + 1.3));
+        // (The same gusts the grass, flowers and trees sway in: scene/wind.)
+        const gust = gustAt(windNow());
         wind.gain.gain.setTargetAtTime(wind.level * (0.55 + 0.7 * gust), now, 1.5);
         wind.filter.frequency.setTargetAtTime(900 + 5200 * gust * gust, now, 1.5);
         wind.pan.pan.setTargetAtTime(0.4 * Math.sin(t * 0.083 + 0.7), now, 2.5);
@@ -633,6 +635,62 @@ class AudioEngine {
     wet.gain.value = Math.min(0.9, 0.12 + distance / 45);
     panner.connect(wet).connect(this.farSend);
     src.start(t0, offset, duration);
+  }
+
+  /* ---------- the goat found ---------- */
+
+  /**
+   * A soft swell of music as Gugut sees the goat (and, bigger, as he reaches
+   * her): a warm open chord on detuned triangle voices, its filter opening as
+   * it rises, a high shimmer on top, then a long fade. With the music switch.
+   */
+  swell(size = 1) {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || ctx.state !== "running" || !this.isMusicOn()) return;
+    const now = ctx.currentTime;
+    const rise = 1.8 * size;
+    const hold = 1.2 * size;
+    const fade = 4.5;
+    const end = now + rise + hold + fade;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.exponentialRampToValueAtTime(0.11 * size, now + rise);
+    out.gain.setValueAtTime(0.11 * size, now + rise + hold);
+    out.gain.exponentialRampToValueAtTime(0.0001, end);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = 0.7;
+    filter.frequency.setValueAtTime(350, now);
+    filter.frequency.exponentialRampToValueAtTime(2600, now + rise);
+    filter.frequency.exponentialRampToValueAtTime(900, end);
+    filter.connect(out).connect(this.master);
+    if (this.reverbSend) out.connect(this.reverbSend);
+    // D, A, D, F♯, E: open and warm (an add9).
+    for (const freq of [146.83, 220, 293.66, 369.99, 659.25]) {
+      for (const detune of [-6, 6]) {
+        const osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        const voice = ctx.createGain();
+        voice.gain.value = freq > 600 ? 0.12 : 0.22;
+        osc.connect(voice).connect(filter);
+        osc.start(now);
+        osc.stop(end + 0.1);
+      }
+    }
+    // A shimmer: two high sines, faint, entering late.
+    for (const freq of [1174.66, 1760]) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.025 * size, now + rise * 1.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, end);
+      osc.connect(g).connect(out);
+      osc.start(now);
+      osc.stop(end + 0.1);
+    }
   }
 
   /* ---------- Gugut's voice ---------- */

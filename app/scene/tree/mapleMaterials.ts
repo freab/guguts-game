@@ -36,6 +36,7 @@ import { pbrSurface, type PbrSet } from "../textures/pbrTextures";
 import { LEAF_ATLAS } from "./treeGeometry";
 import { sunTranslucency } from "../translucency";
 import type { MapleTreeLayout } from "./mapleTree";
+import { gustAt, gustScale, windNow } from "../wind";
 
 /**
  * Wind on the tree — deliberately very slow: gusts take ~50 s to come and go
@@ -115,7 +116,8 @@ export function createMapleMaterials(
     const gust = sin(uniforms.time.mul(GUST_SPEED).add(p.x.mul(0.3)).add(p.z.mul(0.22))).add(
       sin(uniforms.time.mul(GUST_SPEED * 2.4).add(p.x.mul(0.7))).mul(0.25)
     );
-    return vec3(gust.mul(SWAY_X), float(0), gust.mul(SWAY_Z)).mul(bend).mul(uniforms.wind);
+    // (Bigger in the gusts you hear: scene/wind.)
+    return vec3(gust.mul(SWAY_X), float(0), gust.mul(SWAY_Z)).mul(bend).mul(uniforms.wind).mul(gustScale(p.xz));
   };
 
   // Bark: textured wood (UVs in metres along each branch), moss at the foot.
@@ -157,7 +159,8 @@ export function createMapleMaterials(
   const flutter = sin(uniforms.time.mul(FLUTTER_SPEED).add(hash(instanceIndex).mul(6.283)))
     .mul(length(leafPos.sub(origin)))
     .mul(0.08)
-    .mul(uniforms.wind);
+    .mul(uniforms.wind)
+    .mul(gustScale(origin.xz));
   leaves.positionNode = select(
     dropped,
     origin,
@@ -242,7 +245,8 @@ export function createMapleMaterials(
       const time = uniforms.time.value;
       const gust =
         Math.sin(time * GUST_SPEED + p.x * 0.3 + p.z * 0.22) + 0.25 * Math.sin(time * GUST_SPEED * 2.4 + p.x * 0.7);
-      const k = bend * uniforms.wind.value;
+      // (The gust as heard at the player — close enough for things hung on the tree.)
+      const k = bend * uniforms.wind.value * (0.35 + 1.3 * gustAt(windNow()));
       return out.set(gust * SWAY_X * k, 0, gust * SWAY_Z * k);
     },
     dispose() {

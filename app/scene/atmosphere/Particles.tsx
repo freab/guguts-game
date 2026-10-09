@@ -11,10 +11,12 @@ import {
   dot,
   float,
   length,
+  mix,
   mod,
   positionLocal,
   sin,
   smoothstep,
+  step,
   uniform,
   uv,
   vec3,
@@ -23,6 +25,11 @@ import {
 import { useDisposable } from "../../hooks/useDisposable";
 import { quality } from "../../quality";
 import { sun } from "../sunUniforms";
+import { dusk } from "../dusk";
+
+/** Fireflies as the run starts, and by full dusk. */
+const FIREFLIES = 40;
+const FIREFLIES_AT_DUSK = 72;
 
 interface FieldOptions {
   count: number;
@@ -135,14 +142,16 @@ export default function Particles() {
   }, [time]);
 
   const fireflies = useDisposable(() => {
-    const f = particleField({ count: 40, radius: 9, minY: 0.25, maxY: 1.5, size: 0.07, speed: 0.12, sway: 0.5, seed: 23 }, time);
+    const f = particleField({ count: FIREFLIES_AT_DUSK, radius: 9, minY: 0.25, maxY: 1.5, size: 0.07, speed: 0.12, sway: 0.5, seed: 23 }, time);
     // Each blinks on its own rhythm: long dark, a soft glow up and down.
     const blink = smoothstep(0.55, 1, sin(time.mul(f.seed.x.mul(0.8).add(0.6)).add(f.seed.y.mul(40))));
     const material = additive(new THREE.MeshBasicNodeMaterial());
     material.vertexNode = f.vertex;
     // Bright enough to catch the bloom: a warm yellow-green spark.
     material.colorNode = vec3(0.85, 1.0, 0.35).mul(blink.mul(3.2));
-    material.opacityNode = f.dot.mul(f.fade);
+    // More of them, and brighter, as dusk comes on (scene/dusk): FIREFLIES at first.
+    const out = step(f.seed.w, mix(float(FIREFLIES / FIREFLIES_AT_DUSK), float(1), dusk));
+    material.opacityNode = f.dot.mul(f.fade).mul(out).mul(dusk.mul(0.8).add(1));
     const mesh = new THREE.Mesh(f.geometry, material);
     mesh.frustumCulled = false;
     mesh.name = "Fireflies";

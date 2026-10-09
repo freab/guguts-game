@@ -1,10 +1,11 @@
 import * as THREE from "three/webgpu";
-import { float, mix, positionWorld, texture, uniform } from "three/tsl";
+import { cos, float, length, mix, positionWorld, sin, smoothstep as smoothstepNode, texture, uniform, vec2 } from "three/tsl";
 import { WallCollider } from "../../character/WallCollider";
-import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld } from "../../maze/mazeData";
+import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld, clearingRadius } from "../../maze/mazeData";
 import { mapleTreeLayout, treeTransmittance } from "../tree/mapleTree";
 import { nextFrames } from "./bakeTracker";
 import { quality } from "../../quality";
+import { gustScale, windTime } from "../wind";
 
 /**
  * Baked ground lighting ("lightmap") for everything lying on the floor — the
@@ -50,7 +51,26 @@ const placeholder = makeTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
 /** World-space rectangle the lightmap covers: (minX, minZ, sizeX, sizeZ). */
 const bounds = uniform(new THREE.Vector4(-1, -1, 2, 2));
 /** One shared texture node — every material samples it, swaps update them all. */
-const lightmapNode = texture(placeholder, positionWorld.xz.sub(bounds.xy).div(bounds.zw));
+/**
+ * Dappled shade that moves: under the maple (the clearing, round the origin)
+ * the lightmap is read a little off where it should be, the offset swaying
+ * with the wind (harder in the gusts — scene/wind) and differently from spot
+ * to spot, so the baked patches of leaf shadow and sun shift and shimmer as
+ * if the crown were moving. Nothing changes away from the tree (no walls are
+ * in reach). The radius and sway are set per bake (Low: no sway).
+ */
+const clearing = uniform(6);
+const leafSway = uniform(0.07);
+const groundXZ = positionWorld.xz;
+const underTree = float(1).sub(smoothstepNode(clearing.mul(0.55), clearing.mul(0.9), length(groundXZ)));
+const swayed = vec2(
+  sin(windTime.mul(1.3).add(groundXZ.x.mul(0.9)).add(groundXZ.y.mul(0.4))),
+  cos(windTime.mul(1.05).add(groundXZ.y.mul(0.8)).sub(groundXZ.x.mul(0.3)))
+)
+  .mul(leafSway)
+  .mul(gustScale(groundXZ))
+  .mul(underTree);
+const lightmapNode = texture(placeholder, groundXZ.add(swayed).sub(bounds.xy).div(bounds.zw));
 
 export const lightmapStrength = {
   /** How dark baked wall shadows are (0 = off). */
@@ -156,6 +176,8 @@ export async function bakeLightmap(
   const previous = lightmapNode.value;
   lightmapNode.value = makeTexture(data, w, h);
   bounds.value.set(minX, minZ, sizeX, sizeZ);
+  clearing.value = clearingRadius();
+  leafSway.value = quality(0, 0.07, 0.08);
   if (previous !== placeholder) previous.dispose();
   onProgress?.(1);
 }

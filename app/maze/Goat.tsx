@@ -8,6 +8,7 @@ import BlobShadow from "../character/BlobShadow";
 import { fitSkinnedModel } from "../character/fitSkinnedModel";
 import { exitPosition } from "./mazeData";
 import { useDisposable } from "../hooks/useDisposable";
+import { revealRim } from "./GoatReveal";
 
 /**
  * The goat: one static, textured mesh (no rig, no clips), authored facing +Z
@@ -68,6 +69,8 @@ function createGoatMaterial(source: THREE.MeshStandardMaterial) {
   const turned = rotate(p.sub(neck), vec3(nod.mul(headWeight), look.mul(headWeight), float(0))).add(neck);
 
   material.positionNode = turned.add(swell);
+  // Lit warm once she's been seen (maze/GoatReveal).
+  material.emissiveNode = revealRim();
   return {
     material,
     advance: (dt: number) => void (time.value += dt),
