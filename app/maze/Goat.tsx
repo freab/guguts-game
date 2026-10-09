@@ -1,14 +1,15 @@
 "use client";
 
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
 import { float, positionLocal, rotate, sin, smoothstep, uniform, vec3 } from "three/tsl";
 import BlobShadow from "../character/BlobShadow";
 import { fitSkinnedModel } from "../character/fitSkinnedModel";
-import { exitPosition } from "./mazeData";
 import { useDisposable } from "../hooks/useDisposable";
 import { revealRim } from "./GoatReveal";
+import { goat } from "../game/goat";
 
 /**
  * The goat: one static, textured mesh (no rig, no clips), authored facing +Z
@@ -78,9 +79,22 @@ function createGoatMaterial(source: THREE.MeshStandardMaterial) {
   };
 }
 
+/** Trot bob (m) and its rate (bounces/s) while she runs. */
+const TROT_BOB = 0.05;
+const TROT_RATE = 5.5;
+
+/** Put her where she is now, facing her way, bobbing as she trots (model faces +Z). */
+function placeGoat(group: THREE.Group) {
+  const [x, z] = goat.position();
+  const bob = goat.moving() ? Math.abs(Math.sin((performance.now() / 1000) * TROT_RATE * Math.PI)) * TROT_BOB : 0;
+  group.position.set(x, bob, z);
+  group.rotation.y = goat.facing();
+}
+
 /**
  * Gugut's runaway goat, waiting on the exit tile at the far end of the maze —
- * the thing you're looking for. It faces back into the maze, towards you.
+ * the thing you're looking for — facing back into the maze, towards you. On
+ * Hard she runs when called (game/goat): she trots, turning her way.
  */
 export default function Goat() {
   const { scene } = useGLTF(GOAT_URL);
@@ -106,14 +120,19 @@ export default function Goat() {
     return { root: goat.root, advance: goatMaterial.advance, dispose: goatMaterial.dispose };
   }, [scene]);
 
-  useFrame((_, dt) => life.advance(Math.min(dt, 0.1)));
+  // Where she is (game/goat): her tile by the bush, a new maze each mount —
+  // set while rendering, so everything mounted with her reads the right spot.
+  useMemo(() => goat.reset(), []);
+  const group = useRef<THREE.Group>(null);
+  useFrame((_, dt) => {
+    life.advance(Math.min(dt, 0.1));
+    goat.update(dt);
+    if (group.current) placeGoat(group.current);
+  });
 
-  const [x, z] = exitPosition();
-  // Model faces +Z; turn it to look at the maze centre (the origin).
-  const facing = Math.atan2(-x, -z);
-
+  const [x, z] = goat.position();
   return (
-    <group name="Goat" position={[x, 0, z]} rotation={[0, facing, 0]}>
+    <group ref={group} name="Goat" position={[x, 0, z]} rotation={[0, goat.facing(), 0]}>
       <primitive object={life.root} />
       <BlobShadow size={1.1} height={0.035} />
     </group>

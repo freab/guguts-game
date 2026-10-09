@@ -5,7 +5,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { audio } from "../audio/audioEngine";
 import { WallCollider } from "../character/WallCollider";
-import { exitPosition } from "../maze/mazeData";
+import { playerStore } from "../character/playerStore";
+import { goat } from "./goat";
 import { goatAnswer } from "./goatAnswer";
 import { runStore } from "./runStore";
 
@@ -13,6 +14,9 @@ import { runStore } from "./runStore";
 const BLEAT_HEIGHT = 0.8;
 /** When there's no sound (muted, not loaded), how long until she "answers" on screen (s). */
 const SILENT_ANSWER_DELAY = 1.2;
+/** Hard: she runs this long (s) after her answer is heard, if he's at least FLEE_NEAREST m away. */
+const FLEE_AFTER = 0.6;
+const FLEE_NEAREST = 4;
 /** Seeing her: within SIGHT_RANGE m, in view (SIGHT_CONE), checked every SIGHT_EVERY s. */
 const SIGHT_RANGE = 16;
 const SIGHT_CONE = 0.85;
@@ -32,7 +36,8 @@ const _dir = new THREE.Vector3();
  * a rasp. When Gugut, calmed by Temesgen's song, hears her on her own
  * (runStore.heardAt), her bleat plays the same way without the whistle.
  * It also notices when Gugut first catches sight of her (runStore.seeGoat —
- * his "found her!" voiceover, game/Monologue).
+ * his "found her!" voiceover, game/Monologue). On Hard, a moment after she
+ * answers a call, she runs (game/goat.flee).
  */
 export default function GoatVoice() {
   const camera = useThree((s) => s.camera);
@@ -50,7 +55,7 @@ export default function GoatVoice() {
     const run = runStore.get();
     if (run.sawAt || run.phase !== "running" || sight.current < SIGHT_EVERY) return;
     sight.current = 0;
-    const [gx, gz] = exitPosition();
+    const [gx, gz] = goat.position();
     _dir.set(gx - camera.position.x, BLEAT_HEIGHT - camera.position.y, gz - camera.position.z);
     const distance = _dir.length();
     if (distance > SIGHT_RANGE) return;
@@ -61,7 +66,7 @@ export default function GoatVoice() {
   useEffect(() => {
     /** Her answer: `play` sounds it from where she is and says how long until it's heard. */
     const answer = (play: (x: number, y: number, z: number, distance: number, occluded: boolean) => number | null) => {
-      const [gx, gz] = exitPosition();
+      const [gx, gz] = goat.position();
       camera.getWorldPosition(_origin);
       _dir.set(gx - _origin.x, BLEAT_HEIGHT - _origin.y, gz - _origin.z);
       const distance = _dir.length();
@@ -69,9 +74,25 @@ export default function GoatVoice() {
       const occluded = walls.raycast(_origin, _dir, distance) < distance - 0.3;
       const delay = play(gx, BLEAT_HEIGHT, gz, distance, occluded) ?? SILENT_ANSWER_DELAY;
       goatAnswer.post({ at: performance.now() + delay * 1000, x: gx, z: gz, distance, occluded });
+      return { delay, distance };
+    };
+    // Hard: she runs a moment after answering — unless he's right there.
+    let flight: ReturnType<typeof setTimeout> | undefined;
+    let fled = false;
+    const fleeAfter = (delay: number, distance: number) => {
+      const run = runStore.get();
+      if (run.level !== "hard" || distance < FLEE_NEAREST) return;
+      clearTimeout(flight);
+      flight = setTimeout(() => {
+        if (runStore.get().phase !== "running") return;
+        if (goat.flee(playerStore.x, playerStore.z) && !fled) {
+          fled = true;
+          runStore.notify("She heard you — and bolted deeper into the maze. Call less, follow more.");
+        }
+      }, (delay + FLEE_AFTER) * 1000);
     };
     let { calledAt, dryAt, heardAt } = runStore.get();
-    return runStore.subscribe(() => {
+    const off = runStore.subscribe(() => {
       const run = runStore.get();
       if (run.calledAt !== calledAt) {
         calledAt = run.calledAt;
@@ -79,7 +100,8 @@ export default function GoatVoice() {
           goatAnswer.post(null); // a new run
           return;
         }
-        answer((x, y, z, d, o) => audio.goatCall(x, y, z, d, o));
+        const { delay, distance } = answer((x, y, z, d, o) => audio.goatCall(x, y, z, d, o));
+        fleeAfter(delay, distance);
       }
       if (run.heardAt !== heardAt) {
         heardAt = run.heardAt;
@@ -94,6 +116,10 @@ export default function GoatVoice() {
         if (dryAt !== 0) audio.dryCall();
       }
     });
+    return () => {
+      off();
+      clearTimeout(flight);
+    };
   }, [camera, walls]);
 
   return null;

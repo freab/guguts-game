@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { playerStore } from "../character/playerStore";
 import { CALL_MAP_FADE_MS, CALL_MAP_MS } from "../game/runStore";
-import { CELL, COLS, ROWS, cellAt, exitPosition } from "../maze/mazeData";
+import { CELL, COLS, ROWS, cellAt } from "../maze/mazeData";
+import { goat } from "../game/goat";
 
 /** The map's size on screen (px). */
 const SIZE = 168;
@@ -52,11 +53,12 @@ export default function CallMap({ className = "" }: { className?: string }) {
     const ch = SIZE / ROWS;
     const px = (x: number) => (x / CELL + (COLS - 1) / 2 + 0.5) * cw;
     const py = (z: number) => (z / CELL + (ROWS - 1) / 2 + 0.5) * ch;
-    const [gx, gz] = exitPosition();
     const unit = Math.max(cw, ch);
     let id = 0;
     const draw = (t: number) => {
       ctx.clearRect(0, 0, SIZE, SIZE);
+      // (Where she is now: on Hard you may see her run — game/goat.)
+      const [gx, gz] = goat.position();
       // The goat: a warm dot with a ring spreading out from it.
       const pulse = (t / 1100) % 1;
       ctx.strokeStyle = `rgba(252, 211, 77, ${0.9 * (1 - pulse)})`;

@@ -76,7 +76,7 @@ function GameplaySettings() {
       setListening(false);
       if (e.code === "Escape") return;
       if (RESERVED_KEYS.has(e.code)) {
-        setMessage(`${keyLabel(e.code)} is already used (moving, running, drinking, music or pause).`);
+        setMessage(`${keyLabel(e.code)} is already used (moving, running, drinking, music, pause or photo mode).`);
         return;
       }
       setPreferences({ callKey: e.code });

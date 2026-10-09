@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { sun } from "./sunUniforms";
 import { DUSK, duskForRun, setDusk } from "./dusk";
+import { photo } from "../game/photo";
 
 export interface SunsetBase {
   sunColor: string;
@@ -65,7 +66,9 @@ export default function Sunset({
   preview: number;
 }) {
   useFrame(() => {
-    const d = !enabled ? 0 : preview >= 0 ? preview : duskForRun();
+    // (Photo mode can hold the sun anywhere from the start to full dusk.)
+    const held = photo.get().active ? photo.get().dusk : null;
+    const d = held !== null ? held : !enabled ? 0 : preview >= 0 ? preview : duskForRun();
     setDusk(d);
     applyDusk(d, base, light, ambient, hemisphere);
   });

@@ -41,7 +41,7 @@ export interface Notice {
 }
 
 /** Why the game is paused; paused while any is active. */
-export type PauseReason = "menu" | "dialog" | "help" | "rotate" | "talk" | "intro";
+export type PauseReason = "menu" | "dialog" | "help" | "rotate" | "talk" | "intro" | "photo";
 
 export interface RunState {
   phase: RunPhase;
@@ -161,6 +161,10 @@ export const runStore = {
       heardAt: now,
       notice: { text: "Calm at last, you hear her — a bleat, clear across the maze.", at: now },
     });
+  },
+  /** A message for the player (GameNotice). */
+  notify(text: string, now = performance.now()) {
+    set({ notice: { text, at: now } });
   },
   /** Gugut sees her for the first time this run. */
   seeGoat(now = performance.now()) {

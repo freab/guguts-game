@@ -3,7 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import { runStore } from "../game/runStore";
-import { exitPosition } from "../maze/mazeData";
+import { goat } from "../game/goat";
 
 /** Her face (m above the ground), where the view turns to. */
 const FACE_HEIGHT = 0.8;
@@ -42,7 +42,7 @@ function winShot(camera: THREE.Camera) {
   const run = runStore.get();
   if (run.phase !== "won") return;
   const t = (performance.now() - run.finishedAt) / 1000;
-  const [gx, gz] = exitPosition();
+  const [gx, gz] = goat.position();
 
   // The turn onto her, and the small push in.
   const w = ease(t / TURN_SECONDS);

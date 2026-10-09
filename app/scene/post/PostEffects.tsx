@@ -28,6 +28,7 @@ import { depthAwareBlend } from "three/examples/jsm/tsl/display/depthAwareBlend.
 import { godrays } from "./godrays/GodraysNode.js";
 import type GodraysNode from "./godrays/GodraysNode.js";
 import { DUSK, dusk } from "../dusk";
+import { takeCapture } from "../../game/photo";
 import { useDisposable } from "../../hooks/useDisposable";
 
 /** Structural options — changing these rebuilds the effect graph. */
@@ -278,6 +279,8 @@ export default function PostEffects({
     updateSunView(uniforms, light, camera);
     applyDusk(graph, params);
     pipeline.render();
+    // Photo mode: save this frame if asked (it must be read in the same task as it's drawn).
+    takeCapture(gl.domElement as HTMLCanvasElement);
   }, 1);
   return null;
 }

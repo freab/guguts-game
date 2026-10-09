@@ -39,6 +39,7 @@ export const RESERVED_KEYS = new Set([
   "KeyE",
   "KeyM",
   "KeyP",
+  "KeyF",
   "Escape",
   "Tab",
 ]);

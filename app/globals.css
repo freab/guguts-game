@@ -70,6 +70,16 @@ body {
   }
 }
 
+/* Photo mode (ui/PhotoOverlay): a camera flash as a photo is saved. */
+@keyframes photo-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* GameNotice: fade in (it is centred with a transform, so no scaling). */
 @keyframes notice-in {
   from {

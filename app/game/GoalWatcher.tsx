@@ -2,7 +2,7 @@
 
 import { useFrame } from "@react-three/fiber";
 import { playerStore } from "../character/playerStore";
-import { exitPosition } from "../maze/mazeData";
+import { goat } from "./goat";
 import { runStore } from "./runStore";
 
 /** How close (metres, feet to the goat) counts as having reached her. */
@@ -12,7 +12,7 @@ const FIRST_STEP_SPEED = 0.3;
 
 /**
  * Drives the run from inside the Canvas: starts the clock on the player's
- * first step, and ends the run when they reach the goat on the exit tile.
+ * first step, and ends the run when they reach the goat (wherever she is: game/goat).
  */
 export default function GoalWatcher() {
   useFrame(() => {
@@ -20,7 +20,7 @@ export default function GoalWatcher() {
     if (phase === "armed" && playerStore.speed > FIRST_STEP_SPEED) {
       runStore.start(performance.now());
     } else if (phase === "running") {
-      const [gx, gz] = exitPosition();
+      const [gx, gz] = goat.position();
       if (Math.hypot(playerStore.x - gx, playerStore.z - gz) < REACH) runStore.finish(performance.now());
     }
   });

@@ -17,10 +17,16 @@ export class LookInput {
   private sensitivity = 1;
   private invertY = false;
   private dragging = false;
+  /** Off while something else has the camera (photo mode): the mouse doesn't turn Gugut. */
+  private enabled = true;
 
   constructor(yaw: number, pitch: number) {
     this.yaw = yaw;
     this.pitch = pitch;
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
   }
 
   configure(sensitivity: number, invertY: boolean): void {
@@ -58,7 +64,7 @@ export class LookInput {
       }
     };
     const onMouseMove = (e: MouseEvent) => {
-      if (document.pointerLockElement !== el && !this.dragging) return;
+      if (!this.enabled || (document.pointerLockElement !== el && !this.dragging)) return;
       const k = LOOK_RADIANS_PER_PIXEL * this.sensitivity;
       this.yaw -= e.movementX * k;
       this.pitch -= e.movementY * k * (this.invertY ? -1 : 1);

@@ -38,6 +38,8 @@ import { getPreferences, usePreferences } from "../game/preferences";
 import Monologue from "../game/Monologue";
 import { intro, useIntro } from "../game/intro";
 import IntroOverlay from "../ui/IntroOverlay";
+import PhotoOverlay from "../ui/PhotoOverlay";
+import { photo, usePhoto } from "../game/photo";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 import { applyGraphicsToPanel } from "../quality";
@@ -102,7 +104,9 @@ export default function SceneClient() {
   // The intro fly-in (game/intro): the camera is flying — no HUD, the game paused.
   const introPhase = useIntro();
   const cinematic = introPhase === "playing" || introPhase === "skipping";
-  const playing = ready && !cinematic && (run.phase === "armed" || run.phase === "running");
+  // Photo mode (game/photo): no HUD, its own panel.
+  const photoActive = usePhoto().active;
+  const playing = ready && !cinematic && !photoActive && (run.phase === "armed" || run.phase === "running");
   // The controls are shown on the first run on this device (then from the menu).
   const showHelp = helpOpen || (playing && run.phase === "armed" && !helpDismissed && !controlsSeen());
 
@@ -141,6 +145,10 @@ export default function SceneClient() {
   useEffect(() => {
     runStore.setPaused("intro", cinematic);
   }, [cinematic]);
+  // Leaving the maze ends photo mode.
+  useEffect(() => {
+    if (!ready) photo.close();
+  }, [ready]);
 
   // Gugut's voiceovers, as chosen on the title screen (or in Settings).
   const { voice } = usePreferences();
@@ -174,6 +182,7 @@ export default function SceneClient() {
       if (e.repeat || isTyping(e.target)) return;
       if (e.code === "KeyM") audio.toggleMusic();
       else if (e.code === getPreferences().callKey && !runStore.isPaused()) runStore.callGoat();
+      else if (e.code === "KeyF" && !e.defaultPrevented && !runStore.isPaused()) photo.open();
       else if (e.code === "KeyE") {
         if (!temesgen.talk()) bottleFocus.grab();
       }
@@ -309,7 +318,7 @@ export default function SceneClient() {
       {level && <Scene key={`scene-${runId}`} />}
 
       {/* Touch controls, while playing on a touch device. */}
-      {ready && !cinematic && touch && <TouchControls />}
+      {ready && !cinematic && !photoActive && touch && <TouchControls />}
 
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}
@@ -333,8 +342,9 @@ export default function SceneClient() {
       )}
 
       {/* The run: its clock, and the finish screen when you reach the goat. */}
-      {ready && !cinematic && <RunTimer />}
-      {ready && <GameNotice />}
+      {ready && !cinematic && !photoActive && <RunTimer />}
+      {ready && !photoActive && <GameNotice />}
+      {ready && <PhotoOverlay touch={touch} />}
       {ready && <BleatIndicator />}
       {ready && <Monologue key={`voice-${runId}`} />}
       {ready && <DrinkVignette />}
@@ -363,7 +373,9 @@ export default function SceneClient() {
 
       {/* Leaderboard, settings and music — always shown (above the title
           screen too); below the leva panel on #debug. */}
-      <div className={`ui-shell absolute right-3 z-[60] flex items-stretch gap-1.5 p-1.5 ${debug ? "top-14" : "top-3"}`}>
+      <div
+        className={`ui-shell absolute right-3 z-[60] flex items-stretch gap-1.5 p-1.5 ${debug ? "top-14" : "top-3"} ${photoActive ? "hidden" : ""}`}
+      >
         <div className="ui-well flex items-center gap-1 p-1">
         {canFullscreen && (
           <IconButton
@@ -407,6 +419,10 @@ export default function SceneClient() {
           }}
           onControls={() => setHelpOpen(true)}
           onLeaderboard={() => setBoardOpen(true)}
+          onPhoto={() => {
+            setMenuOpen(false);
+            photo.open();
+          }}
           onSettings={() => setSettingsOpen(true)}
           onCredits={() => setCreditsOpen(true)}
           onChangeLevel={() => {

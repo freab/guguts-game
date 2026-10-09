@@ -16,6 +16,7 @@ import { MAX_DELTA } from "./config";
 import { writePlayerStore } from "./playerStore";
 import { touchInput } from "./touchInput";
 import { runStore } from "../game/runStore";
+import { photo } from "../game/photo";
 
 export type Control = "forward" | "backward" | "left" | "right" | "run";
 
@@ -94,6 +95,8 @@ export default function PlayerController() {
     const dt = Math.min(delta, MAX_DELTA);
     // The run is over (or a dialog is open): stand still, ignore input.
     const blocked = runStore.inputBlocked();
+    // Photo mode has the camera: the mouse mustn't turn Gugut meanwhile.
+    look.setEnabled(!photo.get().active);
     // Touch: apply the look drag since last frame, and the move stick.
     if (touchInput.lookDX || touchInput.lookDY) {
       if (!blocked) look.addDrag(touchInput.lookDX, touchInput.lookDY);

@@ -11,6 +11,7 @@ import Sunset from "./Sunset";
 import { DUSK, useDuskStep } from "./dusk";
 import GustLeaves from "./atmosphere/GustLeaves";
 import WinShot from "./WinShot";
+import PhotoCamera from "./PhotoCamera";
 import GoatReveal from "../maze/GoatReveal";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
@@ -624,6 +625,8 @@ export default function Scene() {
         <IntroFlight />
         {/* …and so does the turn onto the goat as you reach her. */}
         <WinShot />
+        {/* …and photo mode's free camera, last: while it's on, its view is drawn. */}
+        <PhotoCamera />
         {/* After the player: a bottle being drunk is held in front of the camera
             the controller has just placed. */}
         <WaterBottles />

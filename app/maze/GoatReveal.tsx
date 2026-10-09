@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three/webgpu";
 import {
@@ -27,6 +27,7 @@ import { runStore } from "../game/runStore";
 import { useDisposable } from "../hooks/useDisposable";
 import { bushPlace } from "./CoffeeBush";
 import { exitPosition } from "./mazeData";
+import { goat } from "../game/goat";
 
 /** The reveal's warm light. */
 export const REVEAL_COLOR = new THREE.Color("#ffb066");
@@ -38,6 +39,21 @@ export const REVEAL_COLOR = new THREE.Color("#ffb066");
 export const revealGlow = uniform(0);
 /** The reveal's own clock (its motes drift and twinkle by it). */
 const time = uniform(0);
+
+/** Where the reveal is centred: between her and the bush while she's home, on her once she runs (game/goat). */
+const revealCenter = uniform(new THREE.Vector3());
+
+/** Centre the reveal on her (and her bush, while she's by it). */
+function followGoat(group: THREE.Group) {
+  const [gx, gz] = goat.position();
+  const [ex, ez] = exitPosition();
+  const bush = bushPlace();
+  const home = Math.hypot(gx - ex, gz - ez) < 0.5;
+  const x = home ? (gx + bush.x) / 2 : gx;
+  const z = home ? (gz + bush.z) / 2 : gz;
+  revealCenter.value.set(x, 0, z);
+  group.position.set(x, 0, z);
+}
 
 /** Seeing her: up over RISE s, then settling to SETTLE over the next SETTLE_OVER s. */
 const RISE = 2.5;
@@ -74,11 +90,6 @@ function additive<T extends THREE.NodeMaterial>(material: T): T {
  * music as she is seen, a bigger one as she is reached.
  */
 export default function GoatReveal() {
-  const center = useMemo(() => {
-    const [gx, gz] = exitPosition();
-    const bush = bushPlace();
-    return new THREE.Vector3((gx + bush.x) / 2, 0, (gz + bush.z) / 2);
-  }, []);
 
   const parts = useDisposable(() => {
     const warm = color(REVEAL_COLOR);
@@ -123,7 +134,7 @@ export default function GoatReveal() {
     const angle = s.y.mul(Math.PI * 2).add(time.mul(s.w.sub(0.5).mul(0.6)));
     const radius = s.w.mul(MOTE_RADIUS - 0.25).add(0.25);
     const local = vec3(cos(angle).mul(radius), rise.add(0.1), sin(angle).mul(radius));
-    const view = cameraViewMatrix.mul(vec4(local.add(vec3(center.x, 0, center.z)), 1));
+    const view = cameraViewMatrix.mul(vec4(local.add(revealCenter), 1));
     const motes = additive(new THREE.MeshBasicNodeMaterial());
     motes.vertexNode = cameraProjectionMatrix.mul(view.add(vec4(positionLocal.xy.mul(s.x.mul(0.025).add(0.02)), 0, 0)));
     const dot = smoothstep(1, 0, length(uv().sub(0.5)).mul(2)).pow(2);
@@ -142,7 +153,7 @@ export default function GoatReveal() {
         for (const m of [pool, shaft, motes]) m.dispose();
       },
     };
-  }, [center]);
+  }, []);
 
   // The swells of music: seeing her, then reaching her.
   useEffect(() => {
@@ -169,11 +180,12 @@ export default function GoatReveal() {
       glow = seenGlow((now - run.sawAt) / 1000);
     }
     revealGlow.value = glow;
+    followGoat(parts.group);
   });
 
   return (
     <>
-      <primitive object={parts.group} position={[center.x, 0, center.z]} />
+      <primitive object={parts.group} />
       <primitive object={parts.moteMesh} />
     </>
   );

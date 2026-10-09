@@ -11,6 +11,8 @@ export interface PauseActions {
   onCallGoat: () => void;
   onRestart: () => void;
   onControls: () => void;
+  /** Into photo mode (game/photo). */
+  onPhoto: () => void;
   onLeaderboard: () => void;
   onSettings: () => void;
   onCredits: () => void;
@@ -56,6 +58,9 @@ export default function PauseMenu(actions: PauseActions) {
             </button>
             <button type="button" onClick={actions.onRestart} className={button}>
               Restart (new maze)
+            </button>
+            <button type="button" onClick={actions.onPhoto} className={button}>
+              Photo mode (F)
             </button>
             <button type="button" onClick={actions.onControls} className={button}>
               Controls
