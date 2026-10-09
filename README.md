@@ -2,7 +2,7 @@
 
 **A 3D maze game you play in your browser, inspired by the Ethiopian story of how coffee was found.**
 
-Gugut's goat ran into a maze. Find her before the sun goes down.
+Gugut's goat ran into a maze. Find her as the sun goes down.
 
 ---
 
@@ -10,7 +10,7 @@ Gugut's goat ran into a maze. Find her before the sun goes down.
 
 There is an old Ethiopian story about **Kaldi**, a goat herder. One day his goats ate red berries from a strange bush, and they danced all night.
 
-In my game, Gugut's goat eats those same berries and runs off into a big stone maze. You play as Gugut, and you have to find her and bring her home before dark.
+In my game, Gugut's goat eats those same berries and runs off into a big stone maze. You play as Gugut, and you have to find her and bring her home as the sun sets.
 
 When you find her, the story finishes like the legend. Gugut takes the berries to the monks on the hill. They roast them in the fire and make a warm drink called **buna**. Today we call it **coffee**.
 
@@ -18,7 +18,9 @@ When you find her, the story finishes like the legend. Gugut takes the berries t
 
 ## How to play
 
-Choose **Easy**, **Medium** or **Hard**, then find the goat as fast as you can. The timer starts when you take your first step.
+First choose your graphics (**Low**, **Medium** or **High**) and whether you want to hear Gugut's voice. Then choose **Easy**, **Medium** or **Hard** and find the goat as fast as you can.
+
+There is no time limit. The timer starts when you take your first step and just measures how long you took. While you search, the sun slowly sets and the sky turns orange, but it never gets dark.
 
 | | Computer | Phone |
 |---|---|---|
@@ -60,7 +62,7 @@ Some things I'm proud of:
 - **He plays along with the real song.** While Temesgen's song plays, the game listens to the music. His hand strums and his head nods along with the beat.
 - **Sound you can follow.** The goat and the music come from where they really are in the maze. Walls between you and the sound make it muffled, so you can find your way by ear.
 - **A story-book loading screen.** The title picture burns away like paper to show the story while the game loads.
-- **Works on phones.** On phones the game uses lighter graphics, big touch buttons and a layout that fits a phone screen.
+- **Works on phones.** On phones the game starts on Low graphics (you can change it), with big touch buttons and a layout that fits a phone screen.
 - **Safe sharing.** Your share link can't be used to change your name or post fake times.
 
 ---

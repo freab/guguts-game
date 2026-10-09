@@ -317,7 +317,7 @@ export function distanceToPath(x: number, z: number): number {
   return best;
 }
 
-/** Is the given world point inside a wall cell (or outside the maze)? */
+/** Is the given world point inside a wall cell (or outside the maze)? (Only isWalkable uses it.) */
 export function isWallAtWorld(x: number, z: number): boolean {
   const [row, col] = worldToCell(x, z);
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return true;
@@ -326,8 +326,8 @@ export function isWallAtWorld(x: number, z: number): boolean {
 
 /**
  * Can a disc of `radius` centered at (x, z) stand here without touching a wall?
- * Used by the non-physics (foot-lock) controller for grid collision. Samples the
- * disc's four extremes plus its center.
+ * Samples the disc's four extremes plus its center. Not used by the game (the
+ * player collides through character/WallCollider); kept as a grid helper.
  */
 export function isWalkable(x: number, z: number, radius = 0.35): boolean {
   const pts: [number, number][] = [
@@ -340,7 +340,7 @@ export function isWalkable(x: number, z: number, radius = 0.35): boolean {
   return pts.every(([px, pz]) => !isWallAtWorld(px, pz));
 }
 
-/** World-space spawn point for the player, lifted slightly so it drops in. */
+/** World-space spawn point for the player: the start cell's centre (callers use only x and z). */
 export function startPosition(): [number, number, number] {
   const [x, z] = cellToWorld(START_RC[0], START_RC[1]);
   return [x, 2, z];
@@ -351,12 +351,15 @@ export function exitPosition(): [number, number] {
   return cellToWorld(EXIT_RC[0], EXIT_RC[1]);
 }
 
-/** How close (world units) the player must get to the exit tile to escape. */
+/**
+ * A radius round the exit tile. Not used by the game: reaching the goat is
+ * game/GoalWatcher's check; kept with atExit as grid helpers.
+ */
 export function exitRadius(): number {
   return CELL * 0.6;
 }
 
-/** Has the player (at world x, z) reached the exit tile? */
+/** Is world (x, z) within exitRadius of the exit tile? (Unused; see exitRadius.) */
 export function atExit(x: number, z: number): boolean {
   const [ex, ez] = exitPosition();
   const dx = x - ex;
