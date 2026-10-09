@@ -50,16 +50,23 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
  * resize), so it costs nothing while the game loads behind it. Until the
  * renderer is up — or if it never comes up — the same images sit underneath
  * as CSS backgrounds, cross-fading.
+ *
+ * `mode="in"` runs the second burn the other way, for the outro (ui/OutroStory):
+ * at stage 1 the canvas is clear (the game shows), and moving to stage 2 burns
+ * `toSrc` *in* over it, along the same noise front with the same ember edge.
  */
 export default function DissolveCanvas({
   fromSrc,
   toSrc,
   stage,
   onDissolved,
+  mode = "out",
 }: {
   fromSrc: string;
   toSrc: string;
   stage: DissolveStage;
+  /** "out": the images burn away (the preloader). "in": `toSrc` burns in from nothing (stage 1 → 2). */
+  mode?: "out" | "in";
   /** Called once a burn forward has finished, with the stage it reached. */
   onDissolved?: (stage: DissolveStage) => void;
 }) {
@@ -239,7 +246,13 @@ export default function DissolveCanvas({
       const image = mix(b, a, first.keep).add(first.ember);
       // Premultiplied: what stands of the image, plus the ember light.
       const alpha = clamp(second.keep.add(second.glow), 0, 1);
-      material.colorNode = vec4(image.mul(second.keep).add(second.ember), alpha);
+      if (mode === "in") {
+        // What the second burn has burned through is where the image now stands.
+        const shownIn = float(1).sub(second.keep);
+        material.colorNode = vec4(b.mul(shownIn).add(second.ember), clamp(shownIn.add(second.glow), 0, 1));
+      } else {
+        material.colorNode = vec4(image.mul(second.keep).add(second.ember), alpha);
+      }
       material.needsUpdate = true;
 
       resize();
@@ -266,7 +279,7 @@ export default function DissolveCanvas({
       quad.geometry.dispose();
       renderer.dispose();
     };
-  }, [fromSrc, toSrc]);
+  }, [fromSrc, toSrc, mode]);
 
   // The CSS fallback: cross-fades, then fades out at stage 2. Once the canvas
   // is live it does the burning, so the fallback just gets out of the way.
@@ -276,7 +289,7 @@ export default function DissolveCanvas({
     <div className="absolute inset-0">
       <div
         className="absolute inset-0 bg-[#0b0d08] transition-opacity ease-in-out"
-        style={{ ...fade, opacity: stage === 2 ? 0 : 1 }}
+        style={{ ...fade, opacity: (mode === "in" ? stage === 2 : stage !== 2) ? 1 : 0 }}
       >
         <div className={bg} style={{ backgroundImage: `url("${toSrc}")` }} />
         <div

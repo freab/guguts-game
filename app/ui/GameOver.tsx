@@ -8,6 +8,7 @@ import { submitRun } from "../leaderboard/client";
 import { formatTime, type SubmitResponse } from "../leaderboard/shared";
 import LeaderboardTable from "./LeaderboardTable";
 import ShareDialog, { type ShareCard } from "./ShareDialog";
+import OutroStory from "./OutroStory";
 import { LEVELS } from "../maze/levels";
 
 /**
@@ -36,7 +37,7 @@ interface Actions {
 
 /**
  * The end of a run, when the player reaches the goat: first the end of the
- * story (Epilogue — the red berries, the first coffee), then the results:
+ * story (ui/OutroStory — the red berries, the first coffee), then the results:
  * the time, a star rating for how few calls it took, the badges earned, and
  * the level's leaderboard (the time goes to it straight away, while the
  * story is read) — and a card to share the time (ui/ShareDialog).
@@ -52,7 +53,7 @@ export default function GameOver(actions: Actions) {
   );
 }
 
-/** Holds the end back while the view settles on her and the light blooms (WIN_SHOT_MS). */
+/** Holds the end back while the view settles on her and pulls away (WIN_SHOT_MS): then the outro burns in. */
 function AfterWinShot({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -124,7 +125,7 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
   );
 
   const button = "px-5 py-2.5 text-sm font-semibold";
-  if (chapter === "story") return <Epilogue onContinue={() => setChapter("results")} />;
+  if (chapter === "story") return <OutroStory onContinue={() => setChapter("results")} />;
   return (
     <div className="absolute inset-0 z-[65] flex items-center justify-center bg-black/60 p-4">
       <div className="ui-shell flex max-h-[92vh] w-full max-w-lg flex-col p-1.5">
@@ -232,80 +233,4 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
 /** Three stars for no calls, two for one or two, one for three or more. */
 function starsFor(callsUsed: number): number {
   return callsUsed === 0 ? 3 : callsUsed <= 2 ? 2 : 1;
-}
-
-/**
- * The end of the story, after the opening one (ui/LoadingOverlay): the goat
- * by the strange bush, Gugut tasting the red berries, the monks' fire — the
- * Ethiopian legend of how coffee was found. Each paragraph fades in after the
- * last; Continue (or Enter) goes on to the results.
- */
-const EPILOGUE = [
-  "There she is, at the far end of the maze, next to the berry bush. Still dancing. Her mouth is red from the berries.",
-  "Gugut tries one. Right away, he isn't tired anymore. He fills his pockets and walks her home as the sun sets.",
-  "That night he takes the berries to the monks up on the hill. One of them tosses a handful into the fire, and the room fills with a warm, rich smell. They roast the beans, grind them and pour hot water over them. The drink is bitter, but it keeps them awake all night.",
-  "They call it buna. You know it as coffee.",
-];
-
-function Epilogue({ onContinue }: { onContinue: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onContinue();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onContinue]);
-
-  return (
-    <div
-      className="absolute inset-0 z-[65] flex items-center justify-center bg-black/75 p-4"
-      style={{ animation: "notice-in 900ms ease-out both" }}
-    >
-      <div className="ui-shell flex max-h-[92vh] w-full max-w-xl flex-col p-1.5">
-        <div className="ui-well min-h-0 overflow-y-auto p-6 sm:p-9">
-          {/* A coffee cherry: the red berry, its leaf. */}
-          <svg viewBox="0 0 48 48" className="mx-auto h-12 w-12" style={{ animation: "notice-in 600ms ease-out both" }} aria-hidden>
-            <path d="M26 10c7-6 16-4 18 1-6 4-13 4-18-1Z" fill="#3f6b2a" />
-            <path d="M26 10c-1 4-2 7-4 10" stroke="#5b4632" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <circle cx="20" cy="29" r="10" fill="#b3261e" />
-            <circle cx="29" cy="33" r="8" fill="#d23a2a" />
-            <circle cx="17" cy="25" r="2.4" fill="#fff" opacity="0.35" />
-          </svg>
-          <h2
-            className={`${posterFont.className} mt-2 text-center text-5xl tracking-wide sm:text-6xl`}
-            style={{ animation: "notice-in 700ms ease-out 0.15s both" }}
-          >
-            The red berries
-          </h2>
-          <div className={`${posterFont.className} mt-5 space-y-3 text-lg leading-snug text-white/85 sm:text-xl`}>
-            {EPILOGUE.map((text, i) => (
-              <p
-                key={i}
-                className={i === EPILOGUE.length - 1 ? "pt-1 text-center text-2xl text-amber-200 sm:text-3xl" : ""}
-                style={{ animation: `notice-in 900ms ease-out ${0.6 + i * 1.4}s both` }}
-              >
-                {text}
-              </p>
-            ))}
-          </div>
-          <div
-            className="mt-7 flex justify-center"
-            style={{ animation: `notice-in 600ms ease-out ${0.6 + EPILOGUE.length * 1.4}s both` }}
-          >
-            <button
-              type="button"
-              autoFocus
-              onClick={onContinue}
-              className="ui-cta px-6 py-2.5 text-sm"
-            >
-              See how you did
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }

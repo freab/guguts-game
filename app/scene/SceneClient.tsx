@@ -38,7 +38,6 @@ import { getPreferences, usePreferences } from "../game/preferences";
 import Monologue from "../game/Monologue";
 import { intro, useIntro } from "../game/intro";
 import IntroOverlay from "../ui/IntroOverlay";
-import WinFlash from "../ui/WinFlash";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
 import { applyGraphicsToPanel } from "../quality";
@@ -353,7 +352,6 @@ export default function SceneClient() {
         </div>
       )}
       {playing && touch && <CallButton showKey={false} large className="absolute bottom-8 right-6" />}
-      {ready && <WinFlash />}
       {ready && (
         <GameOver
           onPlayAgain={restart}

@@ -10,6 +10,7 @@ import { LEVELS, type Level } from "../maze/levels";
 import { defaultGraphics, type Graphics } from "../quality";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
 import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
+import { SHADOW, STORY_SRC, StoryButton, StoryText } from "./storyParts";
 
 /**
  * How much of the counter each preload stage accounts for (sums to 1).
@@ -24,14 +25,10 @@ const STAGE_WEIGHTS: [Exclude<LoadingStage, "ready">, number][] = [
 
 /** Title screen backdrop (down the maze path), burned away on picking a level. */
 const TITLE_SRC = "/preloader/first.webp";
-/** Preloader backdrop (up past the tree at the sky), the story is written on it. */
-const STORY_SRC = "/preloader/second.webp";
 
 /** The "GUGUT & THE GOAT" wordmark (cream, transparent). */
 const LOGO_SRC = "/logo gugut.svg";
 
-/** Soft shadow so the cream lettering holds up over bright sky. */
-const SHADOW = "[text-shadow:0_2px_14px_rgba(20,16,8,0.45)]";
 
 const STORY = [
   "Long ago, a goat herder named Kaldi saw his goats dancing all night after they ate some red berries. People still tell that story.",
@@ -103,27 +100,6 @@ function Counter({ onFull }: { onFull: () => void }) {
       </span>
       <span className="text-[clamp(2rem,min(4.5vw,9vh),4.5rem)] text-[#fdf3d4]/70">%</span>
     </div>
-  );
-}
-
-/**
- * Replaces the counter at 100: the game waits behind the story until the
- * player has read it and steps in. Focused, so Enter / Space work too.
- */
-function EnterButton({ onEnter }: { onEnter: () => void }) {
-  return (
-    <button
-      autoFocus
-      onClick={onEnter}
-      className="group absolute right-[6vw] bottom-[6vh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-2 pr-2 pl-7 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#2a2312] opacity-0 shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
-      style={{ animation: "notice-in 700ms ease-out forwards" }}
-    >
-      Enter the maze
-      <svg viewBox="0 0 24 24" aria-hidden className="size-[1.3em] transition-transform duration-300 group-hover:translate-x-0.5">
-        <circle cx="12" cy="12" r="12" fill="#fdf3d4" />
-        <path d="M9.5 7.5v9l7-4.5z" fill="#c9a45c" />
-      </svg>
-    </button>
   );
 }
 
@@ -262,41 +238,15 @@ function LevelChooser({ onChoose, onSetup }: { onChoose: (level: Level) => void;
   );
 }
 
-/**
- * The story, written onto the second image word by word once the first has
- * burned away. Mounted per run, so it writes itself again each time.
- */
-function Story() {
-  let word = 0;
-  return (
-    <div
-      className={`absolute right-6 left-6 space-y-[2.2vh] leading-[1.25] tracking-wide text-[#fdf3d4] portrait:top-[40svh] portrait:text-[clamp(1.05rem,4.6vw,1.6rem)] landscape:top-[max(18vh,4.5rem)] landscape:right-[13vw] landscape:left-[41.5vw] landscape:text-[clamp(0.95rem,min(1.9vw,4.4vh),2.2rem)] ${SHADOW}`}
-    >
-      {STORY.map((line) => (
-        <p key={line}>
-          {line.split(" ").map((w, i) => (
-            <span
-              key={i}
-              className="inline-block opacity-0"
-              style={{ animation: `story-word-in 520ms ease-out ${200 + word++ * 45}ms forwards` }}
-            >
-              {w}&nbsp;
-            </span>
-          ))}
-        </p>
-      ))}
-    </div>
-  );
-}
-
 /** The story, and the counter until it reaches 100, then the Enter button. */
 function Preloader({ onEnter }: { onEnter: () => void }) {
   const [full, setFull] = useState(false);
   const onFull = useCallback(() => setFull(true), []);
   return (
     <>
-      <Story />
-      {full ? <EnterButton onEnter={onEnter} /> : <Counter onFull={onFull} />}
+      <StoryText lines={STORY} />
+      {/* At 100 the game waits behind the story until the player has read it and steps in. */}
+      {full ? <StoryButton label="Enter the maze" onClick={onEnter} /> : <Counter onFull={onFull} />}
     </>
   );
 }

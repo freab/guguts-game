@@ -27,11 +27,11 @@ export const BOTTLES = 2;
 export const CALL_MAP_MS = 3200;
 export const CALL_MAP_FADE_MS = 1200;
 /**
- * Reaching her: the view eases onto her and the light blooms up
- * (scene/WinShot, maze/GoatReveal, ui/WinFlash) for this long before the
- * story's end comes up (ui/GameOver).
+ * Reaching her: the view eases onto her and her light blooms up, then the
+ * camera lifts away over the maze (scene/WinShot, maze/GoatReveal); this far
+ * in, the end of the story starts to burn in over it (ui/GameOver → OutroStory).
  */
-export const WIN_SHOT_MS = 2400;
+export const WIN_SHOT_MS = 3800;
 
 /** A short message to the player (a call used up, water found…). */
 export interface Notice {

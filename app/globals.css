@@ -80,21 +80,6 @@ body {
   }
 }
 
-/* Reaching the goat (ui/WinFlash): the light blooms up as the view settles
-   on her, peaks as the story's end comes up (WIN_SHOT_MS, ~63%), then fades. */
-@keyframes win-flash {
-  0%,
-  20% {
-    opacity: 0;
-  }
-  63% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 /*
  * Phones and tablets: no frosted-glass blur on the HUD. A backdrop blur over
  * the 3D view makes the browser re-blur the scene behind every blurred panel
