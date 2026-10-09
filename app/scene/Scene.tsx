@@ -14,6 +14,7 @@ import WinShot from "./WinShot";
 import PhotoCamera from "./PhotoCamera";
 import GoatReveal from "../maze/GoatReveal";
 import Jebena from "../maze/Jebena";
+import KidGoat from "../maze/KidGoat";
 import Carving from "../maze/Carving";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
@@ -618,6 +619,7 @@ export default function Scene() {
         <Carving />
         <GoatReveal />
         <Temesgen />
+        <KidGoat />
         <Particles />
         <GustLeaves />
         <Birds />

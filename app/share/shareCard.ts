@@ -39,6 +39,8 @@ export interface CardData {
   detail?: string;
   /** The address printed on the card (the game, or the player's page). */
   host: string;
+  /** Found the rare golden goat (game/goldenGoat): a gold frame round the card. */
+  golden?: boolean;
 }
 
 /** The preloader's colours. */
@@ -284,6 +286,23 @@ export async function drawCard(format: CardFormat, data: CardData): Promise<Blob
   ctx.font = `${footSize}px ${font}`;
   const invite = fit(ctx, "Can you find her faster?", pillX - pad - 24 * k);
   say(ctx, invite, pad, footY + footH / 2 + 2 * k, footSize, font, C.creamDim);
+
+  // The golden goat's gold frame: a gilt edge, and a fine line inside it.
+  if (data.golden) {
+    const edge = 18 * k;
+    ctx.save();
+    const gilt = ctx.createLinearGradient(0, 0, W, H);
+    gilt.addColorStop(0, "#f6dc8a");
+    gilt.addColorStop(0.5, C.gold);
+    gilt.addColorStop(1, "#8f6a2c");
+    ctx.strokeStyle = gilt;
+    ctx.lineWidth = edge;
+    ctx.strokeRect(edge / 2, edge / 2, W - edge, H - edge);
+    ctx.strokeStyle = "rgba(246, 220, 138, 0.7)";
+    ctx.lineWidth = 2 * k;
+    ctx.strokeRect(edge * 1.8, edge * 1.8, W - edge * 3.6, H - edge * 3.6);
+    ctx.restore();
+  }
 
   return new Promise((resolve, reject) =>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("card"))), "image/png")

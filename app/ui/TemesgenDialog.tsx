@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { posterFont } from "../fonts";
 import { runStore } from "../game/runStore";
 import { mazeHint, temesgen } from "../game/temesgen";
+import { getProfile } from "../game/profile";
 
 type Step = "greet" | "invite" | "playing" | "farewell" | "listening" | "rejoin" | "hint" | "other" | "otherPlaying";
 
@@ -30,9 +31,23 @@ interface Line {
 const GIVES_IN_AT = 3;
 const askOther: Choice = { text: "Do you know any other songs?", then: "other", act: () => void temesgen.askOtherSong() };
 
+/**
+ * His hello — by the player's name, if they have chosen one (a secret):
+ * not the made-up "Goatherd 1234" every new player starts with.
+ */
+function greeting(): string {
+  const name = getProfile().name.trim();
+  const quiet = "You are walking fast for such a quiet evening.";
+  if (!name || /^Goatherd \d+$/.test(name)) return `Selam, little brother. ${quiet}`;
+  const lower = name.toLowerCase();
+  if (lower === "temesgen") return `Selam, Temesgen! A fine name — a musician's name. ${quiet}`;
+  if (lower === "gugut") return `Selam, Gugut, little brother. Everyone on this hill knows your goat. ${quiet}`;
+  return `Selam, ${name}. ${quiet}`;
+}
+
 const LINES: Record<Step, Line> = {
   greet: {
-    says: "Selam, little brother. You are walking fast for such a quiet evening.",
+    says: greeting,
     choices: [
       { text: "Have you seen my goat?", then: "invite" },
       { text: "You know these walls — where would a goat go?", then: "hint", afterWater: true },

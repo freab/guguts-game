@@ -10,6 +10,7 @@ import { fitSkinnedModel } from "../character/fitSkinnedModel";
 import { useDisposable } from "../hooks/useDisposable";
 import { revealRim } from "./GoatReveal";
 import { goat } from "../game/goat";
+import { goldenGoat } from "../game/goldenGoat";
 
 /**
  * The goat: one static, textured mesh (no rig, no clips), authored facing +Z
@@ -17,9 +18,12 @@ import { goat } from "../game/goat";
  * y ≈ -0.47, head top at y ≈ +0.47, front legs around z ≈ 0, hind legs
  * around z ≈ -0.45. The regions below are in those model units.
  */
-const GOAT_URL = "/models/goatnew.glb";
+export const GOAT_URL = "/models/goatnew.glb";
 /** Standing height (top of the head), metres. */
 const GOAT_HEIGHT = 1.0;
+
+/** The golden goat's coat (multiplies her texture). */
+const GOLD_FUR = new THREE.Color("#f5cf6a");
 
 /** Seconds per breath: a calm, resting goat. */
 const BREATH_PERIOD = 3.4;
@@ -37,7 +41,10 @@ const NECK = new THREE.Vector3(0, 0.1, 0.12);
  *   breath, bending smoothly from the neck.
  * Each goat gets its own phase so they don't breathe in step.
  */
-function createGoatMaterial(source: THREE.MeshStandardMaterial) {
+export function createGoatMaterial(
+  source: THREE.MeshStandardMaterial,
+  { reveal = true, golden = false }: { reveal?: boolean; golden?: boolean } = {}
+) {
   const time = uniform(Math.random() * 100);
   const material = new THREE.MeshStandardNodeMaterial();
   material.map = source.map;
@@ -70,8 +77,19 @@ function createGoatMaterial(source: THREE.MeshStandardMaterial) {
   const turned = rotate(p.sub(neck), vec3(nod.mul(headWeight), look.mul(headWeight), float(0))).add(neck);
 
   material.positionNode = turned.add(swell);
-  // Lit warm once she's been seen (maze/GoatReveal).
-  material.emissiveNode = revealRim();
+  // Lit warm once she's been seen (maze/GoatReveal) — not the kid (maze/KidGoat).
+  // The rare golden goat (game/goldenGoat): gold fur, glittering as she breathes.
+  let glow: THREE.Node<"vec3"> | null = reveal ? revealRim() : null;
+  if (golden) {
+    material.color.set(GOLD_FUR);
+    const glitter = sin(time.mul(2.3).add(positionLocal.x.mul(41)).add(positionLocal.y.mul(37)).add(positionLocal.z.mul(29)))
+      .mul(0.5)
+      .add(0.5)
+      .pow(8);
+    const gold = vec3(1, 0.78, 0.32).mul(glitter.mul(1.6).add(0.12));
+    glow = glow ? glow.add(gold) : gold;
+  }
+  material.emissiveNode = glow;
   return {
     material,
     advance: (dt: number) => void (time.value += dt),
@@ -118,7 +136,7 @@ export default function Goat() {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && !source) source = mesh.material as THREE.MeshStandardMaterial;
     });
-    const goatMaterial = createGoatMaterial(source!);
+    const goatMaterial = createGoatMaterial(source!, { golden: goldenGoat() });
     goat.animated.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) {

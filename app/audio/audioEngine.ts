@@ -539,6 +539,39 @@ class AudioEngine {
     }
   }
 
+  /** Something wooden landing in the grass (the lantern secret): a soft thud and a rattle of glass. */
+  thunk() {
+    const ctx = this.ctx;
+    if (!ctx || !this.calls || !this.noise || ctx.state !== "running") return;
+    const now = ctx.currentTime;
+    const thud = ctx.createBufferSource();
+    thud.buffer = this.noise;
+    const low = ctx.createBiquadFilter();
+    low.type = "lowpass";
+    low.frequency.value = 260;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(0.9, now + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    thud.connect(low).connect(env).connect(this.calls);
+    thud.start(now);
+    thud.stop(now + 0.3);
+    for (const [freq, at] of [
+      [3100, 0.03],
+      [4300, 0.09],
+    ]) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.exponentialRampToValueAtTime(0.05, now + at + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.18);
+      osc.connect(g).connect(this.calls);
+      osc.start(now + at);
+      osc.stop(now + at + 0.2);
+    }
+  }
+
   /** Gugut tries to call with no voice left: a dry, breathy rasp. */
   dryCall() {
     const ctx = this.ctx;

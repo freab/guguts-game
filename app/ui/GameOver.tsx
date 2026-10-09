@@ -10,6 +10,7 @@ import LeaderboardTable from "./LeaderboardTable";
 import ShareDialog, { type ShareCard } from "./ShareDialog";
 import OutroStory from "./OutroStory";
 import { isGugut } from "../game/secrets";
+import { goldenGoat } from "../game/goldenGoat";
 import { LEVELS } from "../maze/levels";
 
 /**
@@ -101,12 +102,15 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
   const [chapter, setChapter] = useState<"story" | "results">("story");
   const stars = starsFor(run.callsUsed);
   const bottlesFound = run.bottlesTaken.filter(Boolean).length;
+  // The rare golden goat (game/goldenGoat): a badge, and a gold frame on the card.
+  const golden = goldenGoat();
   const badges = [
     run.callsUsed === 0 && { name: "Silent tracker", detail: "Found her without a single call" },
     bottlesFound === run.bottlesTaken.length && { name: "Well watered", detail: "Found every bottle of water" },
     run.calls === 0 && bottlesFound === 0 && run.callsUsed > 0 && { name: "Parched", detail: "Made it with a dry throat" },
     run.jebenaFound && { name: "First buna", detail: "Found the monks' jebena, still warm" },
     run.caffeinated && { name: "Caffeinated", detail: "Ran on buna" },
+    golden && { name: "Lucky shepherd", detail: "Found the golden goat" },
   ].filter(Boolean) as { name: string; detail: string }[];
 
   // The share card: this run, ranked when it's their best on the board.
@@ -123,9 +127,10 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
       rank: data?.newBest ? data.you?.rank : undefined,
       players: data?.newBest ? data.players : undefined,
       newBest: data?.newBest,
+      golden,
       detail: `${run.callsUsed === 0 ? "No calls" : `Called her ${run.callsUsed === 1 ? "once" : run.callsUsed === 2 ? "twice" : `${run.callsUsed} times`}`} · ${bottlesFound} of ${run.bottlesTaken.length} bottles of water`,
     }),
-    [profile.name, run.level, timeMs, stars, badgeNames, data, run.callsUsed, bottlesFound, run.bottlesTaken.length]
+    [profile.name, run.level, timeMs, stars, badgeNames, data, run.callsUsed, bottlesFound, run.bottlesTaken.length, golden]
   );
 
   const button = "ui-label px-5 py-2.5";

@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
 import { panelQuality } from "../quality";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { treeSeed } from "../maze/mazeData";
 import { playerStore } from "../character/playerStore";
+import { runStore } from "../game/runStore";
+import { lantern } from "../game/lantern";
 import { useDisposable } from "../hooks/useDisposable";
 import { useLeafAtlas, usePbrSet } from "./textures/pbrTextures";
 import { useLoading } from "./bake/loadingStore";
@@ -122,7 +124,22 @@ function buildTree(layout: MapleTreeLayout, mats: ReturnType<typeof createMapleM
   };
 }
 
-/** A small hanging lantern: chain, roof, frame posts and glowing panes. */
+/** Clicking the lantern (a secret — game/lantern): how close to it the click must aim (m, ×scale) and how far it reaches (m). */
+const LANTERN_HIT = 0.28;
+const LANTERN_REACH = 12;
+/** Each click's extra swing (radians), dying away over this long (s). */
+const KICK = 0.05;
+const KICK_FADE = 1.6;
+
+const _ray = new THREE.Ray();
+const _glow = new THREE.Vector3();
+const _ndc = new THREE.Vector2();
+
+/**
+ * A small hanging lantern: chain, roof, frame posts and glowing panes. Click
+ * it (a secret — game/lantern) and it swings; click it enough and it falls
+ * into the grass, still glowing.
+ */
 function Lantern({
   anchor,
   scale,
@@ -134,16 +151,64 @@ function Lantern({
 }) {
   const swing = useRef<THREE.Group>(null);
   const hang = useRef<THREE.Group>(null);
+  const glow = useRef<THREE.Mesh>(null);
+  const landed = useRef(false);
   const offset = useMemo(() => new THREE.Vector3(), []);
+  const camera = useThree((st) => st.camera);
+  const gl = useThree((st) => st.gl);
+
+  // A new maze: back on its branch.
+  useEffect(() => {
+    lantern.reset();
+    landed.current = false;
+  }, []);
+
+  // A click aimed at it (the view's centre with the mouse captured, else the pointer).
+  useEffect(() => {
+    const el = gl.domElement;
+    const onDown = (e: PointerEvent) => {
+      const { phase } = runStore.get();
+      if ((phase !== "armed" && phase !== "running") || runStore.isPaused() || !glow.current) return;
+      if (document.pointerLockElement === el) _ndc.set(0, 0);
+      else {
+        const r = el.getBoundingClientRect();
+        _ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      }
+      aimRay(camera, _ndc);
+      glow.current.getWorldPosition(_glow);
+      const along = _glow.clone().sub(_ray.origin).dot(_ray.direction);
+      if (along > 0 && along < LANTERN_REACH && _ray.distanceToPoint(_glow) < LANTERN_HIT * scale) lantern.click();
+    };
+    el.addEventListener("pointerdown", onDown);
+    return () => el.removeEventListener("pointerdown", onDown);
+  }, [gl, camera, scale]);
+
   useFrame(({ clock }) => {
     const g = swing.current;
     const h = hang.current;
     if (!g || !h) return;
     const t = clock.elapsedTime;
-    g.rotation.z = Math.sin(t * 1.3) * 0.05;
-    g.rotation.x = Math.sin(t * 0.9 + 1) * 0.035;
-    // Ride the limb it hangs from as the tree sways.
-    h.position.copy(anchor).add(mats.swayAt(anchor, offset));
+    const now = performance.now();
+    // Its idle sway, plus a kick for each recent click, dying away.
+    const kick = lantern.clickedAt() ? Math.min(lantern.clicks(), 9) * KICK * Math.exp(-(now - lantern.clickedAt()) / 1000 / KICK_FADE) : 0;
+    g.rotation.z = Math.sin(t * 1.3) * (0.05 + kick);
+    g.rotation.x = Math.sin(t * 0.9 + 1) * (0.035 + kick * 0.5);
+    const dropped = lantern.droppedAt();
+    if (!dropped) {
+      // Ride the limb it hangs from as the tree sways.
+      h.position.copy(anchor).add(mats.swayAt(anchor, offset));
+      return;
+    }
+    // Falling: under gravity, down to the grass (its base on the ground), then lying a little askew.
+    const fallen = Math.min(anchor.y - (LANTERN_CHAIN + 0.37) * scale, 4.9 * ((now - dropped) / 1000) ** 2);
+    h.position.set(anchor.x, anchor.y - fallen, anchor.z);
+    if (fallen >= anchor.y - (LANTERN_CHAIN + 0.37) * scale) {
+      g.rotation.set(0.12, 0, 0.3);
+      if (!landed.current) {
+        landed.current = true;
+        lantern.landed();
+      }
+    }
   });
   const frame = useDisposable(() => lanternFrameGeometry(), []);
   return (
@@ -152,12 +217,18 @@ function Lantern({
         {/* Chain, roof, corner posts and base: one mesh (one draw). */}
         <mesh geometry={frame} material={mats.lanternFrame} castShadow />
         {/* Glowing core */}
-        <mesh position={[0, -LANTERN_CHAIN - 0.22, 0]} material={mats.lanternGlow}>
+        <mesh ref={glow} position={[0, -LANTERN_CHAIN - 0.22, 0]} material={mats.lanternGlow}>
           <boxGeometry args={[0.2, 0.3, 0.2]} />
         </mesh>
       </group>
     </group>
   );
+}
+
+/** The ray from the camera through `ndc` (screen, -1…1). */
+function aimRay(camera: THREE.Camera, ndc: THREE.Vector2) {
+  _ray.origin.setFromMatrixPosition(camera.matrixWorld);
+  _ray.direction.set(ndc.x, ndc.y, 0.5).unproject(camera).sub(_ray.origin).normalize();
 }
 
 /** Length of the lantern's chain. */
