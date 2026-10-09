@@ -4,6 +4,7 @@ import { ChunkCuller, type CullableChunk } from "../grass/ChunkCuller";
 import { ChunkState } from "../grass/grassMapStore";
 import type { VineMaterials } from "./vineMaterials";
 import { growFace, type VineFace, type VineGrowth, type VineLeaf, type VineStem } from "./vineLayout";
+import { quality } from "../../quality";
 
 /** Chunk side in metres. */
 const CHUNK_SIZE = 6;
@@ -24,8 +25,8 @@ export const LEAF_LOD_MIN = 0.3;
 const STEM_VERTEX_CAPACITY = 65536;
 /** Leaf slots the shared leaf mesh starts with (it grows when needed). */
 const LEAF_CAPACITY = 16384;
-/** Beyond this, tendrils are under a pixel wide (and deep in the fog): skip them. */
-const TENDRIL_DISTANCE = 11;
+/** Beyond this, tendrils are under a pixel wide (and deep in the fog): skip them. High keeps them further out. */
+const tendrilDistance = () => quality(11, 11, 15);
 /**
  * Stem rings, every Nth growth point (7 cm apart): near, and from
  * STEM_LOD_DISTANCE on, where a 2 cm stem is a few pixels wide.
@@ -313,6 +314,8 @@ export class VineField {
   leavesDrawn = 0;
   chunksDrawn = 0;
   chunksBuilt = 0;
+  /** Tendrils are built within this distance (m), set by the graphics level when the field is made. */
+  private readonly tendrilDistance = tendrilDistance();
 
   constructor(
     faces: VineFace[],
@@ -386,7 +389,7 @@ export class VineField {
     ch.viewDistance = dist;
     const keep = dist <= LEAF_LOD_NEAR ? 1 : Math.max(LEAF_LOD_MIN, LEAF_LOD_NEAR / dist);
     const drawn = Math.ceil(ch.leafCount * keep);
-    ch.stemLod = dist <= STEM_LOD_DISTANCE ? STEMS_NEAR : dist <= TENDRIL_DISTANCE ? STEMS_FAR : STEMS_FAR_THICK;
+    ch.stemLod = dist <= STEM_LOD_DISTANCE ? STEMS_NEAR : dist <= this.tendrilDistance ? STEMS_FAR : STEMS_FAR_THICK;
     return drawn;
   }
 

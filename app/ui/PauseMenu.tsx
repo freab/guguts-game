@@ -13,6 +13,7 @@ export interface PauseActions {
   onControls: () => void;
   onLeaderboard: () => void;
   onSettings: () => void;
+  onCredits: () => void;
   onChangeLevel: () => void;
 }
 
@@ -64,6 +65,9 @@ export default function PauseMenu(actions: PauseActions) {
             </button>
             <button type="button" onClick={actions.onSettings} className={button}>
               Settings
+            </button>
+            <button type="button" onClick={actions.onCredits} className={button}>
+              Credits
             </button>
             <button type="button" onClick={actions.onChangeLevel} className={button}>
               Change level

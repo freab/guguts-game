@@ -31,6 +31,7 @@ interface Actions {
   onPlayAgain: () => void;
   onChangeLevel: () => void;
   onChangeName: () => void;
+  onCredits: () => void;
 }
 
 /**
@@ -47,7 +48,7 @@ export default function GameOver(actions: Actions) {
   return <Panel key={run.finishedAt} run={run} {...actions} />;
 }
 
-function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { run: RunState }) {
+function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Actions & { run: RunState }) {
   const profile = useProfile();
   const timeMs = run.finishedAt - run.startedAt - run.pausedTotal;
   const [attempt, setAttempt] = useState(0);
@@ -200,6 +201,9 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName }: Actions & { ru
             </button>
             <button type="button" onClick={onChangeName} className={`${button} ui-tile`}>
               Change name
+            </button>
+            <button type="button" onClick={onCredits} className={`${button} ui-tile`}>
+              Credits
             </button>
           </div>
         </div>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { preload } from "react-dom";
 import { useProgress } from "@react-three/drei";
 import { posterFont } from "../fonts";
 import { setPreferences, usePreferences } from "../game/preferences";
 import { LEVELS, type Level } from "../maze/levels";
+import { defaultGraphics, type Graphics } from "../quality";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
 import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
 
@@ -132,35 +133,87 @@ const CARD =
 const PILL =
   "flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100";
 
+/** A choice on the setup step: a glass pill, gold when picked. */
+const CHIP =
+  "rounded-full border px-[1.1em] py-[0.45em] text-[clamp(1.1rem,min(1.8vw,4.2vh),1.8rem)] leading-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdf3d4]";
+const CHIP_ON = "border-[#c9a45c] bg-[#c9a45c] text-[#2a2312]";
+const CHIP_OFF = "border-white/50 bg-black/30 text-[#fdf3d4] hover:bg-white/20";
+const HEADING = `pl-1 text-[clamp(1.4rem,min(2.2vw,5vh),2.4rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`;
+const BLURB = `mt-[1vh] min-h-[2.4em] pl-1 text-[clamp(0.9rem,min(1vw,2.2vh),1.1rem)] leading-tight text-[#fdf3d4]/70 ${SHADOW}`;
+
+const GRAPHICS_OPTIONS: { id: Graphics; label: string; blurb: string }[] = [
+  { id: "low", label: "Low", blurb: "Smooth on phones and older laptops" },
+  { id: "medium", label: "Medium", blurb: "The full look, balanced for most PCs" },
+  { id: "high", label: "High", blurb: "Everything on: more flowers and ivy, sharper light and shadows. For a strong PC" },
+];
+const VOICE_OPTIONS = [
+  { on: true, label: "On", blurb: "Hear Gugut's thoughts as he searches" },
+  { on: false, label: "Off", blurb: "Just the maze, the wind and the birds" },
+];
+
+const noSubscribe = () => () => {};
+/** The device's graphics level when none is chosen (the server can't tell: Medium until hydrated). */
+function useDefaultGraphics(): Graphics {
+  return useSyncExternalStore(noSubscribe, defaultGraphics, () => "medium");
+}
+
 /**
- * First on the title screen: Gugut's voiceovers, on or off (remembered, and
- * in Settings too); the level chooser follows. The saved choice is focused,
- * so Enter keeps it.
+ * First on the title screen: graphics (Low / Medium / High) and Gugut's
+ * voiceovers (on / off), both remembered and in Settings too; Continue goes
+ * on to the level chooser. Continue is focused, so Enter keeps the choices.
  */
-function VoiceChooser({ onChoose }: { onChoose: (on: boolean) => void }) {
-  const { voice } = usePreferences();
-  const options = [
-    { on: true, label: "Voice on", blurb: "Hear Gugut's thoughts as he searches", pill: "ON" },
-    { on: false, label: "Voice off", blurb: "Just the maze, the wind and the birds", pill: "OFF" },
-  ];
+function SetupChooser({ onDone }: { onDone: (graphics: Graphics, voice: boolean) => void }) {
+  const prefs = usePreferences();
+  const fallback = useDefaultGraphics();
+  const [graphics, setGraphics] = useState<Graphics | null>(null);
+  const [voice, setVoice] = useState<boolean | null>(null);
+  const g = graphics ?? prefs.graphics ?? fallback;
+  const v = voice ?? prefs.voice;
   return (
-    <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
-      <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
-        Voiceovers
-      </h2>
-      <div className="flex flex-col gap-[1.5vh]">
-        {options.map((o) => (
-          <button key={o.label} autoFocus={o.on === voice} onClick={() => onChoose(o.on)} className={CARD}>
-            <span className={SHADOW}>
-              <span className="block text-[clamp(2rem,min(3.4vw,7vh),3.6rem)] leading-none">{o.label}</span>
-              <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
-                {o.blurb}
-              </span>
-            </span>
-            <span className={PILL}>{o.pill}</span>
+    <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,24vw,28rem)]">
+      <h2 className={HEADING}>Graphics</h2>
+      <div role="radiogroup" aria-label="Graphics" className="mt-[1.4vh] flex gap-2">
+        {GRAPHICS_OPTIONS.map((o) => (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={o.id === g}
+            onClick={() => setGraphics(o.id)}
+            className={`${CHIP} ${o.id === g ? CHIP_ON : CHIP_OFF}`}
+          >
+            {o.label}
           </button>
         ))}
       </div>
+      <p className={BLURB}>{GRAPHICS_OPTIONS.find((o) => o.id === g)!.blurb}</p>
+
+      <h2 className={`${HEADING} mt-[2.5vh]`}>Voiceovers</h2>
+      <div role="radiogroup" aria-label="Voiceovers" className="mt-[1.4vh] flex gap-2">
+        {VOICE_OPTIONS.map((o) => (
+          <button
+            key={o.label}
+            role="radio"
+            aria-checked={o.on === v}
+            onClick={() => setVoice(o.on)}
+            className={`${CHIP} ${o.on === v ? CHIP_ON : CHIP_OFF}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <p className={BLURB}>{VOICE_OPTIONS.find((o) => o.on === v)!.blurb}</p>
+
+      <button
+        autoFocus
+        onClick={() => onDone(g, v)}
+        className="group mt-[3vh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-6 text-[clamp(1.3rem,min(2vw,4.6vh),2.2rem)] leading-none text-[#2a2312] shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
+      >
+        Continue
+        <svg viewBox="0 0 24 24" aria-hidden className="size-[1.3em] transition-transform duration-300 group-hover:translate-x-0.5">
+          <circle cx="12" cy="12" r="12" fill="#fdf3d4" />
+          <path d="M9.5 7.5v9l7-4.5z" fill="#c9a45c" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -170,8 +223,10 @@ function VoiceChooser({ onChoose }: { onChoose: (on: boolean) => void }) {
  * shown all the time on touch screens, which have no hover (and no blur
  * there: a backdrop blur is costly on a phone).
  */
-function LevelChooser({ onChoose, onVoice }: { onChoose: (level: Level) => void; onVoice: () => void }) {
-  const { voice } = usePreferences();
+function LevelChooser({ onChoose, onSetup }: { onChoose: (level: Level) => void; onSetup: () => void }) {
+  const prefs = usePreferences();
+  const fallback = useDefaultGraphics();
+  const graphics = GRAPHICS_OPTIONS.find((o) => o.id === (prefs.graphics ?? fallback))!;
   return (
     <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
       <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
@@ -197,10 +252,11 @@ function LevelChooser({ onChoose, onVoice }: { onChoose: (level: Level) => void;
         ))}
       </div>
       <button
-        onClick={onVoice}
+        onClick={onSetup}
         className={`mt-[1.5vh] pl-6 text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] text-[#fdf3d4]/60 transition-colors hover:text-[#fdf3d4] focus-visible:text-[#fdf3d4] focus-visible:outline-none ${SHADOW}`}
       >
-        Voiceovers {voice ? "on" : "off"} · <span className="underline underline-offset-4">change</span>
+        {graphics.label} graphics · Voice {prefs.voice ? "on" : "off"} ·{" "}
+        <span className="underline underline-offset-4">change</span>
       </button>
     </div>
   );
@@ -286,12 +342,13 @@ export default function LoadingOverlay({
     setPicked(level);
   };
   const titleShown = choosing && !picked;
-  // Voiceovers on or off: asked first, once a visit (then changed from the
-  // chooser's link or Settings).
-  const [voiceAsked, setVoiceAsked] = useState(false);
-  const chooseVoice = (on: boolean) => {
-    setPreferences({ voice: on });
-    setVoiceAsked(true);
+  // Graphics and voiceovers: asked first, once a visit (then changed from the
+  // chooser's link or Settings). Chosen before a level loads, so the scene is
+  // built for the graphics level (SceneClient applies it as a maze starts).
+  const [setupDone, setSetupDone] = useState(false);
+  const finishSetup = (graphics: Graphics, voice: boolean) => {
+    setPreferences({ graphics, voice });
+    setSetupDone(true);
   };
   // Enter pressed: the story fades and its image burns away to the scene;
   // the game starts (onEnter) once that burn is done.
@@ -351,11 +408,11 @@ export default function LoadingOverlay({
         }`}
       >
         {/* Keyed, so each step fades in as the other goes. */}
-        <div key={voiceAsked ? "levels" : "voice"} className="opacity-0" style={{ animation: "notice-in 500ms ease-out forwards" }}>
-          {voiceAsked ? (
-            <LevelChooser onChoose={pick} onVoice={() => setVoiceAsked(false)} />
+        <div key={setupDone ? "levels" : "setup"} className="opacity-0" style={{ animation: "notice-in 500ms ease-out forwards" }}>
+          {setupDone ? (
+            <LevelChooser onChoose={pick} onSetup={() => setSetupDone(false)} />
           ) : (
-            <VoiceChooser onChoose={chooseVoice} />
+            <SetupChooser onDone={finishSetup} />
           )}
         </div>
         <h1 className="w-[clamp(15rem,min(26vw,48vh),30rem)]">

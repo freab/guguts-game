@@ -6,6 +6,7 @@ import { KeyboardControls } from "@react-three/drei";
 import { useControls, folder, monitor, button } from "leva";
 import * as THREE from "three/webgpu";
 import PlayerController, { KEYBOARD_MAP } from "../character/PlayerController";
+import IntroFlight from "./IntroFlight";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
 import Temesgen from "../maze/Temesgen";
@@ -34,7 +35,7 @@ import InfiniteGrid from "./InfiniteGrid";
 import SkyEnvironment from "./SkyEnvironment";
 import { setSun as setSunUniforms } from "./sunUniforms";
 import { SHADOW_ONLY_LAYER } from "./layers";
-import { tier } from "../quality";
+import { panelQuality, quality } from "../quality";
 
 // Register the three/webgpu class catalog with R3F's JSX reconciler so every
 // <mesh>/<meshLambertMaterial>/etc. uses the same classes the WebGPURenderer
@@ -71,7 +72,8 @@ function PerfProbe() {
   return null;
 }
 
-const SHADOW_MAP_SIZE = 2048;
+/** The sun's shadow map (baked once, read by the walls and the god rays): sharper on High. */
+const shadowMapSize = () => quality(2048, 2048, 4096);
 
 /**
  * Aim the sun at the maze centre, size its shadow camera to cover the whole
@@ -135,7 +137,7 @@ function SunLight({
       intensity={intensity}
       color={color}
       castShadow
-      shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
+      shadow-mapSize={[shadowMapSize(), shadowMapSize()]}
       shadow-bias={-0.0004}
       shadow-normalBias={0.02}
     />
@@ -360,7 +362,7 @@ export default function Scene() {
       {
         fogEnabled: { value: true, label: "Fog" },
         // (Phones: a little shorter — fewer chunks of grass, ivy and walls drawn.)
-        viewDistance: { value: tier(15, 12), min: 5, max: 80, step: 1, label: "View distance" },
+        viewDistance: { value: panelQuality<number>("viewDistance"), min: 5, max: 80, step: 1, label: "View distance" },
         fogStart: { value: 0.4, min: 0, max: 0.95, step: 0.05, label: "Fog start" },
       },
       { collapsed: true }
@@ -385,7 +387,7 @@ export default function Scene() {
         postEnabled: { value: true, label: "Enabled" },
         // Multisampling of the scene pass (geometric edges; alpha-tested foliage
         // edges are not smoothed by it).
-        msaa: { value: tier(4, 2), options: { Off: 0, "2×": 2, "4×": 4 }, label: "MSAA" },
+        msaa: { value: panelQuality<number>("msaa"), options: { Off: 0, "2×": 2, "4×": 4 }, label: "MSAA" },
         godrays: { value: true, label: "God rays" },
         // Density is per 100 m of lit air; our rays cross ~10–30 m, so it needs
         // to be high to show. Falloff dims rays far from the light (node default 2).
@@ -394,9 +396,9 @@ export default function Scene() {
         raysFalloff: { value: 0.5, min: 0, max: 3, step: 0.05, label: "Rays falloff" },
         // The view distance keeps the rays' march short, so fewer steps do.
         // (Phones: a quarter-resolution, shorter march — the rays stay.)
-        raysSteps: { value: tier(40, 24), min: 8, max: 120, step: 1, label: "Rays steps" },
+        raysSteps: { value: panelQuality<number>("raysSteps"), min: 8, max: 120, step: 1, label: "Rays steps" },
         raysResolution: {
-          value: tier(0.5, 0.25),
+          value: panelQuality<number>("raysResolution"),
           options: { Quarter: 0.25, Half: 0.5, Full: 1 },
           label: "Rays resolution",
         },
@@ -406,7 +408,7 @@ export default function Scene() {
         bloomStrength: { value: 0.35, min: 0, max: 2, step: 0.05, label: "Bloom strength" },
         bloomRadius: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Bloom radius" },
         bloomThreshold: { value: 0.9, min: 0, max: 2, step: 0.01, label: "Bloom threshold" },
-        flare: { value: tier(true, false), label: "Lens flare" },
+        flare: { value: panelQuality<boolean>("flare"), label: "Lens flare" },
         flareStrength: { value: 0.6, min: 0, max: 2, step: 0.05, label: "Flare strength" },
         vignette: { value: true, label: "Vignette" },
         vignetteStrength: { value: 0.4, min: 0, max: 1, step: 0.05, label: "Vignette strength" },
@@ -518,10 +520,11 @@ export default function Scene() {
       camera={{ position: [0, 24, 34], fov: 55, near: 0.05 }}
       // PCF shadows (WebGPU dropped PCFSoft, R3F's default, and warns about it).
       shadows="percentage"
-      // Cap the pixel ratio: on a 2–3x HiDPI display this is a big fillrate win.
+      // Cap the pixel ratio: on a 2–3x HiDPI display this is a big fillrate win
+      // (High lets a sharp screen go to 2).
       // Phones get the same cap — at 1 their 2–3x screens showed the scene
       // stretched from a third of their resolution, visibly pixelated.
-      dpr={[1, 1.5]}
+      dpr={quality<[number, number]>([1, 1.5], [1, 1.5], [1, 2])}
       // Force the WebGPU renderer. forceWebGL:false = use the WebGPU backend when
       // the browser supports it; init() is async, so R3F awaits the promise.
       gl={async (props) => {
@@ -579,6 +582,8 @@ export default function Scene() {
         <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
         <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
         <PlayerController />
+        {/* After the player: the intro fly-in starts from (and lands in) his view. */}
+        <IntroFlight />
         {/* After the player: a bottle being drunk is held in front of the camera
             the controller has just placed. */}
         <WaterBottles />

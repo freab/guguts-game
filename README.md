@@ -67,6 +67,8 @@ Some things I'm proud of:
 
 ## Credits
 
+- **Designs:** by **Eman Issae**.
+- **Voice of Gugut:** the voiceovers are performed by **Surafel Yimam**.
 - **Music:** "Nostalgia" by **Temesgen** ([temesgen.com](https://temesgen.com)). All rights belong to the artist.
 - **Sound effects:** free (public domain) recordings from [BigSoundBank](https://bigsoundbank.com) by Joseph Sardin: birds, footsteps, goat bleats and drinking.
 - **Textures:** free (public domain) textures from [Poly Haven](https://polyhaven.com) and [ambientCG](https://ambientcg.com).

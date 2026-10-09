@@ -3,10 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { RESERVED_KEYS, keyLabel, setPreferences, usePreferences } from "../game/preferences";
 import { setPlayerName, useProfile } from "../game/profile";
+import { GRAPHICS_LEVELS, defaultGraphics, type Graphics } from "../quality";
 import { NAME_MAX } from "../leaderboard/shared";
 import Dialog from "./Dialog";
 
-/** Settings: the player's name on the leaderboard, the call key, sound captions and voiceovers. */
+/** Settings: the player's name on the leaderboard, the call key, sound captions, voiceovers and graphics. */
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const profile = useProfile();
   const [name, setName] = useState(profile.name);
@@ -124,6 +125,23 @@ function GameplaySettings() {
           onChange={(e) => setPreferences({ voice: e.target.checked })}
           className="h-5 w-5 accent-neutral-200"
         />
+      </label>
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-sm text-white/70">
+          Graphics
+          <span className="block text-xs text-white/40">Takes effect on your next maze</span>
+        </span>
+        <select
+          value={prefs.graphics ?? defaultGraphics()}
+          onChange={(e) => setPreferences({ graphics: e.target.value as Graphics })}
+          className="ui-tile h-9 px-3 text-sm"
+        >
+          {GRAPHICS_LEVELS.map((g) => (
+            <option key={g} value={g} className="bg-neutral-900">
+              {g[0].toUpperCase() + g.slice(1)}
+            </option>
+          ))}
+        </select>
       </label>
     </div>
   );

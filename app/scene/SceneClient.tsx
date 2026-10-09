@@ -18,6 +18,7 @@ import GameOver from "../ui/GameOver";
 import LeaderboardDialog from "../ui/LeaderboardDialog";
 import RunTimer from "../ui/RunTimer";
 import SettingsDialog from "../ui/SettingsDialog";
+import CreditsDialog from "../ui/CreditsDialog";
 import { runStore, useRun } from "../game/runStore";
 import ControlsHelp, { controlsSeen } from "../ui/ControlsHelp";
 import PauseMenu from "../ui/PauseMenu";
@@ -35,8 +36,11 @@ import DrinkVignette from "../ui/DrinkVignette";
 import { bottleFocus } from "../game/bottleFocus";
 import { getPreferences, usePreferences } from "../game/preferences";
 import Monologue from "../game/Monologue";
+import { intro, useIntro } from "../game/intro";
+import IntroOverlay from "../ui/IntroOverlay";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen, useIsPortrait } from "../ui/fullscreen";
 import { setLoading, useLoading } from "./bake/loadingStore";
+import { applyGraphicsToPanel } from "../quality";
 
 /** True while the user is typing in a field (e.g. a leva number input). */
 function isTyping(target: EventTarget | null): boolean {
@@ -78,6 +82,8 @@ export default function SceneClient() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const [creditsOpen, setCreditsOpen] = useState(false);
+  const closeCredits = useCallback(() => setCreditsOpen(false), []);
   const closeBoard = useCallback(() => setBoardOpen(false), []);
   // Pause menu, controls help, and the phone "turn sideways" prompt.
   const run = useRun();
@@ -93,7 +99,10 @@ export default function SceneClient() {
   const portrait = useIsPortrait();
   const fullscreen = useIsFullscreen();
   const canFullscreen = useSyncExternalStore(noSubscribe, fullscreenSupported, () => false);
-  const playing = ready && (run.phase === "armed" || run.phase === "running");
+  // The intro fly-in (game/intro): the camera is flying — no HUD, the game paused.
+  const introPhase = useIntro();
+  const cinematic = introPhase === "playing" || introPhase === "skipping";
+  const playing = ready && !cinematic && (run.phase === "armed" || run.phase === "running");
   // The controls are shown on the first run on this device (then from the menu).
   const showHelp = helpOpen || (playing && run.phase === "armed" && !helpDismissed && !controlsSeen());
 
@@ -124,6 +133,14 @@ export default function SceneClient() {
   useEffect(() => {
     audio.setActive(ready);
   }, [ready]);
+
+  // The preloader has gone: the intro flies (it held its first shot until now).
+  useEffect(() => {
+    if (ready) intro.play();
+  }, [ready]);
+  useEffect(() => {
+    runStore.setPaused("intro", cinematic);
+  }, [cinematic]);
 
   // Gugut's voiceovers, as chosen on the title screen (or in Settings).
   const { voice } = usePreferences();
@@ -175,6 +192,7 @@ export default function SceneClient() {
 
   // New random maze at the current size.
   const restart = () => {
+    applyGraphicsToPanel();
     regenerateMaze();
     setLoading({ stage: "assets", bakeProgress: 0, sceneHeld: false }); // preloader runs again
     setEntered(false);
@@ -218,6 +236,9 @@ export default function SceneClient() {
     if (touch) void enterFullscreen(true);
   };
   const chooseLevel = (next: Level) => {
+    // The graphics level chosen on the title screen (or in Settings) — into the
+    // panel too, which would otherwise keep the last maze's values.
+    applyGraphicsToPanel();
     // Temesgen's song downloads alongside the scene's assets (counted by the preloader).
     void audio.preloadSong();
     applied.current = { w: next.cellsW, h: next.cellsH, c: next.cell };
@@ -288,7 +309,7 @@ export default function SceneClient() {
       {level && <Scene key={`scene-${runId}`} />}
 
       {/* Touch controls, while playing on a touch device. */}
-      {ready && touch && <TouchControls />}
+      {ready && !cinematic && touch && <TouchControls />}
 
       {/* Title screen (story + level chooser), then the preloader: covers
           everything until assets, bakes, shaders and post-processing are ready. */}
@@ -301,8 +322,18 @@ export default function SceneClient() {
         onEnter={() => setEntered(true)}
       />
 
+      {/* The intro fly-in's bars, level name and skip prompt. */}
+      {level && (
+        <IntroOverlay
+          key={`intro-${runId}`}
+          title={LEVELS.find((l) => l.id === level)?.label ?? "Custom maze"}
+          subtitle={LEVELS.find((l) => l.id === level)?.blurb ?? ""}
+          touch={touch}
+        />
+      )}
+
       {/* The run: its clock, and the finish screen when you reach the goat. */}
-      {ready && <RunTimer />}
+      {ready && !cinematic && <RunTimer />}
       {ready && <GameNotice />}
       {ready && <BleatIndicator />}
       {ready && <Monologue key={`voice-${runId}`} />}
@@ -326,6 +357,7 @@ export default function SceneClient() {
           onPlayAgain={restart}
           onChangeLevel={() => setLevel(null)}
           onChangeName={() => setSettingsOpen(true)}
+          onCredits={() => setCreditsOpen(true)}
         />
       )}
 
@@ -376,6 +408,7 @@ export default function SceneClient() {
           onControls={() => setHelpOpen(true)}
           onLeaderboard={() => setBoardOpen(true)}
           onSettings={() => setSettingsOpen(true)}
+          onCredits={() => setCreditsOpen(true)}
           onChangeLevel={() => {
             setMenuOpen(false);
             setLevel(null);
@@ -387,6 +420,7 @@ export default function SceneClient() {
         <RotatePrompt onDismiss={() => setRotateDismissed(true)} />
       )}
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {creditsOpen && <CreditsDialog onClose={closeCredits} />}
       {boardOpen && <LeaderboardDialog initial={level ?? "easy"} onClose={closeBoard} />}
     </div>
   );

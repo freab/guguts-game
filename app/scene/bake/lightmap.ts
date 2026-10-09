@@ -4,7 +4,7 @@ import { WallCollider } from "../../character/WallCollider";
 import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld } from "../../maze/mazeData";
 import { mapleTreeLayout, treeTransmittance } from "../tree/mapleTree";
 import { nextFrames } from "./bakeTracker";
-import { tier } from "../../quality";
+import { quality } from "../../quality";
 
 /**
  * Baked ground lighting ("lightmap") for everything lying on the floor — the
@@ -17,18 +17,21 @@ import { tier } from "../../quality";
  */
 
 /**
- * Resolution: texels per metre (capped), plus a margin around the maze.
- * Phones bake a coarser one: it is baked on the CPU while the loading
+ * Resolution: texels per metre (capped; read per bake), plus a margin around the maze.
+ * Low bakes a coarser one, High a finer one: it is baked on the CPU while the loading
  * screen is up, and the shadows on the ground are soft anyway.
  */
-const TEXELS_PER_METRE = tier(10, 7);
+const texelsPerMetre = () => quality(7, 10, 14);
 const MAX_SIZE = 2048;
 const MARGIN = 4;
 /** Rows baked per frame, so the page (and loading screen) stays responsive. */
 const ROWS_PER_SLICE = 24;
-/** Penumbra softness (metres) and how far ambient occlusion reaches from walls. */
+/**
+ * Penumbra softness (metres), and how far the darkening at wall bases reaches
+ * across the ground (High: wider, so the walls sit deeper in the grass).
+ */
 const PENUMBRA = 0.14;
-const AO_REACH = 0.9;
+const aoReach = () => quality(0.9, 0.9, 1.25);
 
 function makeTexture(data: Uint8Array, width: number, height: number): THREE.DataTexture {
   const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
@@ -111,8 +114,10 @@ export async function bakeLightmap(
   const minZ = z0 - CELL / 2 - MARGIN;
   const sizeX = x1 + CELL / 2 + MARGIN - minX;
   const sizeZ = z1 + CELL / 2 + MARGIN - minZ;
-  const w = Math.min(MAX_SIZE, Math.ceil(sizeX * TEXELS_PER_METRE));
-  const h = Math.min(MAX_SIZE, Math.ceil(sizeZ * TEXELS_PER_METRE));
+  const texels = texelsPerMetre();
+  const aoDistance = aoReach();
+  const w = Math.min(MAX_SIZE, Math.ceil(sizeX * texels));
+  const h = Math.min(MAX_SIZE, Math.ceil(sizeZ * texels));
 
   const sun = new Float32Array(w * h);
   const ao = new Float32Array(w * h);
@@ -129,7 +134,7 @@ export async function bakeLightmap(
       const i = y * w + x;
       origin.set(wx, 0.05, z);
       sun[i] = walls.raycast(origin, dir, reach) === Infinity ? treeTransmittance(tree, origin, dir) : 0;
-      ao[i] = smoothstep(0, AO_REACH, walls.distanceToWalls(wx, z, AO_REACH));
+      ao[i] = smoothstep(0, aoDistance, walls.distanceToWalls(wx, z, aoDistance));
     }
     if (y % ROWS_PER_SLICE === ROWS_PER_SLICE - 1) {
       onProgress?.(y / h);
@@ -138,7 +143,7 @@ export async function bakeLightmap(
     }
   }
 
-  blur(sun, w, h, Math.round(PENUMBRA * TEXELS_PER_METRE), 2);
+  blur(sun, w, h, Math.round(PENUMBRA * texels), 2);
   if (isCancelled()) return;
 
   const data = new Uint8Array(w * h * 4);

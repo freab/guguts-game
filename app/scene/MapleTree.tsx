@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useControls, folder, monitor } from "leva";
 import * as THREE from "three/webgpu";
-import { tier } from "../quality";
+import { panelQuality } from "../quality";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { treeSeed } from "../maze/mazeData";
 import { playerStore } from "../character/playerStore";
@@ -208,8 +208,8 @@ export default function MapleTree({
           lanternGlow: { value: 2.2, min: 0, max: 6, step: 0.1, label: "Lantern glow" },
           culling: { value: true, label: "Culling + LOD" },
           occlusion: { value: true, label: "Occlusion culling" },
-          lodNear: { value: tier(16, 10), min: 4, max: 80, step: 1, label: "Full detail within" },
-          lodMin: { value: tier(0.2, 0.12), min: 0.05, max: 1, step: 0.05, label: "Fewest leaves" },
+          lodNear: { value: panelQuality<number>("Tree.lodNear"), min: 4, max: 80, step: 1, label: "Full detail within" },
+          lodMin: { value: panelQuality<number>("Tree.lodMin"), min: 0.05, max: 1, step: 0.05, label: "Fewest leaves" },
           groundDistance: { value: 30, min: 5, max: 100, step: 1, label: "Fallen leaves dist." },
           Leaves: monitor(() => stats.leaves, { graph: false, interval: 300 }),
           Visible: monitor(() => stats.tree, { graph: false, interval: 300 }),
