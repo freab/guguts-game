@@ -50,7 +50,7 @@ export const BUILD_SLIDES: Slide[] = [
     notes: [
       "Two things I love: the legend every Ethiopian grows up with, Kaldi and his dancing goats, and The Maze Runner.",
       "Then the question: what if Kaldi's goat ate the berries and ran into a maze like that?",
-      "The goat gives you a reason to go in, the maze gives you the challenge, and the sunset gives you the clock.",
+      "The goat gives you a reason to go in, the maze gives you the challenge, and the timer and the setting sun give you the race.",
     ],
     lines: ["What if Kaldi's goat ate the berries, and ran off into a maze like that?"],
     merge: {
@@ -383,6 +383,53 @@ export const BUILD_SLIDES: Slide[] = [
     lines: ["Post-processing turns the render into a sunset: bloom, god rays through the tree, a lens flare. Press X for before and after."],
     post: true,
     xray: { label: "Post-processing", controls: [["postEnabled", false]] },
+  },
+  {
+    shot: "corridor",
+    title: "How to play",
+    notes: [
+      "First person, in the browser. No time limit: the timer just measures you for the leaderboard.",
+      "The core loop: call her, listen, follow the sound. Calls are limited, so you have to think.",
+    ],
+    lines: ["Gugut's goat is somewhere in the maze. Find her, and bring her home as the sun goes down."],
+    cards: [
+      ["Find her", "First person, right in the browser. The timer starts with your first step, and your best time goes on the world leaderboard."],
+      ["Call her", "Press C: Gugut whistles and she answers from where she really is. A small map flashes where she is."],
+      ["Three calls", "Then Gugut is too thirsty to call. Two bottles of water are hidden in the maze: drink one to call again."],
+      ["Temesgen", "Sit and listen to his kirar long enough and you calm down, and hear her on your own."],
+      ["Stars and badges", "Three stars for the fewest calls, and badges like Silent tracker: found her without calling once."],
+      ["On a phone too", "Left thumb walks, right thumb looks, and a big button to call her."],
+    ],
+  },
+  {
+    shot: "top",
+    title: "Three mazes",
+    notes: [
+      "Easy is a walk, Medium has more dead ends, Hard is 20 by 20.",
+      "And on Hard she doesn't wait for you: call her and she runs.",
+    ],
+    lines: ["Every one a new maze each time you play. On Hard, she doesn't wait: call her and she runs."],
+    levels: true,
+  },
+  {
+    shot: "grass",
+    title: "Pick your graphics",
+    notes: [
+      "First thing you choose: Low, Medium or High. Phones start on Low.",
+      "Point at the lit one: that's what this presentation is running on.",
+    ],
+    lines: ["Chosen first, remembered, and changeable any time in Settings. Phones start on Low."],
+    graphics: true,
+  },
+  {
+    shot: "orbit",
+    title: "World leaderboard",
+    notes: [
+      "This is live, right now: real players, real times.",
+      "Point at the player counts. Then: can anyone here beat the top time?",
+    ],
+    lines: ["Live from the world leaderboard, right now. Can you beat them?"],
+    leaderboard: true,
   },
   {
     shot: "intro",

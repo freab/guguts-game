@@ -97,6 +97,12 @@ export interface Slide {
   qr?: boolean;
   /** Two things that became one: [name, what it brought] + [name, what it brought] = [the result]. */
   merge?: { left: [string, string]; right: [string, string]; result: [string, string] };
+  /** The three levels, each as a small maze of its real size, generated live. */
+  levels?: boolean;
+  /** The graphics chooser's three levels, the one this presentation runs on lit. */
+  graphics?: boolean;
+  /** The world leaderboard, live: each level's top times and how many players. */
+  leaderboard?: boolean;
   /** Pictures on the right, as framed cards: a file in public/, a caption, and whether it's landscape. */
   images?: { src: string; caption: string; wide?: boolean }[];
   /** The culling map (present/CullingMap): the maze from above, live, explaining one kind of culling. */

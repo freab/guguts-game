@@ -15,7 +15,8 @@ export const metadata: Metadata = {
 export default function PresentPage() {
   return (
     <main className="h-screen w-screen">
-      <PresentClient slides={BUILD_SLIDES} silentUntil={BUILD_SLIDES.findIndex((s) => s.steps)} />
+      {/* Silent until the sound slide: the first whose steps bring in the mix. */}
+      <PresentClient slides={BUILD_SLIDES} silentUntil={BUILD_SLIDES.findIndex((s) => s.steps?.some((step) => step.mix))} />
     </main>
   );
 }

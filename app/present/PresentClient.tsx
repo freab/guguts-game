@@ -12,7 +12,9 @@ import { goat } from "../game/goat";
 import { revealPreview } from "../game/revealPreview";
 import { runStore } from "../game/runStore";
 import { temesgen } from "../game/temesgen";
-import { LEVELS } from "../maze/levels";
+import { LEVELS, type Level } from "../maze/levels";
+import { formatTime, type LeaderboardResponse } from "../leaderboard/shared";
+import { GRAPHICS_LEVELS, graphics as currentGraphics } from "../quality";
 import { setMazeConfig } from "../maze/mazeData";
 import { applyGraphicsToPanel } from "../quality";
 import { setLoading, useLoading } from "../scene/bake/loadingStore";
@@ -583,6 +585,9 @@ function SlideView({
       {slide.cards && <Cards cards={slide.cards} />}
       {slide.images && <Pictures images={slide.images} />}
       {slide.merge && <Merge {...slide.merge} />}
+      {slide.levels && <LevelMazes />}
+      {slide.graphics && <GraphicsChoice />}
+      {slide.leaderboard && <WorldBoard />}
       {slide.xray?.legend && (
         <div
           className="absolute top-1/2 right-[5vw] flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-[#fdf3d4]/15 bg-black/70 p-4 transition-opacity duration-500"
@@ -667,6 +672,158 @@ function Picture({ src, caption, box, tilt, delay }: { src: string; caption: str
         <figcaption className="mt-2 text-center font-[family-name:var(--font-jolly)] text-xl leading-none text-[#0b0d08]">{caption}</figcaption>
       </div>
     </figure>
+  );
+}
+
+/** A small maze of this many cells across (a recursive backtracker, like the game's): true = wall. */
+function miniMaze(cells: number): boolean[][] {
+  const size = cells * 2 + 1;
+  const g = Array.from({ length: size }, () => Array<boolean>(size).fill(true));
+  const seen = Array.from({ length: cells }, () => Array<boolean>(cells).fill(false));
+  const stack: [number, number][] = [[0, 0]];
+  seen[0][0] = true;
+  g[1][1] = false;
+  while (stack.length) {
+    const [x, y] = stack[stack.length - 1];
+    const next = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
+      .map(([dx, dy]) => [x + dx, y + dy, dx, dy] as const)
+      .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < cells && ny < cells && !seen[ny][nx]);
+    if (!next.length) {
+      stack.pop();
+      continue;
+    }
+    const [nx, ny, dx, dy] = next[Math.floor(Math.random() * next.length)];
+    seen[ny][nx] = true;
+    g[2 * y + 1 + dy][2 * x + 1 + dx] = false;
+    g[2 * ny + 1][2 * nx + 1] = false;
+    stack.push([nx, ny]);
+  }
+  return g;
+}
+
+/** The three levels, each a real maze of its size: start (cream) top-left, the goat (gold) bottom-right. */
+function LevelMazes() {
+  const [mazes] = useState(() => LEVELS.map((level) => ({ level, grid: miniMaze(level.cellsW) })));
+  return (
+    <div className="absolute top-[13vh] left-1/2 flex -translate-x-1/2 items-end gap-[2.5vw]">
+      {mazes.map(({ level, grid }, i) => (
+        <MiniMazeCard key={level.id} level={level} grid={grid} delay={600 + i * 300} />
+      ))}
+    </div>
+  );
+}
+
+function MiniMazeCard({ level, grid, delay }: { level: Level; grid: boolean[][]; delay: number }) {
+  const n = grid.length;
+  const [blurbSize, blurbText] = level.blurb.split(" · ");
+  return (
+    <div className="slide-rise flex flex-col items-center gap-3" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rounded-xl border border-[#fdf3d4]/15 bg-black/70 p-3">
+        <svg viewBox={`0 0 ${n} ${n}`} className="h-[min(19vw,34vh)] w-[min(19vw,34vh)]" shapeRendering="crispEdges" aria-hidden>
+          <rect width={n} height={n} fill="#1b1e16" />
+          {grid.flatMap((row, y) => row.map((wall, x) => (wall ? <rect key={`${x},${y}`} x={x} y={y} width={1.02} height={1.02} fill="#7d7464" /> : null)))}
+          <rect x={1} y={1} width={1} height={1} fill="#fdf3d4" />
+          <rect x={n - 2} y={n - 2} width={1} height={1} fill="#f2c43d" />
+        </svg>
+      </div>
+      <p className="font-[family-name:var(--font-jolly)] text-[clamp(1.8rem,2.6vw,2.6rem)] leading-none">{level.label}</p>
+      <p className="-mt-1 text-sm text-[#fdf3d4]/70">
+        <b className="text-[#c9a45c]">{blurbSize}</b> · {blurbText}
+      </p>
+    </div>
+  );
+}
+
+/** How many of each board's top times the slide shows. */
+const BOARD_ROWS = 10;
+
+/** The world leaderboard, live (api/leaderboard): each level's top times and its number of players. */
+function WorldBoard() {
+  const [boards, setBoards] = useState<(LeaderboardResponse | null)[] | "error" | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.all(
+      LEVELS.map((level) =>
+        fetch(`/api/leaderboard?level=${level.id}`, { cache: "no-store" })
+          .then((r) => (r.ok ? (r.json() as Promise<LeaderboardResponse>) : null))
+          .catch(() => null)
+      )
+    ).then((all) => {
+      if (live) setBoards(all.every((b) => !b) ? "error" : all);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return (
+    <div className="absolute top-[12vh] left-1/2 flex -translate-x-1/2 items-start gap-[1.6vw]">
+      {LEVELS.map((level, i) => {
+        const board = Array.isArray(boards) ? boards[i] : null;
+        return (
+          <div
+            key={level.id}
+            className="slide-rise w-[min(20rem,26vw)] rounded-2xl border border-[#fdf3d4]/15 bg-black/75 p-5"
+            style={{ animationDelay: `${600 + i * 220}ms` }}
+          >
+            <div className="mb-3 flex items-baseline justify-between">
+              <p className="font-[family-name:var(--font-jolly)] text-[clamp(1.8rem,2.6vw,2.6rem)] leading-none">{level.label}</p>
+              {board && <p className="text-xs uppercase tracking-[0.15em] text-[#c9a45c]">{board.players.toLocaleString()} players</p>}
+            </div>
+            {board ? (
+              <ol className="flex flex-col gap-1">
+                {board.entries.slice(0, BOARD_ROWS).map((e) => (
+                  <li
+                    key={e.rank}
+                    className={`flex items-center gap-3 rounded-lg px-2 py-0.5 text-[clamp(0.8rem,1vw,0.95rem)] ${e.rank === 1 ? "bg-[#c9a45c]/20 text-[#f2c43d]" : "text-[#fdf3d4]/85"}`}
+                  >
+                    <span className="w-5 text-right tabular-nums opacity-70">{e.rank}</span>
+                    <span className="min-w-0 flex-1 truncate">{e.name}</span>
+                    <b className="tabular-nums">{formatTime(e.timeMs)}</b>
+                  </li>
+                ))}
+                {board.entries.length === 0 && <li className="text-sm text-[#fdf3d4]/50">No times yet: be the first.</li>}
+              </ol>
+            ) : (
+              <p className="text-sm text-[#fdf3d4]/50">{boards === null ? "Loading…" : "The board is unavailable right now."}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The game's graphics chooser: what each level means, the one this presentation runs on lit. */
+const GRAPHICS_TEXT: Record<string, string> = {
+  low: "Smooth on phones and older laptops",
+  medium: "The full look, balanced for most PCs",
+  high: "Everything on: more flowers and ivy, sharper light and shadows. For a strong PC",
+};
+
+function GraphicsChoice() {
+  const [running] = useState(currentGraphics);
+  return (
+    <div className="absolute top-[16vh] left-1/2 flex -translate-x-1/2 items-stretch gap-[1.6vw]">
+      {GRAPHICS_LEVELS.map((level, i) => {
+        const on = level === running;
+        return (
+          <div
+            key={level}
+            className={`slide-rise flex w-[min(17rem,22vw)] flex-col rounded-2xl border p-5 ${
+              on ? "border-[#c9a45c] bg-[#c9a45c]/20 shadow-[0_0_60px_rgba(201,164,92,0.35)]" : "border-[#fdf3d4]/15 bg-black/70"
+            }`}
+            style={{ animationDelay: `${600 + i * 220}ms` }}
+          >
+            <p className={`font-[family-name:var(--font-jolly)] text-[clamp(2rem,3vw,3rem)] leading-none ${on ? "text-[#f2c43d]" : ""}`}>
+              {level[0].toUpperCase() + level.slice(1)}
+            </p>
+            <p className="mt-3 flex-1 text-[clamp(0.85rem,1.05vw,1rem)] leading-snug text-[#fdf3d4]/80">{GRAPHICS_TEXT[level]}</p>
+            {on && <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[#c9a45c]">● Running now</p>}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
