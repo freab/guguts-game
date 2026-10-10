@@ -27,6 +27,7 @@ import StudioSplash from "../ui/StudioSplash";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen } from "../ui/fullscreen";
 import CullingMap from "./CullingMap";
 import { presentLive, presentStore, usePresent } from "./presentStore";
+import { PRESENTER_POLL_MS, isRoomCode, newRoomCode, type RemoteAction, type RemoteState } from "../remote/shared";
 import { GOLDEN_HOUR, PLAY_URL, PLAYERS, type Readout, type Slide } from "./slides";
 
 // Browser-only, like the game's own (drei's loaders need browser globals).
@@ -105,6 +106,29 @@ export default function PresentClient({
   preload("/qr-play.svg", { as: "image" });
   // The slide on screen, and the one leaving (its text animating out).
   const [notes, setNotes] = useState(false);
+  // The phone remote (present/remote): this presentation's code, the pairing card (R), a "connected" toast.
+  const [room, setRoom] = useState<string | null>(null);
+  const [pairing, setPairing] = useState(false);
+  const [phoneAt, setPhoneAt] = useState(0);
+  useEffect(() => {
+    let code = "";
+    try {
+      code = localStorage.getItem(ROOM_KEY) ?? "";
+    } catch {
+      // Storage blocked: a new code each visit.
+    }
+    if (!isRoomCode(code)) {
+      code = newRoomCode();
+      try {
+        localStorage.setItem(ROOM_KEY, code);
+      } catch {
+        // (Not remembered.)
+      }
+    }
+    // (After mount: the code lives in this browser only.)
+    const t = window.setTimeout(() => setRoom(code), 0);
+    return () => window.clearTimeout(t);
+  }, []);
   const [shown, setShown] = useState({ index, step });
   const [leaving, setLeaving] = useState<{ index: number; step: number } | null>(null);
   if (shown.index !== index) {
@@ -311,6 +335,64 @@ export default function PresentClient({
     [SLIDES]
   );
 
+  // The phone's taps: picked up a few times a second, done as the keys would.
+  useEffect(() => {
+    if (!ready || !room) return;
+    let live = true;
+    let busy = false;
+    const id = window.setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const res = await fetch(`/api/remote?code=${room}&as=presenter`, { cache: "no-store" });
+        const { actions = [] } = (await res.json()) as { actions?: RemoteAction[] };
+        for (const action of live ? actions : []) {
+          if (action === "next") advance(1);
+          else if (action === "prev") advance(-1);
+          else if (action === "first") presentStore.goTo(0);
+          else if (action === "xray") pressX(SLIDES[presentStore.get().slide]);
+          else if (action === "bleat") bleat();
+          else if (action === "hello") {
+            setPhoneAt(Date.now());
+            setPairing(false);
+          }
+        }
+      } catch {
+        // Offline for a moment: the keyboard still works.
+      } finally {
+        busy = false;
+      }
+    }, PRESENTER_POLL_MS);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [ready, room, advance, pressX, SLIDES]);
+  // Where the presentation is, for the phone: sent when it changes.
+  useEffect(() => {
+    if (!ready || !room) return;
+    const state: RemoteState = {
+      slide: index,
+      count: SLIDES.length,
+      step,
+      steps: slide.steps?.length ?? 1,
+      title: slide.title,
+      notes: slide.notes ?? [],
+      xray: slide.xray ? { label: slide.xray.label, state: (slide.xray.states ?? ["ON", "OFF"])[xray ? 1 : 0] } : null,
+    };
+    void fetch("/api/remote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: room, state }),
+    }).catch(() => {});
+  }, [ready, room, index, step, xray, slide, SLIDES.length, phoneAt]);
+  // The "phone connected" toast, for a few seconds.
+  useEffect(() => {
+    if (!phoneAt) return;
+    const t = window.setTimeout(() => setPhoneAt(0), 3500);
+    return () => window.clearTimeout(t);
+  }, [phoneAt]);
+
   // Slide keys (a presentation clicker sends Page Up / Down).
   useEffect(() => {
     if (!ready) return;
@@ -322,6 +404,7 @@ export default function PresentClient({
       else if (e.code === "Home") presentStore.goTo(0);
       else if (e.code === "KeyX") pressX(SLIDES[at]);
       else if (e.code === "KeyN") setNotes((n) => !n);
+      else if (e.code === "KeyR") setPairing((v) => !v);
       else if (e.code === "KeyF") void (document.fullscreenElement ? exitFullscreen() : enterFullscreen());
       else if (e.code === "KeyB") bleat();
       else return;
@@ -337,7 +420,7 @@ export default function PresentClient({
       {mounted && <Scene director={<Director slides={SLIDES} />} maxDpr={MAX_DPR} />}
 
       {/* Loading: the game's own counter, while the maze is baked and compiled. */}
-      {!ready && <Loading />}
+      {!ready && <Loading room={room} />}
 
       {/* The slides, over the scene (they also keep clicks off it: no pointer lock). */}
       {ready && (
@@ -367,6 +450,12 @@ export default function PresentClient({
       {pulse > 0 && <div key={pulse} className="xray-pulse pointer-events-none absolute inset-0 z-[22]" />}
       {/* N: the presenter's notes. */}
       {ready && notes && slide.notes && <Notes notes={slide.notes} index={index} count={SLIDES.length} />}
+      {ready && pairing && room && <Pairing room={room} />}
+      {phoneAt > 0 && (
+        <div className="pointer-events-none absolute top-5 left-1/2 z-[31] -translate-x-1/2 rounded-full bg-[#7fd08a] px-5 py-2 font-semibold text-[#0b0d08]" style={{ animation: "notice-in 300ms ease-out" }}>
+          📱 Phone connected
+        </div>
+      )}
 
       <StudioSplash />
     </div>
@@ -456,13 +545,40 @@ function Notes({ notes, index, count }: { notes: string[]; index: number; count:
   );
 }
 
+/** Where this browser keeps its remote code (the phone stays paired across reloads). */
+const ROOM_KEY = "gugut.present.room";
+
 /** How long the outgoing slide's text takes to leave (ms); the new one's waits about as long. */
 const EXIT_MS = 420;
 
-function Loading() {
+function Loading({ room }: { room: string | null }) {
   return (
     <div className={`${posterFont.className} absolute inset-0 z-30 bg-black`}>
       <Counter onFull={noop} />
+      {room && (
+        <p className="absolute bottom-[5vh] left-[6vw] font-sans text-sm text-[#fdf3d4]/45">
+          Phone remote: <b className="text-[#fdf3d4]/70">{remoteAddress()}</b> · code <b className="font-mono tracking-[0.2em] text-[#c9a45c]">{room}</b>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Where the phone opens the remote: this site's address. */
+const remoteAddress = () => `${window.location.host}/present/remote`;
+
+/** The pairing card (R): where to go on the phone, and the code. */
+function Pairing({ room }: { room: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[31] flex items-center justify-center bg-black/60">
+      <div className="rounded-3xl border border-[#c9a45c]/50 bg-black/90 px-10 py-8 text-center" style={{ animation: "notice-in 300ms ease-out" }}>
+        <p className="font-[family-name:var(--font-jolly)] text-5xl leading-none">Phone remote</p>
+        <p className="mt-4 text-[#fdf3d4]/70">On your phone, open</p>
+        <p className="mt-1 text-xl font-semibold">{remoteAddress()}</p>
+        <p className="mt-4 text-[#fdf3d4]/70">and enter</p>
+        <p className="mt-2 font-mono text-6xl font-bold tracking-[0.3em] text-[#c9a45c]">{room}</p>
+        <p className="mt-5 text-xs text-[#fdf3d4]/40">R to close · it closes by itself when the phone connects</p>
+      </div>
     </div>
   );
 }
