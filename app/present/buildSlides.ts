@@ -20,8 +20,51 @@ const upTo = (layer: SceneLayer): SceneLayer[] => ORDER.slice(0, ORDER.indexOf(l
 export const BUILD_SLIDES: Slide[] = [
   {
     shot: "orbit",
+    title: "Hi, I'm Freab Mesfin",
+    notes: [
+      "Hi, I'm Freab Mesfin. Most of you know me as Gugut, from my channel, Gugut's Journey.",
+      "I make games under the name Gugut Studios. This is the first one.",
+    ],
+    lines: ["Most of you know me as Gugut, from my channel, Gugut's Journey.", "Gugut Studios"],
+    clear: true,
+  },
+  {
+    shot: "top",
+    title: "Where it started",
+    notes: [
+      "I loved The Maze Runner: a giant maze, walls that hide everything, and the only way out is through it.",
+      "I wanted to make that feeling: lost between huge walls, racing the clock.",
+    ],
+    lines: [
+      "The Maze Runner: a maze so big it hides everything, and the only way out is through it.",
+      "I wanted to make that feeling: lost between huge walls, racing the clock.",
+    ],
+    clear: true,
+    images: [
+      { src: "/inspiration/maze-runner-maze.jpg", caption: "The Maze", wide: true },
+      { src: "/inspiration/maze-runner-poster.jpg", caption: "The Maze Runner (2014)" },
+    ],
+  },
+  {
+    shot: "goat",
+    title: "Two stories, one game",
+    notes: [
+      "Two things I love: the legend every Ethiopian grows up with, Kaldi and his dancing goats, and The Maze Runner.",
+      "Then the question: what if Kaldi's goat ate the berries and ran into a maze like that?",
+      "The goat gives you a reason to go in, the maze gives you the challenge, and the sunset gives you the clock.",
+    ],
+    lines: ["What if Kaldi's goat ate the berries, and ran off into a maze like that?"],
+    clear: true,
+    merge: {
+      left: ["Kaldi's goats", "The Ethiopian legend: a goat herder sees his goats dancing after eating red berries. That's how buna, coffee, was found."],
+      right: ["The Maze Runner", "Giant walls, no way out but through, and the clock running out before night."],
+      result: ["Gugut & the Goat", "Gugut's goat eats the same berries and runs into the maze. Find her before the sun goes down."],
+    },
+  },
+  {
+    shot: "orbit",
     title: "How it's made",
-    notes: ["Hi, I'm ___ from Gugut Studios. This is Gugut & the Goat, a 3D game in the browser.","Instead of slides, I'll take the game apart and build it back up, live."],
+    notes: ["This is Gugut & the Goat, a 3D game in the browser.","Instead of slides, I'll take the game apart and build it back up, live."],
     lines: ["This is Gugut & the Goat.", "Let's build it from nothing, one piece at a time."],
     clear: true,
   },

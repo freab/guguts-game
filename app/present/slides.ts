@@ -99,6 +99,10 @@ export interface Slide {
   chapter?: string;
   /** A QR code to play the game, on a phone: big, in the middle. */
   qr?: boolean;
+  /** Two things that became one: [name, what it brought] + [name, what it brought] = [the result]. */
+  merge?: { left: [string, string]; right: [string, string]; result: [string, string] };
+  /** Pictures on the right, as framed cards: a file in public/, a caption, and whether it's landscape. */
+  images?: { src: string; caption: string; wide?: boolean }[];
   /** The culling map (present/CullingMap): the maze from above, live, explaining one kind of culling. */
   map?: CullingMode;
   /** Technique cards: [name, what it does]. */

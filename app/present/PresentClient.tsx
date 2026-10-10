@@ -529,6 +529,8 @@ function SlideView({
         </div>
       )}
       {slide.cards && <Cards cards={slide.cards} />}
+      {slide.images && <Pictures images={slide.images} />}
+      {slide.merge && <Merge {...slide.merge} />}
       {slide.xray?.legend && (
         <div
           className="absolute top-1/2 right-[5vw] flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-[#fdf3d4]/15 bg-black/55 p-4 backdrop-blur-md transition-opacity duration-500"
@@ -556,6 +558,91 @@ function SlideView({
       <div className="absolute top-6 right-[calc(1.5vw+3.5rem)] text-sm tracking-[0.2em] text-[#fdf3d4]/50 tabular-nums">
         {index + 1} / {count}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pictures on the right, as tilted, framed photo cards rising in one after
+ * another: a landscape one large at the back, a portrait one overlapping it in
+ * front (a collage); or portraits side by side. A file not added yet (public/…)
+ * shows as an empty frame saying what goes there.
+ */
+function Pictures({ images }: { images: { src: string; caption: string; wide?: boolean }[] }) {
+  const wide = images.find((i) => i.wide);
+  const tall = images.filter((i) => !i.wide);
+  if (wide) {
+    return (
+      <div className="absolute top-1/2 right-[3vw] h-[66vh] w-[46vw] -translate-y-1/2">
+        <div className="absolute top-0 right-0">
+          <Picture {...wide} box="h-[min(26vw,44vh)] w-[min(41vw,70vh)]" tilt={2} delay={600} />
+        </div>
+        {tall[0] && (
+          <div className="absolute bottom-0 left-0">
+            <Picture {...tall[0]} box="h-[min(34vh,24vw)] w-[min(22.7vh,16vw)]" tilt={-5} delay={900} />
+          </div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="absolute top-1/2 right-[4vw] flex -translate-y-1/2 items-center gap-[2vw]">
+      {tall.map((image, i) => (
+        <Picture key={image.src} {...image} box="h-[min(42vh,26rem)] w-[min(19vw,18rem)]" tilt={i % 2 ? 3 : -3} delay={600 + i * 250} />
+      ))}
+    </div>
+  );
+}
+
+function Picture({ src, caption, box, tilt, delay }: { src: string; caption: string; box: string; tilt: number; delay: number }) {
+  const [missing, setMissing] = useState(false);
+  return (
+    <figure className="slide-rise" style={{ animationDelay: `${delay}ms` }}>
+      <div className="rounded-sm bg-[#fdf3d4] p-2.5 pb-3 shadow-[0_14px_60px_rgba(0,0,0,0.65)]" style={{ transform: `rotate(${tilt}deg)` }}>
+        <div className={`relative overflow-hidden bg-[#1b1e16] ${box}`}>
+          {missing ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-xs text-[#fdf3d4]/60">
+              <span className="text-2xl">🖼</span>
+              Add this picture at
+              <code className="break-all text-[#c9a45c]">public{src}</code>
+            </div>
+          ) : (
+            // (A plain img: the file may not be there yet, and it's shown as it is.)
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt={caption} className="h-full w-full object-cover" onError={() => setMissing(true)} />
+          )}
+        </div>
+        <figcaption className="mt-2 text-center font-[family-name:var(--font-jolly)] text-xl leading-none text-[#0b0d08]">{caption}</figcaption>
+      </div>
+    </figure>
+  );
+}
+
+/** Two stories into one game: [card] + [card] = [the game's card, in gold], one after another. */
+function Merge({ left, right, result }: { left: [string, string]; right: [string, string]; result: [string, string] }) {
+  const card = (name: string, text: string, delay: number, gold = false) => (
+    <div
+      className={`slide-rise w-[min(18rem,22vw)] rounded-2xl border p-5 backdrop-blur-md ${
+        gold ? "border-[#c9a45c] bg-[#c9a45c]/15 shadow-[0_0_60px_rgba(201,164,92,0.35)]" : "border-[#fdf3d4]/15 bg-black/55"
+      }`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <p className={`font-[family-name:var(--font-jolly)] text-[clamp(1.6rem,2.3vw,2.4rem)] leading-none ${gold ? "text-[#f2c43d]" : "text-[#fdf3d4]"}`}>{name}</p>
+      <p className="mt-3 text-[clamp(0.85rem,1.05vw,1rem)] leading-snug text-[#fdf3d4]/80">{text}</p>
+    </div>
+  );
+  const sign = (s: string, delay: number) => (
+    <span className="slide-rise font-[family-name:var(--font-jolly)] text-[clamp(2.5rem,4vw,4rem)] text-[#c9a45c]" style={{ animationDelay: `${delay}ms` }}>
+      {s}
+    </span>
+  );
+  return (
+    <div className="absolute top-[12vh] left-1/2 flex -translate-x-1/2 items-center gap-[1.6vw]">
+      {card(left[0], left[1], 600)}
+      {sign("+", 900)}
+      {card(right[0], right[1], 1100)}
+      {sign("=", 1500)}
+      {card(result[0], result[1], 1800, true)}
     </div>
   );
 }
