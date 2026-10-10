@@ -44,8 +44,6 @@ export interface XRay {
   lightmap?: boolean;
   /** Colour Temesgen by the parts his vertex shader moves. */
   limbs?: boolean;
-  /** Show the goat golden (the 1-in-50 secret). */
-  golden?: boolean;
   /** Apply this surface's texture (a sweep across), replacing its UV grid. */
   applies?: UvSurface;
   /** What the colours mean, shown while X is on: [colour, label]. */
@@ -75,12 +73,10 @@ export interface Slide {
   /** Technique tags. */
   tags?: string[];
   lines: string[];
-  /** Fog off: for shots that look across the whole maze. */
-  clear?: boolean;
   readout?: Readout;
   xray?: XRay;
   /** As the slide comes up: Temesgen plays, or the goat's found-her glow. */
-  enter?: "song" | "reveal";
+  enter?: "song" | "reveal" | "dance";
   /** The title slide: the logo instead of a title. */
   logo?: boolean;
   /** Show only these parts of the scene (scene/sceneLayers); everything when left out. */

@@ -4,14 +4,13 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three/webgpu";
-import { float, materialColor, mix, positionLocal, rotate, sin, smoothstep, uniform, vec3 } from "three/tsl";
+import { float, positionLocal, rotate, sin, smoothstep, uniform, vec3 } from "three/tsl";
 import BlobShadow from "../character/BlobShadow";
 import { fitSkinnedModel } from "../character/fitSkinnedModel";
 import { useDisposable } from "../hooks/useDisposable";
 import { revealRim } from "./GoatReveal";
 import { goat } from "../game/goat";
 import { goldenGoat } from "../game/goldenGoat";
-import { sceneLayers } from "../scene/sceneLayers";
 
 /**
  * The goat: one static, textured mesh (no rig, no clips), authored facing +Z
@@ -79,22 +78,21 @@ export function createGoatMaterial(
 
   material.positionNode = turned.add(swell);
   // Lit warm once she's been seen (maze/GoatReveal) — not the kid (maze/KidGoat).
-  // The rare golden goat (game/goldenGoat): gold fur, glittering as she
-  // breathes — by `gold` (0..1: all or nothing in the game; the presentation
-  // turns her golden in front of you, app/present).
-  const gold = uniform(golden ? 1 : 0);
-  const glitter = sin(time.mul(2.3).add(positionLocal.x.mul(41)).add(positionLocal.y.mul(37)).add(positionLocal.z.mul(29)))
-    .mul(0.5)
-    .add(0.5)
-    .pow(8);
-  const goldGlow = vec3(1, 0.78, 0.32).mul(glitter.mul(1.6).add(0.12)).mul(gold);
-  material.colorNode = materialColor.rgb.mul(mix(vec3(1, 1, 1), vec3(GOLD_FUR.r, GOLD_FUR.g, GOLD_FUR.b), gold));
-  material.emissiveNode = reveal ? revealRim().add(goldGlow) : goldGlow;
+  // The rare golden goat (game/goldenGoat): gold fur, glittering as she breathes.
+  let glow: THREE.Node<"vec3"> | null = reveal ? revealRim() : null;
+  if (golden) {
+    material.color.set(GOLD_FUR);
+    const glitter = sin(time.mul(2.3).add(positionLocal.x.mul(41)).add(positionLocal.y.mul(37)).add(positionLocal.z.mul(29)))
+      .mul(0.5)
+      .add(0.5)
+      .pow(8);
+    const gold = vec3(1, 0.78, 0.32).mul(glitter.mul(1.6).add(0.12));
+    glow = glow ? glow.add(gold) : gold;
+  }
+  material.emissiveNode = glow;
   return {
     material,
     advance: (dt: number) => void (time.value += dt),
-    /** Towards golden (1) or not (0), over about half a second. */
-    turnGold: (target: number, dt: number) => void (gold.value += (target - gold.value) * Math.min(1, dt * 4)),
     dispose: () => material.dispose(),
   };
 }
@@ -138,8 +136,7 @@ export default function Goat() {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && !source) source = mesh.material as THREE.MeshStandardMaterial;
     });
-    const golden = goldenGoat();
-    const goatMaterial = createGoatMaterial(source!, { golden });
+    const goatMaterial = createGoatMaterial(source!, { golden: goldenGoat() });
     goat.animated.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) {
@@ -147,7 +144,7 @@ export default function Goat() {
         mesh.name = ""; // (counted under "Goat" in the #debug readout)
       }
     });
-    return { root: goat.root, golden, turnGold: goatMaterial.turnGold, advance: goatMaterial.advance, dispose: goatMaterial.dispose };
+    return { root: goat.root, advance: goatMaterial.advance, dispose: goatMaterial.dispose };
   }, [scene]);
 
   // Where she is (game/goat): her tile by the bush, a new maze each mount —
@@ -156,8 +153,6 @@ export default function Goat() {
   const group = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     life.advance(Math.min(dt, 0.1));
-    // Golden in this maze, or shown golden by the presentation: turning gold over half a second.
-    life.turnGold(life.golden || sceneLayers.debug().golden ? 1 : 0, dt);
     goat.update(dt);
     if (group.current) placeGoat(group.current);
   });

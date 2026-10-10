@@ -284,7 +284,7 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
  * - Pixel ratio capped at 1.5; walls are one instanced draw call; grass is
  *   chunked, distance / frustum / occlusion culled and LOD'd.
  */
-export default function Scene({ director }: { director?: ReactNode } = {}) {
+export default function Scene({ director, maxDpr }: { director?: ReactNode; /** Cap the pixel ratio (the presentation: big screens). */ maxDpr?: number } = {}) {
 
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   //
@@ -571,7 +571,7 @@ export default function Scene({ director }: { director?: ReactNode } = {}) {
       // (High lets a sharp screen go to 2).
       // Phones get the same cap — at 1 their 2–3x screens showed the scene
       // stretched from a third of their resolution, visibly pixelated.
-      dpr={quality<[number, number]>([1, 1.5], [1, 1.5], [1, 2])}
+      dpr={quality<[number, number]>([1, Math.min(1.5, maxDpr ?? 2)], [1, Math.min(1.5, maxDpr ?? 2)], [1, Math.min(2, maxDpr ?? 2)])}
       // Force the WebGPU renderer. forceWebGL:false = use the WebGPU backend when
       // the browser supports it; init() is async, so R3F awaits the promise.
       gl={async (props) => {

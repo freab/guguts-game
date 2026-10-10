@@ -71,6 +71,7 @@ export default function CullingMap({ mode, size }: { mode: CullingMode; size: nu
     const dir = new THREE.Vector3();
     const full = Math.max(COLS, ROWS) * CELL + MARGIN * 2;
     let raf = 0;
+    let counted = 0;
 
     const draw = () => {
       const p = playerStore;
@@ -230,7 +231,9 @@ export default function CullingMap({ mode, size }: { mode: CullingMode; size: nu
 
       // The counts.
       const el = countsRef.current;
-      if (el) {
+      // (The map every frame; its numbers a few times a second.)
+      if (el && performance.now() - counted >= 250) {
+        counted = performance.now();
         const pct = g.totalTufts ? Math.round((g.drawnTufts / g.totalTufts) * 100) : 0;
         const row = (swatch: string, label: string, n: number | string) =>
           `<div class="flex items-center justify-between gap-4"><span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background:${swatch}"></span>${label}</span><b class="tabular-nums">${n}</b></div>`;
@@ -248,7 +251,7 @@ export default function CullingMap({ mode, size }: { mode: CullingMode; size: nu
   }, [size, mode]);
 
   return (
-    <div className="rounded-2xl border border-[#fdf3d4]/15 bg-black/60 p-3 backdrop-blur-md" style={{ width: size + 24 }}>
+    <div className="rounded-2xl border border-[#fdf3d4]/15 bg-black/75 p-3" style={{ width: size + 24 }}>
       <p className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[#fdf3d4]/60">
         <span>{mode === "frustum" ? "The whole maze, live" : "Close-up, live"}</span>
         <span>{mode === "frustum" ? "Frustum culling" : "Occlusion culling"}</span>

@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { preload } from "react-dom";
+import { getPreferences, setPreferences, type Graphics } from "../game/preferences";
 import { Leva, levaStore } from "leva";
 import { posterFont } from "../fonts";
 import { audio, MIX_LAYERS, type MixLayer } from "../audio/audioEngine";
@@ -69,9 +71,36 @@ export default function PresentClient({
   silentUntil?: number;
 }) {
   const [mounted, setMounted] = useState(false);
-  const ready = useLoading().stage === "ready";
+  const loaded = useLoading().stage === "ready";
+  // 4. Then the wireframe versions of the walls and the tree are drawn a few
+  // frames each, unseen, so the first X on those slides doesn't freeze to compile them.
+  const [warmed, setWarmed] = useState(false);
+  useEffect(() => {
+    if (!loaded || warmed) return;
+    let cancelled = false;
+    const frames = (n: number) => new Promise<void>((done) => {
+      const step = () => (n-- <= 0 ? done() : requestAnimationFrame(step));
+      requestAnimationFrame(step);
+    });
+    (async () => {
+      for (const layer of WARM_WIREFRAMES) {
+        sceneLayers.setWireframe(layer);
+        await frames(4);
+      }
+      sceneLayers.setWireframe(null);
+      await frames(3);
+      if (!cancelled) setWarmed(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, warmed]);
+  const ready = loaded && warmed;
   const { slide: index, step } = usePresent();
   const slide = SLIDES[index];
+  // 6. The slides' pictures and the QR code, fetched while the loading screen is up.
+  for (const s of SLIDES) for (const image of s.images ?? []) preload(image.src, { as: "image" });
+  preload("/qr-play.svg", { as: "image" });
   // The slide on screen, and the one leaving (its text animating out).
   const [notes, setNotes] = useState(false);
   const [shown, setShown] = useState({ index, step });
@@ -107,7 +136,19 @@ export default function PresentClient({
   // A fresh Easy maze, the game paused (no walking, no clock) while presenting.
   useEffect(() => {
     presentStore.reset();
+    const asked = new URLSearchParams(window.location.search).get("graphics");
+    if (asked === "low" || asked === "medium" || asked === "high") setPreferences({ graphics: asked as Graphics });
     applyGraphicsToPanel();
+    // 5. Gugut's voice loads with everything else (it's decoded once the audio unlocks), not on the sound slide.
+    audio.setVoice(true);
+    // 1. No fog in the presentation at all: switching it recompiles every
+    // material, so it's set once, as the scene's controls appear (before the
+    // loading screen compiles the shaders).
+    const fogOff = window.setInterval(() => {
+      if (getLeva("fogEnabled") === undefined) return;
+      setLeva("fogEnabled", false);
+      window.clearInterval(fogOff);
+    }, 50);
     setMazeConfig({ cellsW: LEVEL.cellsW, cellsH: LEVEL.cellsH, cell: LEVEL.cell });
     setLoading({ stage: "assets", bakeProgress: 0, sceneHeld: false });
     runStore.setPaused("present", true);
@@ -115,6 +156,7 @@ export default function PresentClient({
     const later = window.setTimeout(() => setMounted(true), 0);
     return () => {
       window.clearTimeout(later);
+      window.clearInterval(fogOff);
       runStore.setPaused("present", false);
       runStore.reset();
       audio.setActive(false);
@@ -153,10 +195,9 @@ export default function PresentClient({
     audio.setMix(mixKey === "all" ? null : mixKey ? (mixKey.split(",") as MixLayer[]) : []);
   }, [ready, mixKey]);
 
-  // The sound slide: Gugut's voice loaded, and his song stopped after.
+  // The sound slide: his song stopped after.
   useEffect(() => {
     if (!ready || !slide.steps?.some((s) => s.mix)) return;
-    audio.setVoice(true);
     return () => temesgen.stopSong();
   }, [ready, slide]);
   // Each step's sounds: the song once its layer is in, her bleat every few seconds, his line.
@@ -188,7 +229,6 @@ export default function PresentClient({
     if (s.xray.wireframeFirst) sceneLayers.setWireframe(on ? null : s.xray.wireframeFirst);
     if (s.xray.lightmap) sceneLayers.setLightmapView(on);
     if (s.xray.limbs) sceneLayers.setLimbView(on);
-    if (s.xray.golden) sceneLayers.setGoldenGoat(on);
     if (s.xray.applies) {
       const grids = s.uvGrid ?? [];
       sceneLayers.setUvGrid(on ? grids.filter((g) => g !== s.xray!.applies) : grids);
@@ -226,7 +266,6 @@ export default function PresentClient({
   // Each slide as it comes up: fog off for the wide shots, and its moment.
   useEffect(() => {
     if (!ready) return;
-    setLeva("fogEnabled", !slide.clear);
     sceneLayers.only(slide.layers ?? null, true);
     sceneLayers.setUvGrid(slide.uvGrid ?? [], true);
     sceneLayers.setWireframe(slide.xray?.wireframeFirst ?? null);
@@ -236,6 +275,10 @@ export default function PresentClient({
     if (slide.enter === "song") {
       temesgen.playSong();
       temesgen.standUp(); // (He plays; Gugut doesn't walk over and sit.)
+    } else if (slide.enter === "dance") {
+      // She dances, as in the game when Gugut stands and watches her (game/goat): the berries at work.
+      revealPreview.stop();
+      for (let i = 0; i < 110; i++) goat.observe(0.1, true, true);
     } else if (slide.enter === "reveal") {
       // What the game does as Gugut reaches her: the glow, the light, the motes, the swell.
       timer = window.setTimeout(() => {
@@ -246,6 +289,7 @@ export default function PresentClient({
     return () => {
       window.clearTimeout(timer);
       if (slide.enter === "song") temesgen.stopSong();
+      if (slide.enter === "dance") goat.observe(0.1, false, false);
       if (slide.enter === "reveal") revealPreview.stop();
       setXrayOn(slide, false);
       sceneLayers.setUvGrid([], true);
@@ -288,7 +332,7 @@ export default function PresentClient({
   return (
     <div className={`${posterFont.variable} relative h-full w-full overflow-hidden bg-black text-[#fdf3d4]`}>
       <Leva hidden />
-      {mounted && <Scene director={<Director slides={SLIDES} />} />}
+      {mounted && <Scene director={<Director slides={SLIDES} />} maxDpr={MAX_DPR} />}
 
       {/* Loading: the game's own counter, while the maze is baked and compiled. */}
       {!ready && <Loading />}
@@ -329,6 +373,14 @@ export default function PresentClient({
 
 const noop = () => {};
 
+/** The presentation's resolution cap (big screens, projectors): crisp enough, much cheaper than 2×. */
+const MAX_DPR = 1.5;
+/** The parts with a wireframe x-ray, compiled as wireframe while loading. */
+const WARM_WIREFRAMES = ["walls", "tree"] as const;
+/** How often the live readouts rewrite their numbers (ms); the song meter more often. */
+const READOUT_EVERY = 250;
+const METER_EVERY = 80;
+
 const noSubscribe = () => () => {};
 
 /** Fullscreen on / off (also F), top right: dim until hovered. */
@@ -347,7 +399,7 @@ function FullscreenButton() {
         e.currentTarget.blur();
         void (fullscreen ? exitFullscreen() : enterFullscreen());
       }}
-      className="absolute top-4 right-[1.5vw] z-[26] flex h-10 w-10 items-center justify-center rounded-xl border border-[#fdf3d4]/20 bg-black/40 text-[#fdf3d4] opacity-50 backdrop-blur-sm transition-opacity duration-300 hover:opacity-100 focus-visible:opacity-100"
+      className="absolute top-4 right-[1.5vw] z-[26] flex h-10 w-10 items-center justify-center rounded-xl border border-[#fdf3d4]/20 bg-black/60 text-[#fdf3d4] opacity-50 transition-opacity duration-300 hover:opacity-100 focus-visible:opacity-100"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {fullscreen ? (
@@ -389,7 +441,7 @@ function Letterbox() {
 /** The presenter's notes for this slide (N), small, in the corner. */
 function Notes({ notes, index, count }: { notes: string[]; index: number; count: number }) {
   return (
-    <div className="pointer-events-none absolute right-[2vw] bottom-[2vh] z-[30] w-[min(26rem,34vw)] rounded-xl border border-[#c9a45c]/40 bg-black/80 p-3 text-sm leading-snug text-[#fdf3d4]/90 backdrop-blur-md">
+    <div className="pointer-events-none absolute right-[2vw] bottom-[2vh] z-[30] w-[min(26rem,34vw)] rounded-xl border border-[#c9a45c]/40 bg-black/80 p-3 text-sm leading-snug text-[#fdf3d4]/90">
       <p className="mb-1.5 text-[10px] uppercase tracking-[0.25em] text-[#c9a45c]">
         Notes · {index + 1}/{count} · N to hide
       </p>
@@ -495,7 +547,7 @@ function SlideView({
           {slide.tags && (
             <div className="slide-rise mb-4 flex flex-wrap gap-2" style={{ animationDelay: "400ms" }}>
               {slide.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-[#c9a45c]/60 bg-black/40 px-3 py-1 text-sm uppercase tracking-[0.12em] text-[#c9a45c] backdrop-blur-sm">
+                <span key={tag} className="rounded-full border border-[#c9a45c]/60 bg-black/60 px-3 py-1 text-sm uppercase tracking-[0.12em] text-[#c9a45c]">
                   {tag}
                 </span>
               ))}
@@ -533,7 +585,7 @@ function SlideView({
       {slide.merge && <Merge {...slide.merge} />}
       {slide.xray?.legend && (
         <div
-          className="absolute top-1/2 right-[5vw] flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-[#fdf3d4]/15 bg-black/55 p-4 backdrop-blur-md transition-opacity duration-500"
+          className="absolute top-1/2 right-[5vw] flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-[#fdf3d4]/15 bg-black/70 p-4 transition-opacity duration-500"
           style={{ opacity: xray ? 1 : 0 }}
         >
           {slide.xray.legend.map(([color, label]) => (
@@ -547,7 +599,7 @@ function SlideView({
       {now?.mix && <Mixer mix={now.mix} added={added} />}
 
       {slide.xray && (
-        <div className="absolute left-[6vw] rounded-xl border border-[#fdf3d4]/20 bg-black/50 px-4 py-2 text-sm backdrop-blur-sm" style={{ top: slide.readout ? "11.5rem" : "1.5rem" }}>
+        <div className="absolute left-[6vw] rounded-xl border border-[#fdf3d4]/20 bg-black/65 px-4 py-2 text-sm" style={{ top: slide.readout ? "11.5rem" : "1.5rem" }}>
           <span className="text-[#fdf3d4]/60">X-ray · </span>
           {slide.xray.label}:{" "}
           <b key={String(xray)} className={`badge-pop inline-block ${xray ? "text-[#e0523a]" : "text-[#7fd08a]"}`}>{(slide.xray.states ?? ["ON", "OFF"])[xray ? 1 : 0]}</b>
@@ -622,8 +674,8 @@ function Picture({ src, caption, box, tilt, delay }: { src: string; caption: str
 function Merge({ left, right, result }: { left: [string, string]; right: [string, string]; result: [string, string] }) {
   const card = (name: string, text: string, delay: number, gold = false) => (
     <div
-      className={`slide-rise w-[min(18rem,22vw)] rounded-2xl border p-5 backdrop-blur-md ${
-        gold ? "border-[#c9a45c] bg-[#c9a45c]/15 shadow-[0_0_60px_rgba(201,164,92,0.35)]" : "border-[#fdf3d4]/15 bg-black/55"
+      className={`slide-rise w-[min(18rem,22vw)] rounded-2xl border p-5 ${
+        gold ? "border-[#c9a45c] bg-[#c9a45c]/15 shadow-[0_0_60px_rgba(201,164,92,0.35)]" : "border-[#fdf3d4]/15 bg-black/70"
       }`}
       style={{ animationDelay: `${delay}ms` }}
     >
@@ -654,7 +706,7 @@ function Cards({ cards }: { cards: [string, string][] }) {
       {cards.map(([name, text], i) => (
         <div
           key={name}
-          className="slide-rise rounded-2xl border border-[#fdf3d4]/15 bg-black/55 p-4 backdrop-blur-md"
+          className="slide-rise rounded-2xl border border-[#fdf3d4]/15 bg-black/70 p-4"
           style={{ animationDelay: `${750 + i * 160}ms` }}
         >
           <p className="font-[family-name:var(--font-jolly)] text-[clamp(1.3rem,1.8vw,1.8rem)] leading-none text-[#c9a45c]">{name}</p>
@@ -692,7 +744,7 @@ const MIX_NAMES: Record<MixLayer, [name: string, detail: string]> = {
 
 function Mixer({ mix, added }: { mix: readonly MixLayer[]; added?: MixLayer }) {
   return (
-    <div className="absolute top-1/2 right-[5vw] w-[min(24rem,34vw)] -translate-y-1/2 rounded-2xl border border-[#fdf3d4]/15 bg-black/55 p-4 backdrop-blur-md">
+    <div className="absolute top-1/2 right-[5vw] w-[min(24rem,34vw)] -translate-y-1/2 rounded-2xl border border-[#fdf3d4]/15 bg-black/70 p-4">
       <p className="mb-3 text-xs uppercase tracking-[0.25em] text-[#fdf3d4]/50">The mix</p>
       <div className="flex flex-col gap-2">
         {MIX_LAYERS.map((layer, n) => {
@@ -742,9 +794,13 @@ function ReadoutView({ kind }: { kind: Readout }) {
     let id = 0;
     const rows = (pairs: [string, string][]) =>
       pairs.map(([k, v]) => `<div class="flex justify-between gap-6"><span class="opacity-60">${k}</span><b class="tabular-nums">${v}</b></div>`).join("");
+    let last = 0;
     const tick = () => {
       const el = box.current;
-      if (el) {
+      const now = performance.now();
+      if (kind === "compass" && arrow.current) arrow.current.style.transform = `rotate(${presentLive.goatBearing}rad)`;
+      if (el && now - last >= (kind === "energy" ? METER_EVERY : READOUT_EVERY)) {
+        last = now;
         if (kind === "render") {
           const { frameMs } = getPerf();
           const list: [string, string][] = [
@@ -770,13 +826,13 @@ function ReadoutView({ kind }: { kind: Readout }) {
           const backend = presentLive.webgpu === null ? "…" : presentLive.webgpu ? "WebGPU" : "WebGL 2 (fallback)";
           el.innerHTML = rows([
             ["Renderer", backend],
+            ["Graphics", (getPreferences().graphics ?? "medium").replace(/^./, (c) => c.toUpperCase())],
             ["FPS", frameMs > 0 ? Math.round(1000 / frameMs).toString() : "–"],
             ["Draw calls", perfCalls.current.toLocaleString()],
             ["Triangles", perfTris.current.toLocaleString()],
           ]);
         } else if (kind === "compass") {
           el.innerHTML = rows([["Goat", `${presentLive.goatDistance.toFixed(1)} m away`]]);
-          if (arrow.current) arrow.current.style.transform = `rotate(${presentLive.goatBearing}rad)`;
         }
       }
       id = requestAnimationFrame(tick);
@@ -786,7 +842,7 @@ function ReadoutView({ kind }: { kind: Readout }) {
   }, [kind]);
 
   return (
-    <div className="absolute top-6 left-[6vw] min-w-56 rounded-xl border border-[#fdf3d4]/20 bg-black/50 px-4 py-3 text-base backdrop-blur-sm">
+    <div className="absolute top-6 left-[6vw] min-w-56 rounded-xl border border-[#fdf3d4]/20 bg-black/65 px-4 py-3 text-base">
       <div ref={box} className="flex flex-col gap-1" />
       {kind === "compass" && (
         <div className="mt-3 flex items-center gap-3">
