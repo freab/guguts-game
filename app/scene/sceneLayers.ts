@@ -52,6 +52,8 @@ const debug = {
   limbs: false,
   uvGrid: { ground: false } as Record<UvSurface, boolean>,
   uvGridInstant: false,
+  /** The goat shown golden, whatever this maze's odds (maze/Goat). */
+  golden: false,
 };
 
 export const sceneLayers = {
@@ -90,6 +92,9 @@ export const sceneLayers = {
     debug.uvGrid = { ground: surfaces.includes("ground") };
     debug.uvGridInstant = instant;
   },
+  setGoldenGoat(on: boolean) {
+    debug.golden = on;
+  },
   setLimbView(on: boolean) {
     debug.limbs = on;
   },
@@ -99,6 +104,7 @@ export const sceneLayers = {
     debug.lightmap = false;
     debug.limbs = false;
     debug.uvGrid = { ground: false };
+    debug.golden = false;
     sceneLayers.only(null);
     // (After: nothing animates back in.)
     shownAt.clear();

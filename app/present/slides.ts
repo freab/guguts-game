@@ -44,6 +44,8 @@ export interface XRay {
   lightmap?: boolean;
   /** Colour Temesgen by the parts his vertex shader moves. */
   limbs?: boolean;
+  /** Show the goat golden (the 1-in-50 secret). */
+  golden?: boolean;
   /** Apply this surface's texture (a sweep across), replacing its UV grid. */
   applies?: UvSurface;
   /** What the colours mean, shown while X is on: [colour, label]. */
@@ -99,7 +101,15 @@ export interface Slide {
   map?: CullingMode;
   /** Technique cards: [name, what it does]. */
   cards?: [name: string, text: string][];
+  /** What to say: speaker notes, shown with N (only for the presenter's eyes). */
+  notes?: string[];
 }
+
+/**
+ * The light the whole presentation is shown in: the sunset held at its golden
+ * hour (leva "Dusk preview": 0 = the run's start … 1 = full dusk).
+ */
+export const GOLDEN_HOUR = 0.3;
 
 /** The game's address, as the QR code on the last slide (public/qr-play.svg) has it. */
 export const PLAY_URL = "goat.gugut.studio";

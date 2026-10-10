@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Leva, levaStore } from "leva";
 import { posterFont } from "../fonts";
 import { audio, MIX_LAYERS, type MixLayer } from "../audio/audioEngine";
@@ -20,9 +20,10 @@ import { getPerf } from "../scene/perf/perfStore";
 import { perfCalls, perfTris } from "../scene/perf/renderStats";
 import { Counter } from "../ui/LoadingOverlay";
 import StudioSplash from "../ui/StudioSplash";
+import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen } from "../ui/fullscreen";
 import CullingMap from "./CullingMap";
 import { presentLive, presentStore, usePresent } from "./presentStore";
-import { PLAY_URL, PLAYERS, type Readout, type Slide } from "./slides";
+import { GOLDEN_HOUR, PLAY_URL, PLAYERS, type Readout, type Slide } from "./slides";
 
 // Browser-only, like the game's own (drei's loaders need browser globals).
 const Scene = dynamic(() => import("../scene/Scene"), { ssr: false });
@@ -72,6 +73,7 @@ export default function PresentClient({
   const { slide: index, step } = usePresent();
   const slide = SLIDES[index];
   // The slide on screen, and the one leaving (its text animating out).
+  const [notes, setNotes] = useState(false);
   const [shown, setShown] = useState({ index, step });
   const [leaving, setLeaving] = useState<{ index: number; step: number } | null>(null);
   if (shown.index !== index) {
@@ -186,6 +188,7 @@ export default function PresentClient({
     if (s.xray.wireframeFirst) sceneLayers.setWireframe(on ? null : s.xray.wireframeFirst);
     if (s.xray.lightmap) sceneLayers.setLightmapView(on);
     if (s.xray.limbs) sceneLayers.setLimbView(on);
+    if (s.xray.golden) sceneLayers.setGoldenGoat(on);
     if (s.xray.applies) {
       const grids = s.uvGrid ?? [];
       sceneLayers.setUvGrid(on ? grids.filter((g) => g !== s.xray!.applies) : grids);
@@ -202,6 +205,24 @@ export default function PresentClient({
     setXray(on);
   }, []);
 
+  // X pressed: a pulse of light round the screen; the switch lands at its peak.
+  const [pulse, setPulse] = useState(0);
+  const pressX = useCallback(
+    (s: Slide) => {
+      if (!s.xray) return;
+      setPulse((n) => n + 1);
+      const on = !xrayRef.current;
+      xrayRef.current = on;
+      const at = presentStore.get().slide;
+      // (Only if still on the same slide: a quick → shouldn't carry it over.)
+      window.setTimeout(() => {
+        if (presentStore.get().slide === at) setXrayOn(s, on);
+        else xrayRef.current = false;
+      }, PULSE_PEAK_MS);
+    },
+    [setXrayOn]
+  );
+
   // Each slide as it comes up: fog off for the wide shots, and its moment.
   useEffect(() => {
     if (!ready) return;
@@ -209,7 +230,7 @@ export default function PresentClient({
     sceneLayers.only(slide.layers ?? null, true);
     sceneLayers.setUvGrid(slide.uvGrid ?? [], true);
     sceneLayers.setWireframe(slide.xray?.wireframeFirst ?? null);
-    applySettings(slide.set ?? []);
+    applySettings([["duskPreview", GOLDEN_HOUR], ...(slide.set ?? [])]);
     let timer = 0;
     if (slide.enter === "song") {
       temesgen.playSong();
@@ -252,14 +273,16 @@ export default function PresentClient({
       if (["ArrowRight", "Space", "PageDown", "Enter"].includes(e.code)) advance(1);
       else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.code)) advance(-1);
       else if (e.code === "Home") presentStore.goTo(0);
-      else if (e.code === "KeyX") setXrayOn(SLIDES[at], !xrayRef.current);
+      else if (e.code === "KeyX") pressX(SLIDES[at]);
+      else if (e.code === "KeyN") setNotes((n) => !n);
+      else if (e.code === "KeyF") void (document.fullscreenElement ? exitFullscreen() : enterFullscreen());
       else if (e.code === "KeyB") bleat();
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ready, advance, setXrayOn, SLIDES]);
+  }, [ready, advance, pressX, SLIDES]);
 
   return (
     <div className={`${posterFont.variable} relative h-full w-full overflow-hidden bg-black text-[#fdf3d4]`}>
@@ -286,9 +309,17 @@ export default function PresentClient({
               exiting={v.index !== index}
             />
           ))}
-          <Chapters slides={SLIDES} index={index} />
         </div>
       )}
+
+      <FullscreenButton />
+
+      {/* While the camera moves: letterbox bars. */}
+      {ready && <Letterbox />}
+      {/* X: a pulse of warm light round the edges. */}
+      {pulse > 0 && <div key={pulse} className="xray-pulse pointer-events-none absolute inset-0 z-[22]" />}
+      {/* N: the presenter's notes. */}
+      {ready && notes && slide.notes && <Notes notes={slide.notes} index={index} count={SLIDES.length} />}
 
       <StudioSplash />
     </div>
@@ -296,6 +327,79 @@ export default function PresentClient({
 }
 
 const noop = () => {};
+
+const noSubscribe = () => () => {};
+
+/** Fullscreen on / off (also F), top right: dim until hovered. */
+function FullscreenButton() {
+  const supported = useSyncExternalStore(noSubscribe, fullscreenSupported, () => false);
+  const fullscreen = useIsFullscreen();
+  if (!supported) return null;
+  const label = fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)";
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={(e) => {
+        // (Let go of the focus: Space / Enter are "next", not this button again.)
+        e.currentTarget.blur();
+        void (fullscreen ? exitFullscreen() : enterFullscreen());
+      }}
+      className="absolute top-4 right-[1.5vw] z-[26] flex h-10 w-10 items-center justify-center rounded-xl border border-[#fdf3d4]/20 bg-black/40 text-[#fdf3d4] opacity-50 backdrop-blur-sm transition-opacity duration-300 hover:opacity-100 focus-visible:opacity-100"
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {fullscreen ? (
+          <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+        ) : (
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+        )}
+      </svg>
+    </button>
+  );
+}
+
+/** When the x-ray's switch lands, into the X pulse (ms). */
+const PULSE_PEAK_MS = 160;
+
+/** Cinema bars, top and bottom, at presentLive.bars (read on its own loop). */
+function Letterbox() {
+  const top = useRef<HTMLDivElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let id = 0;
+    const tick = () => {
+      const h = `${(presentLive.bars * 7).toFixed(2)}vh`;
+      if (top.current) top.current.style.height = h;
+      if (bottom.current) bottom.current.style.height = h;
+      id = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return (
+    <>
+      <div ref={top} className="pointer-events-none absolute inset-x-0 top-0 z-[15] h-0 bg-black" />
+      <div ref={bottom} className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] h-0 bg-black" />
+    </>
+  );
+}
+
+/** The presenter's notes for this slide (N), small, in the corner. */
+function Notes({ notes, index, count }: { notes: string[]; index: number; count: number }) {
+  return (
+    <div className="pointer-events-none absolute right-[2vw] bottom-[2vh] z-[30] w-[min(26rem,34vw)] rounded-xl border border-[#c9a45c]/40 bg-black/80 p-3 text-sm leading-snug text-[#fdf3d4]/90 backdrop-blur-md">
+      <p className="mb-1.5 text-[10px] uppercase tracking-[0.25em] text-[#c9a45c]">
+        Notes · {index + 1}/{count} · N to hide
+      </p>
+      <ul className="flex list-disc flex-col gap-1 pl-4">
+        {notes.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** How long the outgoing slide's text takes to leave (ms); the new one's waits about as long. */
 const EXIT_MS = 420;
@@ -424,40 +528,14 @@ function SlideView({
         <div className="absolute left-[6vw] rounded-xl border border-[#fdf3d4]/20 bg-black/50 px-4 py-2 text-sm backdrop-blur-sm" style={{ top: slide.readout ? "11.5rem" : "1.5rem" }}>
           <span className="text-[#fdf3d4]/60">X-ray · </span>
           {slide.xray.label}:{" "}
-          <b className={xray ? "text-[#e0523a]" : "text-[#7fd08a]"}>{(slide.xray.states ?? ["ON", "OFF"])[xray ? 1 : 0]}</b>
+          <b key={String(xray)} className={`badge-pop inline-block ${xray ? "text-[#e0523a]" : "text-[#7fd08a]"}`}>{(slide.xray.states ?? ["ON", "OFF"])[xray ? 1 : 0]}</b>
           <span className="ml-2 text-[#fdf3d4]/40">(X)</span>
         </div>
       )}
 
-      <div className="absolute top-6 right-[6vw] text-sm tracking-[0.2em] text-[#fdf3d4]/50 tabular-nums">
+      <div className="absolute top-6 right-[calc(1.5vw+3.5rem)] text-sm tracking-[0.2em] text-[#fdf3d4]/50 tabular-nums">
         {index + 1} / {count}
       </div>
-    </div>
-  );
-}
-
-/**
- * Where the build is (slides with a `chapter`): a strip along the top,
- * done ones in gold, the current one lit. Nothing on decks without chapters.
- */
-function Chapters({ slides, index }: { slides: Slide[]; index: number }) {
-  const chapters = slides.map((s, i) => [s.chapter, i] as const).filter((c): c is readonly [string, number] => !!c[0]);
-  if (!chapters.length) return null;
-  const current = slides[index].chapter;
-  return (
-    <div className="pointer-events-none absolute top-6 left-1/2 flex max-w-[56vw] -translate-x-1/2 flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs uppercase tracking-[0.14em]">
-      {chapters.map(([name, at], n) => (
-        <span key={name} className="flex items-center gap-1.5">
-          {n > 0 && <span className={at <= index ? "text-[#c9a45c]/70" : "text-[#fdf3d4]/20"}>·</span>}
-          <span
-            className={`rounded-full px-2 py-0.5 transition-colors duration-500 ${
-              name === current ? "bg-[#c9a45c] text-[#2a2312]" : at <= index ? "text-[#c9a45c]" : "text-[#fdf3d4]/30"
-            }`}
-          >
-            {name}
-          </span>
-        </span>
-      ))}
     </div>
   );
 }

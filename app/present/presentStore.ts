@@ -44,6 +44,8 @@ export const presentLive = {
   /** The goat's direction relative to where the camera looks (radians, + = right). */
   goatBearing: 0,
   goatDistance: 0,
+  /** 0..1: the letterbox bars while the camera moves between shots. */
+  bars: 0,
   /** Is the renderer on WebGPU (true) or its WebGL 2 fallback (false)? null until known. */
   webgpu: null as boolean | null,
 };

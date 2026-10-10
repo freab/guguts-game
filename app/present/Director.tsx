@@ -248,9 +248,15 @@ function placeUvGrids(grid: THREE.Mesh, dt: number) {
   grid.visible = uvWipe.value < 1;
 }
 
-/** The lightmap x-ray: shown when asked, laid over the ground the lightmap covers. */
-function placeLightmapView(view: THREE.Mesh) {
-  view.visible = sceneLayers.debug().lightmap;
+/** How fast the lightmap x-ray fades in and out (per second). */
+const LIGHTMAP_FADE = 3;
+
+/** The lightmap x-ray: fading in when asked, laid over the ground the lightmap covers. */
+function placeLightmapView(view: THREE.Mesh, dt: number) {
+  const material = view.material as THREE.MeshBasicNodeMaterial;
+  const target = sceneLayers.debug().lightmap ? 1 : 0;
+  material.opacity = target > material.opacity ? Math.min(1, material.opacity + dt * LIGHTMAP_FADE) : Math.max(0, material.opacity - dt * LIGHTMAP_FADE);
+  view.visible = material.opacity > 0;
   if (!view.visible) return;
   const b = lightmapBounds.value;
   view.position.set(b.x + b.z / 2, 0.06, b.y + b.w / 2);
@@ -291,6 +297,9 @@ export default function Director({ slides }: { slides: Slide[] }) {
     const material = new THREE.MeshBasicNodeMaterial();
     material.colorNode = lightmapView;
     material.fog = false;
+    material.transparent = true;
+    material.depthWrite = false;
+    material.opacity = 0;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.visible = false;
@@ -314,7 +323,7 @@ export default function Director({ slides }: { slides: Slide[] }) {
       scene.backgroundIntensity = since ? clamp((performance.now() - since) / 1000 / SKY_FADE, 0, 1) ** 2 : 1;
     }
 
-    placeLightmapView(lightmapPlane);
+    placeLightmapView(lightmapPlane, Math.min(delta, 0.1));
     placeUvGrids(uvPlane, Math.min(delta, 0.1));
 
     const { slide, step } = presentStore.get();
@@ -353,6 +362,8 @@ export default function Director({ slides }: { slides: Slide[] }) {
 
     const k = g.seconds ? Math.min(1, t / g.seconds) : 1;
     const u = ease(k);
+    // Letterbox bars while it moves: in quickly, out as it lands.
+    presentLive.bars = g.seconds && k < 1 ? Math.min(1, k / 0.15) * Math.min(1, (1 - k) / 0.3) : 0;
     if (u >= 1) cam.position.copy(p.pos);
     else {
       // A quadratic curve: from → the raised middle → the shot.

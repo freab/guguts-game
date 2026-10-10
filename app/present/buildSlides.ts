@@ -21,12 +21,14 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "orbit",
     title: "How it's made",
+    notes: ["Hi, I'm ___ from Gugut Studios. This is Gugut & the Goat, a 3D game in the browser.","Instead of slides, I'll take the game apart and build it back up, live."],
     lines: ["This is Gugut & the Goat.", "Let's build it from nothing, one piece at a time."],
     clear: true,
   },
   {
     shot: "walls",
     title: "1 · The ground",
+    notes: ["Everything starts as an empty plane.","Press X: the UV grid becomes the real ground texture."],
     chapter: "Ground",
     tags: ["UV mapping", "PBR textures"],
     lines: [
@@ -42,6 +44,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "top",
     title: "2 · The maze",
+    notes: ["New maze every run: recursive backtracker, always solvable.","Instanced: one draw per wall shape. Press X for solid walls."],
     chapter: "Maze",
     xray: { label: "Walls", wireframeFirst: "walls", states: ["WIREFRAME", "SOLID"] },
     tags: ["Recursive backtracker", "GPU instancing", "6 m chunks"],
@@ -57,6 +60,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "stone",
     title: "3 · Stone",
+    notes: ["The stone's height map pushes the wall faces out. They really bulge."],
     chapter: "Stone",
     tags: ["Height-mapped relief", "KTX2 textures"],
     lines: ["The wall faces really bulge: each vertex is pushed out by the stone's height map."],
@@ -67,6 +71,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "lightmap",
     title: "4 · Sunlight",
+    notes: ["Shadows are baked while you read the story: a ray per texel to the sun.","Press X: the actual texture. Red = sun, green = away from walls."],
     chapter: "Light",
     tags: ["CPU ray-traced lightmap", "Ambient occlusion"],
     lines: [
@@ -81,6 +86,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "sky",
     title: "5 · The sky",
+    notes: ["Physically based sky, rendered once into a cube map.","It sets as the clock runs."],
     chapter: "Sky",
     tags: ["Physically based sky", "Baked cube map", "Sunset"],
     lines: [
@@ -93,6 +99,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "grass",
     title: "6 · Grass",
+    notes: ["Thousands of tufts, my own shaders, chunked.","Press X: switch the culling off, watch the count."],
     chapter: "Grass",
     tags: ["WebGPU", "Custom TSL shaders", "Occlusion culling", "LOD"],
     lines: [
@@ -107,6 +114,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "corridor",
     title: "7 · Flowers",
+    notes: ["Wildflowers along the paths, same wind."],
     chapter: "Flowers",
     tags: ["Instanced", "Custom shader"],
     lines: ["Wildflowers along the paths, swaying in the same wind."],
@@ -116,6 +124,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "walls",
     title: "8 · Ivy",
+    notes: ["Ivy follows the real bumpy wall surface."],
     chapter: "Ivy",
     tags: ["Surface-following placement"],
     lines: ["Ivy that grows on the walls' real, bumpy surface, not floating off it."],
@@ -126,6 +135,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "tree",
     title: "9 · The tree",
+    notes: ["Built in code from a seed: every maze grows its own.","Press X for the wireframe."],
     chapter: "Tree",
     tags: ["Procedural tree", "Culling + LOD"],
     lines: [
@@ -139,6 +149,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "temesgenWide",
     title: "10 · Temesgen",
+    notes: ["Temesgen plays the kirar. The music is by Temesgen (temesgen.com).","His hand follows the real song: the game listens to it."],
     chapter: "Temesgen",
     tags: ["Vertex-shader animation", "Web Audio AnalyserNode"],
     lines: [
@@ -154,6 +165,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "temesgen",
     title: "The hardest problem",
+    notes: ["He came as a frozen scan: no skeleton.","The vertex shader decides which body part each vertex is. Press X to see the parts move."],
     chapter: "No skeleton",
     tags: ["No rig, no bones", "Capsule masks", "Vertex shader"],
     lines: [
@@ -178,19 +190,23 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "goat",
     title: "11 · The goat",
+    notes: ["When you find her: rim light, glow, motes, the music swells.","All shaders, no real light.","Press X: the golden goat, a secret in about 1 maze in 50."],
     chapter: "Goat",
     tags: ["Vertex-shader animation", "Additive TSL shaders"],
     lines: [
       "A still scan too: the vertex shader makes her breathe and look round.",
       "When you find her: a rim light on her fur, a warm pool and a shaft of light, motes drifting up, and the music swells. All shader-driven, no real light, so nothing recompiles.",
+      "Press X for a secret: about one maze in 50 has a golden goat.",
     ],
     // (Post-processing on early, here: the reveal's glow blooms, as in the game.)
     layers: upTo("characters"),
     enter: "reveal",
+    xray: { label: "Goat", golden: true, states: ["NORMAL", "GOLDEN"] },
   },
   {
     shot: "grass",
     title: "12 · Little things",
+    notes: ["Birds, leaves, fireflies, and the secrets: the jebena, the coffee bush."],
     chapter: "Details",
     tags: ["Particles", "Secrets"],
     lines: [
@@ -203,6 +219,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "orbit",
     title: "Doing less, every frame",
+    notes: ["It has to run on a phone. The rule: never do work twice.","Walk through the four cards."],
     chapter: "Performance",
     tags: ["Performance"],
     lines: ["A maze full of grass, ivy and a living tree has to run on a phone. The trick is never doing work twice."],
@@ -219,6 +236,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "spin",
     title: "Culling: what you can't see isn't drawn",
+    notes: ["Step 1, frustum: only what's in view. Watch the map follow the camera.","Step 2, occlusion: rays into each cell. Press X to switch it off."],
     chapter: "Culling",
     tags: ["Frustum culling", "Occlusion culling", "Grid ray walk (DDA)", "8-frame hold"],
     lines: [],
@@ -232,7 +250,7 @@ export const BUILD_SLIDES: Slide[] = [
       },
       {
         label: "2 · Occlusion culling",
-        caption: "In a maze, most of what's in view is behind a wall. A ray walks the grid from the camera into each cell: green gets through, red stops at a wall, and those chunks aren't drawn either. Press X to switch it off.",
+        caption: "In a maze, most of what's in view is behind a wall. On the close-up, only what's inside the view: green the camera can see, so it's drawn; red is behind a wall (its line of sight stops at the ✕), so it isn't. Press X to switch it off and watch the red turn green.",
         shot: "corridor",
         map: "occlusion",
       },
@@ -250,6 +268,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "grass",
     title: "And a few more tricks",
+    notes: ["Pick two cards, don't read all six."],
     chapter: "More tricks",
     tags: ["Performance"],
     lines: [],
@@ -267,6 +286,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "orbit",
     title: "Built on WebGPU",
+    notes: ["three.js WebGPU renderer, shaders in TSL.","Point at the readout. If it says WebGL 2, that's the automatic fallback."],
     chapter: "WebGPU",
     tags: ["three.js WebGPURenderer", "TSL shaders", "WGSL", "WebGL 2 fallback"],
     lines: [
@@ -280,6 +300,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "soundStage",
     title: "13 · Sound, layer by layer",
+    notes: ["Pause on Silence for two seconds. Let the room hear nothing.","Then add each layer. Thank Surafel Yimam on the voice step."],
     chapter: "Sound",
     tags: ["Web Audio", "HRTF panning", "Occlusion low-pass", "Reverb", "Ducking", "Compressor"],
     lines: ["Until now, silence. Press → to add each layer of the mix."],
@@ -326,6 +347,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "orbit",
     title: "14 · The finishing touch",
+    notes: ["Bloom, god rays, flare, vignette. Press X for before and after."],
     chapter: "Post FX",
     tags: ["Bloom", "God rays", "Lens flare", "Vignette"],
     lines: ["Post-processing turns the render into a sunset: bloom, god rays through the tree, a lens flare. Press X for before and after."],
@@ -335,6 +357,7 @@ export const BUILD_SLIDES: Slide[] = [
   {
     shot: "intro",
     title: "Thank you",
+    notes: ["Thank you! Scan the QR to play now.","Thanks to Surafel Yimam (voice), Eman Issae (designs), Temesgen (music)."],
     lines: ["Gugut & the Goat · by Gugut Studios"],
     qr: true,
   },
