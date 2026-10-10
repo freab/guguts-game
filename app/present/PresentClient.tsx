@@ -27,7 +27,7 @@ import StudioSplash from "../ui/StudioSplash";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen } from "../ui/fullscreen";
 import CullingMap from "./CullingMap";
 import { presentLive, presentStore, usePresent } from "./presentStore";
-import { PRESENTER_POLL_MS, isRoomCode, newRoomCode, type RemoteAction, type RemoteState } from "../remote/shared";
+import { PRESENTER_POLL_IDLE_MS, PRESENTER_POLL_LIVE_MS, isRoomCode, newRoomCode, type RemoteAction, type RemoteState } from "../remote/shared";
 import { GOLDEN_HOUR, PLAY_URL, PLAYERS, type Readout, type Slide } from "./slides";
 
 // Browser-only, like the game's own (drei's loaders need browser globals).
@@ -335,17 +335,18 @@ export default function PresentClient({
     [SLIDES]
   );
 
-  // The phone's taps: picked up a few times a second, done as the keys would.
+  // The phone's taps, done as the keys would: checked every 2 s until a
+  // phone says hello, then every 150 ms.
   useEffect(() => {
     if (!ready || !room) return;
     let live = true;
-    let busy = false;
-    const id = window.setInterval(async () => {
-      if (busy) return;
-      busy = true;
+    let linked = false;
+    let timer = 0;
+    const check = async () => {
       try {
         const res = await fetch(`/api/remote?code=${room}&as=presenter`, { cache: "no-store" });
         const { actions = [] } = (await res.json()) as { actions?: RemoteAction[] };
+        if (actions.length) linked = true;
         for (const action of live ? actions : []) {
           if (action === "next") advance(1);
           else if (action === "prev") advance(-1);
@@ -359,13 +360,13 @@ export default function PresentClient({
         }
       } catch {
         // Offline for a moment: the keyboard still works.
-      } finally {
-        busy = false;
       }
-    }, PRESENTER_POLL_MS);
+      if (live) timer = window.setTimeout(check, linked ? PRESENTER_POLL_LIVE_MS : PRESENTER_POLL_IDLE_MS);
+    };
+    void check();
     return () => {
       live = false;
-      window.clearInterval(id);
+      window.clearTimeout(timer);
     };
   }, [ready, room, advance, pressX, SLIDES]);
   // Where the presentation is, for the phone: sent when it changes.

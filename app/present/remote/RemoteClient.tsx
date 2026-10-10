@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { posterFont } from "../../fonts";
 import { CODE_LENGTH, PHONE_POLL_MS, cleanRoomCode, isRoomCode, type RemoteAction, type RemoteState } from "../../remote/shared";
 
@@ -44,7 +44,9 @@ export default function RemoteClient() {
   };
 
   return (
-    <div className={`${posterFont.variable} mx-auto flex min-h-dvh max-w-md flex-col px-4 py-5 text-[#fdf3d4]`}>
+    <div
+      className={`${posterFont.variable} mx-auto flex min-h-dvh max-w-md touch-manipulation flex-col px-4 py-5 text-[#fdf3d4] select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none]`}
+    >
       {code ? <Remote code={code} onUnpair={() => setCode(null)} /> : <Pairing typed={typed} setTyped={setTyped} onPair={pair} />}
     </div>
   );
@@ -88,28 +90,54 @@ function Pairing({ typed, setTyped, onPair }: { typed: string; setTyped: (v: str
   );
 }
 
+/** Where a tap will take the presentation, shown at once (the next check confirms it). */
+function predict(s: RemoteState | null, action: RemoteAction): RemoteState | null {
+  if (!s) return s;
+  const moved = (slide: number): RemoteState => ({ ...s, slide, step: 0, steps: 1, title: "…", notes: [], xray: null });
+  if (action === "next") return s.step + 1 < s.steps ? { ...s, step: s.step + 1 } : s.slide + 1 < s.count ? moved(s.slide + 1) : s;
+  if (action === "prev") return s.step > 0 ? { ...s, step: s.step - 1 } : s.slide > 0 ? moved(s.slide - 1) : s;
+  if (action === "first") return moved(0);
+  return s;
+}
+
+/** After a tap: trust the prediction this long, unless the presentation already agrees (ms). */
+const TRUST_PREDICTION_MS = 1200;
+
 function Remote({ code, onUnpair }: { code: string; onUnpair: () => void }) {
   const [state, setState] = useState<RemoteState | null>(null);
   const [offline, setOffline] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const predicted = useRef<{ state: RemoteState | null; until: number }>({ state: null, until: 0 });
+  const pollRef = useRef<() => Promise<void>>(async () => {});
 
-  // Say hello (the laptop shows "phone connected"), then follow the presentation.
+  const post = useCallback(
+    (body: object) =>
+      fetch("/api/remote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+      }),
+    []
+  );
+
+  // A tap: the counter moves now, the tap goes to the presentation, and the real state follows shortly.
   const send = useCallback(
     (action: RemoteAction) => {
       navigator.vibrate?.(12);
-      void fetch("/api/remote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, action }),
-      }).catch(() => setOffline(true));
+      setState((s) => {
+        const next = predict(s, action);
+        predicted.current = { state: next, until: Date.now() + TRUST_PREDICTION_MS };
+        return next;
+      });
+      post({ code, action })
+        .then(() => setOffline(false))
+        .catch(() => setOffline(true));
+      window.setTimeout(() => void pollRef.current(), 400);
     },
-    [code]
+    [code, post]
   );
+
+  // Say hello (the laptop shows "phone connected" and speeds up), then follow the presentation.
   useEffect(() => {
-    void fetch("/api/remote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, action: "hello" }),
-    }).catch(() => {});
+    void post({ code, action: "hello" }).catch(() => setOffline(true));
     let live = true;
     const poll = async () => {
       try {
@@ -117,18 +145,39 @@ function Remote({ code, onUnpair }: { code: string; onUnpair: () => void }) {
         const body = (await res.json()) as { state?: RemoteState | null };
         if (!live) return;
         setOffline(!res.ok);
-        if (res.ok) setState(body.state ?? null);
+        if (!res.ok) return;
+        const real = body.state ?? null;
+        // (Just after a tap the presentation may not have moved yet: keep the prediction until it has.)
+        const p = predicted.current;
+        const agrees = real && p.state && real.slide === p.state.slide && real.step === p.state.step;
+        if (Date.now() < p.until && !agrees) return;
+        predicted.current = { state: null, until: 0 };
+        setState(real);
       } catch {
         if (live) setOffline(true);
       }
     };
+    pollRef.current = poll;
     void poll();
     const id = window.setInterval(poll, PHONE_POLL_MS);
     return () => {
       live = false;
       window.clearInterval(id);
     };
-  }, [code]);
+  }, [code, post]);
+
+  // Reconnect, by hand: hello again (the laptop speeds back up) and fetch the slide now.
+  const reconnect = useCallback(async () => {
+    setRetrying(true);
+    try {
+      await post({ code, action: "hello" });
+      await pollRef.current();
+      setOffline(false);
+    } catch {
+      setOffline(true);
+    }
+    setRetrying(false);
+  }, [code, post]);
 
   // Keep the screen on while presenting.
   useEffect(() => {
@@ -150,10 +199,21 @@ function Remote({ code, onUnpair }: { code: string; onUnpair: () => void }) {
   const last = state ? state.slide + 1 >= state.count && state.step + 1 >= state.steps : false;
   return (
     <div className="flex flex-1 flex-col gap-4">
+      {offline && (
+        <button
+          type="button"
+          onClick={() => void reconnect()}
+          disabled={retrying}
+          className="flex items-center justify-center gap-3 rounded-2xl bg-[#e0523a] py-4 text-lg font-semibold text-white active:bg-[#c4432d] disabled:opacity-70"
+        >
+          <span className={retrying ? "inline-block animate-spin" : "inline-block"}>↻</span>
+          {retrying ? "Reconnecting…" : "Reconnect"}
+        </button>
+      )}
       <div className="flex items-center justify-between text-sm text-[#fdf3d4]/60">
         <span className="flex items-center gap-2">
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${offline ? "bg-[#e0523a]" : state ? "bg-[#7fd08a]" : "bg-[#c9a45c]"}`} />
-          {offline ? "Can't reach the presentation" : state ? `Slide ${state.slide + 1} / ${state.count}` : "Waiting for the presentation…"}
+          {state ? `Slide ${state.slide + 1} / ${state.count}` : offline ? "Offline" : "Waiting for the presentation…"}
         </span>
         <button type="button" onClick={onUnpair} className="font-mono tracking-[0.2em] underline-offset-4 hover:underline">
           {code}

@@ -38,6 +38,12 @@ export function cleanRoomCode(raw: string): string {
   return raw.toUpperCase().replace(/[\s-]/g, "").slice(0, CODE_LENGTH);
 }
 
-/** How often the presentation checks for the phone's taps, and the phone for the slide (ms). */
-export const PRESENTER_POLL_MS = 300;
+/**
+ * How often the presentation checks for the phone's taps (ms): slowly until a
+ * phone has said hello, then fast — quick taps, and little database traffic
+ * while no phone is paired.
+ */
+export const PRESENTER_POLL_IDLE_MS = 2000;
+export const PRESENTER_POLL_LIVE_MS = 150;
+/** How often the phone checks where the presentation is (ms). */
 export const PHONE_POLL_MS = 1000;
