@@ -87,6 +87,8 @@ export interface Slide {
   layers?: SceneLayer[];
   /** Surfaces shown as their UV test grid (until X applies one: XRay.applies). */
   uvGrid?: UvSurface[];
+  /** Post-processing on (it's off everywhere else: the finishing-touch slide is where it's shown). */
+  post?: boolean;
   /** Leva controls set while the slide is up (path suffix, value), put back after. */
   set?: [path: string, value: unknown][];
   /** Steps within the slide, one per press (the sound slide's mix, layer by layer). */

@@ -198,7 +198,6 @@ export const BUILD_SLIDES: Slide[] = [
       "When you find her: a rim light on her fur, a warm pool and a shaft of light, motes drifting up, and the music swells. All shader-driven, no real light, so nothing recompiles.",
       "Press X for a secret: about one maze in 50 has a golden goat.",
     ],
-    // (Post-processing on early, here: the reveal's glow blooms, as in the game.)
     layers: upTo("characters"),
     enter: "reveal",
     xray: { label: "Goat", golden: true, states: ["NORMAL", "GOLDEN"] },
@@ -352,13 +351,17 @@ export const BUILD_SLIDES: Slide[] = [
     tags: ["Bloom", "God rays", "Lens flare", "Vignette"],
     lines: ["Post-processing turns the render into a sunset: bloom, god rays through the tree, a lens flare. Press X for before and after."],
     clear: true,
+    post: true,
     xray: { label: "Post-processing", controls: [["postEnabled", false]] },
   },
   {
     shot: "intro",
     title: "Thank you",
     notes: ["Thank you! Scan the QR to play now.","Thanks to Surafel Yimam (voice), Eman Issae (designs), Temesgen (music)."],
-    lines: ["Gugut & the Goat · by Gugut Studios"],
+    lines: [
+      "Gugut & the Goat · by Gugut Studios",
+      "Everything you just saw ran live, in real time, inside the game itself. No video, no slides. See it again at goat.gugut.studio/present",
+    ],
     qr: true,
   },
 ];

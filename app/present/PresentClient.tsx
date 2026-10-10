@@ -230,7 +230,8 @@ export default function PresentClient({
     sceneLayers.only(slide.layers ?? null, true);
     sceneLayers.setUvGrid(slide.uvGrid ?? [], true);
     sceneLayers.setWireframe(slide.xray?.wireframeFirst ?? null);
-    applySettings([["duskPreview", GOLDEN_HOUR], ...(slide.set ?? [])]);
+    // Every slide: golden hour, and the raw render (post-processing only where a slide asks).
+    applySettings([["duskPreview", GOLDEN_HOUR], ["postEnabled", !!slide.post], ...(slide.set ?? [])]);
     let timer = 0;
     if (slide.enter === "song") {
       temesgen.playSong();
@@ -449,15 +450,34 @@ function SlideView({
               {slide.title}
             </h2>
             <span className="slide-rise mt-[2vh] h-px w-[min(14rem,30vw)] bg-[#c9a45c]" style={{ animationDelay: "500ms" }} />
-            {slide.lines.map((l, i) => (
-              <p
-                key={l}
-                className="slide-rise mt-[2vh] text-[clamp(1rem,1.8vw,1.6rem)] tracking-[0.08em] text-[#fdf3d4]/75 [text-shadow:0_2px_12px_rgba(0,0,0,0.7)]"
-                style={{ animationDelay: `${700 + i * 150}ms` }}
-              >
-                {l}
-              </p>
-            ))}
+            {slide.lines.map((l, i) =>
+              i === 0 ? (
+                <p
+                  key={l}
+                  className="slide-rise mt-[2vh] text-[clamp(1rem,1.8vw,1.6rem)] tracking-[0.08em] text-[#fdf3d4]/75 [text-shadow:0_2px_12px_rgba(0,0,0,0.7)]"
+                  style={{ animationDelay: "700ms" }}
+                >
+                  {l}
+                </p>
+              ) : (
+                // The rest: quieter, the game's address picked out in gold.
+                <p
+                  key={l}
+                  className="slide-rise mt-[3vh] max-w-[46rem] text-[clamp(0.95rem,1.35vw,1.25rem)] leading-relaxed text-[#fdf3d4]/70 [text-shadow:0_2px_12px_rgba(0,0,0,0.7)]"
+                  style={{ animationDelay: `${950 + i * 150}ms` }}
+                >
+                  {l.split(/(goat\.gugut\.studio\S*)/).map((part, j) =>
+                    j % 2 ? (
+                      <b key={j} className="font-semibold whitespace-nowrap text-[#c9a45c]">
+                        {part}
+                      </b>
+                    ) : (
+                      part
+                    )
+                  )}
+                </p>
+              )
+            )}
           </div>
           <PlayQr />
         </>
