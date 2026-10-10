@@ -103,6 +103,8 @@ export interface Slide {
   graphics?: boolean;
   /** The world leaderboard, live: each level's top times and how many players. */
   leaderboard?: boolean;
+  /** The game's control panel (leva, as on /#controls), open and live; put back as it was after. */
+  panel?: boolean;
   /** Pictures on the right, as framed cards: a file in public/, a caption, and whether it's landscape. */
   images?: { src: string; caption: string; wide?: boolean }[];
   /** The culling map (present/CullingMap): the maze from above, live, explaining one kind of culling. */

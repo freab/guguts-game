@@ -393,6 +393,20 @@ export const BUILD_SLIDES: Slide[] = [
     xray: { label: "Finishing touch", controls: [["postEnabled", false]] },
   },
   {
+    shot: "orbit",
+    title: "Every dial, live",
+    notes: [
+      "This is the panel I tuned the whole game with. Every light, colour and effect has a dial.",
+      "Try: Tone mapping → exposure, or Post-processing → bloom strength. Changes are live.",
+      "Avoid the sun's elevation and azimuth: moving the sun re-bakes all the shadows.",
+      "Everything goes back as it was when you leave this slide.",
+    ],
+    tags: ["leva", "Live tuning"],
+    lines: ["Every light, colour and effect in the game has a dial. This is the panel I tuned it all with."],
+    post: true,
+    panel: true,
+  },
+  {
     shot: "corridor",
     title: "How to play",
     notes: [

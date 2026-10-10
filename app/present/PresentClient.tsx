@@ -290,6 +290,19 @@ export default function PresentClient({
     [setXrayOn]
   );
 
+  // The panel slide: the whole panel snapshotted as it comes up, put back as it goes.
+  useEffect(() => {
+    if (!ready || !slide.panel) return;
+    const before = new Map(Object.entries(levaStore.getData()).flatMap(([path, d]) => ("value" in d ? [[path, JSON.stringify(d.value)]] : [])));
+    return () => {
+      for (const [path, d] of Object.entries(levaStore.getData())) {
+        if (!("value" in d) || !before.has(path)) continue;
+        const was = before.get(path)!;
+        if (JSON.stringify(d.value) !== was) levaStore.setValueAtPath(path, JSON.parse(was), false);
+      }
+    };
+  }, [ready, slide]);
+
   // Each slide as it comes up: fog off for the wide shots, and its moment.
   useEffect(() => {
     if (!ready) return;
@@ -399,7 +412,7 @@ export default function PresentClient({
   useEffect(() => {
     if (!ready) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return;
+      if (e.repeat || isTyping(e.target)) return;
       const at = presentStore.get().slide;
       if (["ArrowRight", "Space", "PageDown", "Enter"].includes(e.code)) advance(1);
       else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.code)) advance(-1);
@@ -418,7 +431,12 @@ export default function PresentClient({
 
   return (
     <div className={`${posterFont.variable} relative h-full w-full overflow-hidden bg-black text-[#fdf3d4]`}>
-      <Leva hidden />
+      <Leva
+        hidden={!(ready && slide.panel)}
+        collapsed={false}
+        titleBar={{ title: "Controls", filter: true, position: { x: 0, y: 56 } }}
+        theme={{ sizes: { rootWidth: "340px", controlWidth: "170px" } }}
+      />
       {mounted && <Scene director={<Director slides={SLIDES} />} maxDpr={MAX_DPR} />}
 
       {/* Loading: the game's own counter, while the maze is baked and compiled. */}
@@ -465,6 +483,12 @@ export default function PresentClient({
 }
 
 const noop = () => {};
+
+/** True while the user is typing in a field (the panel's number inputs). */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
 
 /** Slide titles: the poster face, and Noto Serif Ethiopic for any Amharic in them (አደይ አበባ). */
 const TITLE_FONT = `var(--font-jolly), ${ethiopicFont.style.fontFamily}`;
