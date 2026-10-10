@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { preload } from "react-dom";
+import QRCode from "qrcode";
 import { getPreferences, setPreferences, type Graphics } from "../game/preferences";
 import { Leva, levaStore } from "leva";
 import { posterFont } from "../fonts";
@@ -465,6 +466,9 @@ export default function PresentClient({
 
 const noop = () => {};
 
+/** Where this browser keeps its remote code (the phone stays paired across reloads). */
+const ROOM_KEY = "gugut.present.room";
+
 /** The presentation's resolution cap (big screens, projectors): crisp enough, much cheaper than 2×. */
 const MAX_DPR = 1.5;
 /** The parts with a wireframe x-ray, compiled as wireframe while loading. */
@@ -546,9 +550,6 @@ function Notes({ notes, index, count }: { notes: string[]; index: number; count:
   );
 }
 
-/** Where this browser keeps its remote code (the phone stays paired across reloads). */
-const ROOM_KEY = "gugut.present.room";
-
 /** How long the outgoing slide's text takes to leave (ms); the new one's waits about as long. */
 const EXIT_MS = 420;
 
@@ -557,9 +558,14 @@ function Loading({ room }: { room: string | null }) {
     <div className={`${posterFont.className} absolute inset-0 z-30 bg-black`}>
       <Counter onFull={noop} />
       {room && (
-        <p className="absolute bottom-[5vh] left-[6vw] font-sans text-sm text-[#fdf3d4]/45">
-          Phone remote: <b className="text-[#fdf3d4]/70">{remoteAddress()}</b> · code <b className="font-mono tracking-[0.2em] text-[#c9a45c]">{room}</b>
-        </p>
+        <div className="absolute bottom-[5vh] left-[6vw] flex items-center gap-4 font-sans text-sm text-[#fdf3d4]/45">
+          <PairQr room={room} className="h-20 w-20 rounded-lg bg-[#fdf3d4] p-1.5" />
+          <p>
+            Scan to pair your phone, or open <b className="text-[#fdf3d4]/70">{remoteAddress()}</b>
+            <br />
+            and enter <b className="font-mono tracking-[0.2em] text-[#c9a45c]">{room}</b>
+          </p>
+        </div>
       )}
     </div>
   );
@@ -568,13 +574,41 @@ function Loading({ room }: { room: string | null }) {
 /** Where the phone opens the remote: this site's address. */
 const remoteAddress = () => `${window.location.host}/present/remote`;
 
+/** Where a phone pairs straight away: the remote, with this presentation's code in the address. */
+const pairUrl = (room: string) => `${window.location.origin}/present/remote?code=${room}`;
+
+/** The pairing QR: scanned with a phone's camera, it opens the remote already paired. */
+function PairQr({ room, className }: { room: string; className: string }) {
+  const [svg, setSvg] = useState("");
+  useEffect(() => {
+    let live = true;
+    QRCode.toString(pairUrl(room), { type: "svg", errorCorrectionLevel: "M", margin: 1, color: { dark: "#0b0d08", light: "#fdf3d4" } })
+      .then((s) => live && setSvg(s))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [room]);
+  return (
+    <div
+      className={`${className} [&>svg]:h-full [&>svg]:w-full`}
+      role="img"
+      aria-label="QR code to pair your phone"
+      // (The library's own SVG output, from our address: nothing from outside.)
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
 /** The pairing card (R): where to go on the phone, and the code. */
 function Pairing({ room }: { room: string }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-[31] flex items-center justify-center bg-black/60">
       <div className="rounded-3xl border border-[#c9a45c]/50 bg-black/90 px-10 py-8 text-center" style={{ animation: "notice-in 300ms ease-out" }}>
         <p className="font-[family-name:var(--font-jolly)] text-5xl leading-none">Phone remote</p>
-        <p className="mt-4 text-[#fdf3d4]/70">On your phone, open</p>
+        <p className="mt-3 text-[#fdf3d4]/70">Scan with your phone&rsquo;s camera:</p>
+        <PairQr room={room} className="mx-auto mt-3 h-[min(16rem,32vh)] w-[min(16rem,32vh)] rounded-2xl bg-[#fdf3d4] p-3" />
+        <p className="mt-5 text-[#fdf3d4]/70">or open</p>
         <p className="mt-1 text-xl font-semibold">{remoteAddress()}</p>
         <p className="mt-4 text-[#fdf3d4]/70">and enter</p>
         <p className="mt-2 font-mono text-6xl font-bold tracking-[0.3em] text-[#c9a45c]">{room}</p>

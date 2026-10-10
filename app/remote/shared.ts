@@ -28,6 +28,7 @@ export function isRoomCode(raw: unknown): raw is string {
   return typeof raw === "string" && raw.length === CODE_LENGTH && [...raw].every((c) => CODE_ALPHABET.includes(c));
 }
 
+/** A new room's code (the presentation makes one per browser, and keeps it). */
 export function newRoomCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
   return [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
