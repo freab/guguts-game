@@ -7,7 +7,7 @@ import { preload } from "react-dom";
 import QRCode from "qrcode";
 import { getPreferences, setPreferences, type Graphics } from "../game/preferences";
 import { Leva, levaStore } from "leva";
-import { posterFont } from "../fonts";
+import { ethiopicFont, posterFont } from "../fonts";
 import { audio, MIX_LAYERS, type MixLayer } from "../audio/audioEngine";
 import { goat } from "../game/goat";
 import { revealPreview } from "../game/revealPreview";
@@ -466,6 +466,9 @@ export default function PresentClient({
 
 const noop = () => {};
 
+/** Slide titles: the poster face, and Noto Serif Ethiopic for any Amharic in them (አደይ አበባ). */
+const TITLE_FONT = `var(--font-jolly), ${ethiopicFont.style.fontFamily}`;
+
 /** Where this browser keeps its remote code (the phone stays paired across reloads). */
 const ROOM_KEY = "gugut.present.room";
 
@@ -706,7 +709,7 @@ function SlideView({
               ))}
             </div>
           )}
-          <h2 className="slide-rise font-[family-name:var(--font-jolly)] text-[clamp(2.6rem,6vw,5.5rem)] leading-[0.95] [text-shadow:0_2px_18px_rgba(0,0,0,0.6)]" style={{ animationDelay: "500ms" }}>
+          <h2 className="slide-rise text-[clamp(2.6rem,6vw,5.5rem)] leading-[0.95] [text-shadow:0_2px_18px_rgba(0,0,0,0.6)]" style={{ animationDelay: "500ms", fontFamily: TITLE_FONT }}>
             {slide.title}
           </h2>
           <div className="mt-4 flex max-w-3xl flex-col gap-2">
@@ -756,10 +759,8 @@ function SlideView({
 
       {slide.xray && (
         <div className="absolute left-[6vw] rounded-xl border border-[#fdf3d4]/20 bg-black/65 px-4 py-2 text-sm" style={{ top: slide.readout ? "11.5rem" : "1.5rem" }}>
-          <span className="text-[#fdf3d4]/60">X-ray · </span>
           {slide.xray.label}:{" "}
           <b key={String(xray)} className={`badge-pop inline-block ${xray ? "text-[#e0523a]" : "text-[#7fd08a]"}`}>{(slide.xray.states ?? ["ON", "OFF"])[xray ? 1 : 0]}</b>
-          <span className="ml-2 text-[#fdf3d4]/40">(X)</span>
         </div>
       )}
 
