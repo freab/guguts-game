@@ -31,7 +31,7 @@ export const KEYBOARD_MAP: KeyboardControlsEntry<Control>[] = [
 ];
 
 /** Camera yaw at spawn: look down whichever corridor leaves the start cell. */
-function spawnYaw(): number {
+export function spawnYaw(): number {
   return cellAt(1, 2) !== "wall" ? -Math.PI / 2 : Math.PI;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
 import { KeyboardControls } from "@react-three/drei";
 import { useControls, folder, monitor, button } from "leva";
@@ -20,6 +20,8 @@ import Carving from "../maze/Carving";
 import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
 import Temesgen from "../maze/Temesgen";
+import { perfCalls, perfTris } from "./perf/renderStats";
+import LayerGroup from "./LayerGroup";
 import WaterBottles from "../maze/WaterBottles";
 import Birds from "./atmosphere/Birds";
 import Particles from "./atmosphere/Particles";
@@ -63,10 +65,6 @@ const TONE_MAPPINGS = {
 } as const;
 type ToneMappingName = keyof typeof TONE_MAPPINGS;
 
-// Live render stats for the leva "Perf" monitors. Module-level so the monitors
-// keep reading the same objects when the scene remounts (New maze / resize).
-const perfCalls = { current: 0 };
-const perfTris = { current: 0 };
 
 /** Copies the renderer's per-frame draw calls / triangles into the monitors. */
 function PerfProbe() {
@@ -286,7 +284,7 @@ function ToneMapping({ mode, exposure }: { mode: THREE.ToneMapping; exposure: nu
  * - Pixel ratio capped at 1.5; walls are one instanced draw call; grass is
  *   chunked, distance / frustum / occlusion culled and LOD'd.
  */
-export default function Scene() {
+export default function Scene({ director }: { director?: ReactNode } = {}) {
 
   // Leva: lighting, sun & sky, environment, tone mapping, perf readouts.
   //
@@ -626,23 +624,41 @@ export default function Scene() {
         />
         <LightmapBaker sunDirection={sunDirection} />
 
-        <InfiniteGrid />
-        <MazeGround />
-        <Maze drawDistance={fogEnabled ? viewDistance * 1.03 + 0.5 : Infinity} />
-        <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
-        <Goat />
-        <CoffeeBush />
-        <Jebena />
-        <Carving />
-        <GoatReveal />
-        <Temesgen />
-        <KidGoat />
-        <Particles />
-        <GustLeaves />
-        <Birds />
-        <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
-        <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
-        <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
+        <LayerGroup layer="ground">
+          <InfiniteGrid />
+          <MazeGround />
+        </LayerGroup>
+        <LayerGroup layer="walls" entrance="rise">
+          <Maze drawDistance={fogEnabled ? viewDistance * 1.03 + 0.5 : Infinity} />
+          <Carving />
+        </LayerGroup>
+        <LayerGroup layer="vines" entrance="grow">
+          <Vines viewDistance={fogEnabled ? viewDistance : Infinity} />
+        </LayerGroup>
+        <LayerGroup layer="characters">
+          <Goat />
+          <GoatReveal />
+          <Temesgen />
+          <KidGoat />
+        </LayerGroup>
+        <LayerGroup layer="props">
+          <CoffeeBush />
+          <Jebena />
+        </LayerGroup>
+        <LayerGroup layer="atmosphere">
+          <Particles />
+          <GustLeaves />
+          <Birds />
+        </LayerGroup>
+        <LayerGroup layer="tree" entrance="sprout">
+          <MapleTree viewDistance={fogEnabled ? viewDistance : Infinity} />
+        </LayerGroup>
+        <LayerGroup layer="grass" entrance="grow">
+          <Grass pathWidth={footpath ? pathWidth : 0} pathGrass={pathGrass} drawDistance={viewDistance} />
+        </LayerGroup>
+        <LayerGroup layer="flowers" entrance="grow">
+          <Flowers pathWidth={footpath ? pathWidth : 0} maxDistance={fogEnabled ? viewDistance : Infinity} />
+        </LayerGroup>
         <PlayerController />
         {/* After the player: the intro fly-in starts from (and lands in) his view. */}
         <IntroFlight />
@@ -650,9 +666,13 @@ export default function Scene() {
         <WinShot />
         {/* …and photo mode's free camera, last: while it's on, its view is drawn. */}
         <PhotoCamera />
+        {/* A presentation's camera (app/present), last of all: it wins. */}
+        {director}
         {/* After the player: a bottle being drunk is held in front of the camera
             the controller has just placed. */}
-        <WaterBottles />
+        <LayerGroup layer="props">
+          <WaterBottles />
+        </LayerGroup>
         <Footsteps />
         <GoalWatcher />
         <GoatVoice />

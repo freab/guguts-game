@@ -11,6 +11,7 @@ import {
   float,
   length,
   materialColor,
+  mix,
   positionLocal,
   rotate,
   sin,
@@ -24,6 +25,7 @@ import { playerStore } from "../character/playerStore";
 import { WallCollider } from "../character/WallCollider";
 import { temesgen } from "../game/temesgen";
 import { inClearing, restingSpot } from "./mazeData";
+import { sceneLayers } from "../scene/sceneLayers";
 import { runStore } from "../game/runStore";
 import { useDisposable } from "../hooks/useDisposable";
 import { audio } from "../audio/audioEngine";
@@ -127,6 +129,8 @@ function createTemesgenMaterial(source: THREE.MeshStandardMaterial) {
     nod: uniform(0),
     swayX: uniform(0),
     swayZ: uniform(0),
+    /** 0..1: him coloured by the parts the vertex shader moves (app/present's x-ray). */
+    limbView: uniform(0),
   };
   const material = new THREE.MeshStandardNodeMaterial();
   material.map = source.map;
@@ -137,9 +141,6 @@ function createTemesgenMaterial(source: THREE.MeshStandardMaterial) {
   material.metalness = source.metalness;
   material.normalMap = source.normalMap;
 
-  // The bounce fill (see FILL).
-  material.emissiveNode = materialColor.rgb.mul(v3(FILL));
-
   // Which part of him each vertex is (from where it sits in the scan).
   const p0 = positionLocal;
   const leftArm = limb(p0, LEFT_ELBOW, LEFT_HAND, 0.075, 0.11);
@@ -147,6 +148,18 @@ function createTemesgenMaterial(source: THREE.MeshStandardMaterial) {
   const chest = smoothstep(-0.25, -0.05, p0.y).mul(smoothstep(0.42, 0.25, p0.y)).mul(smoothstep(0.2, 0.08, p0.z));
   const head = smoothstep(0.37, 0.45, p0.y).mul(smoothstep(0.24, 0.16, abs(p0.x))).mul(smoothstep(0.2, 0.13, p0.z));
   const body = smoothstep(-0.5, 0.1, p0.y);
+
+  // The x-ray (app/present): each part in its own colour — the swaying upper
+  // body violet, the breathing chest green, the head red, the strumming
+  // forearm gold, the fretting one cyan. (The same masks, read per pixel.)
+  let parts = mix(vec3(0.1, 0.1, 0.13), vec3(0.45, 0.36, 0.7), body);
+  parts = mix(parts, vec3(0.18, 0.62, 0.32), chest);
+  parts = mix(parts, vec3(0.88, 0.32, 0.23), head);
+  parts = mix(parts, vec3(0.95, 0.77, 0.24), leftArm);
+  parts = mix(parts, vec3(0.3, 0.79, 0.94), rightArm);
+  material.colorNode = mix(materialColor.rgb, parts, u.limbView);
+  // The bounce fill (see FILL), or the x-ray's colours glowing a little.
+  material.emissiveNode = mix(materialColor.rgb.mul(v3(FILL)), parts.mul(0.45), u.limbView);
 
   // Strum: about the left elbow, across the strings and a little up.
   const swing = u.strum.mul(STRUM_SWING).mul(leftArm);
@@ -197,6 +210,7 @@ class Performer {
     dt = Math.min(dt, 0.1);
     this.t += dt;
     u.time.value = this.t;
+    u.limbView.value = follow(u.limbView.value, sceneLayers.debug().limbs ? 1 : 0, 6, dt);
     // (His song, or the few bars he plays as Gugut comes into the clearing.)
     const playing = temesgen.get().song !== "stopped";
 

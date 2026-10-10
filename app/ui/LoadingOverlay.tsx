@@ -59,8 +59,9 @@ function overallProgress(stage: LoadingStage, assets: number, bake: number): num
  * smoothly instead of jumping between stages. Mounted per run, so it restarts
  * from 0 each time a level is picked; fades in once the dissolve has run.
  * Calls `onFull` once it shows 100 (only possible at the "ready" stage).
+ * (Also the presentations' loader: app/present.)
  */
-function Counter({ onFull }: { onFull: () => void }) {
+export function Counter({ onFull }: { onFull: () => void }) {
   const { stage, bakeProgress } = useLoading();
   const { progress: assetProgress } = useProgress();
   const target = overallProgress(stage, assetProgress / 100, bakeProgress) * 100;

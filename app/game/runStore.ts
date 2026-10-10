@@ -41,7 +41,7 @@ export interface Notice {
 }
 
 /** Why the game is paused; paused while any is active. */
-export type PauseReason = "menu" | "dialog" | "help" | "rotate" | "talk" | "intro" | "photo";
+export type PauseReason = "menu" | "dialog" | "help" | "rotate" | "talk" | "intro" | "photo" | "present";
 
 export interface RunState {
   phase: RunPhase;

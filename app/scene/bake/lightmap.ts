@@ -1,5 +1,5 @@
 import * as THREE from "three/webgpu";
-import { cos, float, length, mix, positionWorld, sin, smoothstep as smoothstepNode, texture, uniform, vec2 } from "three/tsl";
+import { cos, float, length, mix, positionWorld, sin, smoothstep as smoothstepNode, texture, uniform, vec2, vec3 } from "three/tsl";
 import { WallCollider } from "../../character/WallCollider";
 import { CELL, COLS, ROWS, WALL_HEIGHT, cellToWorld, clearingRadius } from "../../maze/mazeData";
 import { mapleTreeLayout, treeTransmittance } from "../tree/mapleTree";
@@ -83,6 +83,14 @@ export const lightmapStrength = {
 export const lightmapFactor = mix(float(1).sub(lightmapStrength.shadow), float(1), lightmapNode.r).mul(
   mix(float(1).sub(lightmapStrength.ao), float(1), lightmapNode.g)
 );
+
+/**
+ * The lightmap itself, as a colour where it's read (red = sun, green = no
+ * occlusion), and the ground it covers (x, z, width, depth): to show it
+ * (app/present's x-ray, present/Director).
+ */
+export const lightmapView = vec3(lightmapNode.r, lightmapNode.g, 0);
+export const lightmapBounds = bounds;
 
 export function setLightmapStrength(shadow: number, ao: number): void {
   lightmapStrength.shadow.value = shadow;

@@ -23,6 +23,7 @@ import {
   vec4,
 } from "three/tsl";
 import { audio } from "../audio/audioEngine";
+import { revealPreview } from "../game/revealPreview";
 import { runStore } from "../game/runStore";
 import { useDisposable } from "../hooks/useDisposable";
 import { bushPlace } from "./CoffeeBush";
@@ -176,6 +177,9 @@ export default function GoatReveal() {
     if (run.phase === "won") {
       const from = run.sawAt ? seenGlow((run.finishedAt - run.sawAt) / 1000) : 0;
       glow = from + (WIN_GLOW - from) * ease((now - run.finishedAt) / 1000 / WIN_RISE);
+    } else if (revealPreview.startedAt()) {
+      // Shown without a run (app/present): as if he had just reached her.
+      glow = WIN_GLOW * ease((now - revealPreview.startedAt()) / 1000 / WIN_RISE);
     } else if (run.sawAt) {
       glow = seenGlow((now - run.sawAt) / 1000);
     }

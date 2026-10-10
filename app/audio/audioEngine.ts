@@ -129,11 +129,22 @@ export type VoiceLine = "call" | "murmur" | "parched" | "temesgen" | "hum" | "fo
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
 
+/**
+ * The mix's layers, each of which can be muted on its own — all on in the
+ * game; the "how it's made" presentation (app/present) brings them in one by one.
+ */
+export type MixLayer = "wind" | "birds" | "song" | "goat" | "voice";
+export const MIX_LAYERS: MixLayer[] = ["wind", "birds", "song", "goat", "voice"];
+/** How fast a layer fades in or out (time constant, s). */
+const MIX_FADE = 0.25;
+
 interface Track {
   source: AudioBufferSourceNode;
   gain: GainNode;
   filter: BiquadFilterNode;
   pan: StereoPannerNode;
+  /** Its layer of the mix, on or off (setMix). */
+  mute: GainNode;
   level: number;
 }
 
@@ -184,6 +195,11 @@ class AudioEngine {
   /** Which of his songs the player is loaded with. */
   private songTrack: SongTrack = "main";
   private songDownload: Promise<void> | null = null;
+
+  /** Which of the mix's layers are heard (setMix). */
+  private mix = new Set<MixLayer>(MIX_LAYERS);
+  /** After the song's panner: its layer of the mix, on or off. */
+  private songMute: GainNode | null = null;
 
   private musicOn = true;
   private loadedPreference = false;
@@ -237,6 +253,27 @@ class AudioEngine {
     this.active = active;
     this.applyAmbience();
     if (!active) this.stopSong();
+  }
+
+  /** Hear only these layers of the mix (or all of them, given null). */
+  setMix(layers: readonly MixLayer[] | null) {
+    this.mix = new Set(layers ?? MIX_LAYERS);
+    this.applyMix();
+  }
+
+  /** Fade each layer of the mix to on or off. */
+  private applyMix() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const fade = (node: GainNode | null, on: boolean, level = 1) => node?.gain.setTargetAtTime(on ? level : 0, now, MIX_FADE);
+    const [birds, wind] = this.tracks;
+    fade(wind?.mute ?? null, this.mix.has("wind"));
+    fade(birds?.mute ?? null, this.mix.has("birds"));
+    fade(this.songMute, this.mix.has("song"));
+    fade(this.calls, this.mix.has("goat"), dbToGain(CALLS_DB));
+    fade(this.farSend, this.mix.has("goat"));
+    fade(this.voice, this.mix.has("voice"), dbToGain(VOICE_DB));
   }
 
   /* ---------- graph ---------- */
@@ -326,13 +363,15 @@ class AudioEngine {
       const level = dbToGain(TRACK_TARGET_DB - t.rmsDb + t.trim);
       gain.gain.value = level;
       const pan = ctx.createStereoPanner();
-      source.connect(filter).connect(gain).connect(pan).connect(bus);
+      const mute = ctx.createGain();
+      source.connect(filter).connect(gain).connect(pan).connect(mute).connect(bus);
       // Offset the loops so their seams never line up.
       source.start(0, buffer.duration * (0.15 + 0.45 * i));
-      this.tracks.push({ source, gain, filter, pan, level });
+      this.tracks.push({ source, gain, filter, pan, mute, level });
     });
     this.startDrift();
     this.applyAmbience();
+    this.applyMix();
   }
 
   /** Decode the recorded footsteps (the synthesised ones stand in until then). */
@@ -936,7 +975,9 @@ class AudioEngine {
       const duck = ctx.createGain();
       // Direction only (HRTF): the level is setSongLevel's, so no roll-off here.
       const panner = new PannerNode(ctx, { panningModel: "HRTF", distanceModel: "linear", rolloffFactor: 0 });
-      source.connect(muffle).connect(gain).connect(envelope).connect(duck).connect(panner).connect(this.master);
+      const mute = ctx.createGain();
+      this.songMute = mute;
+      source.connect(muffle).connect(gain).connect(envelope).connect(duck).connect(panner).connect(mute).connect(this.master);
       // Listened to as played (before distance), so Temesgen's hands can follow the music.
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
@@ -944,9 +985,10 @@ class AudioEngine {
       if (this.reverbSend) {
         const wet = ctx.createGain();
         wet.gain.value = SONG_REVERB;
-        panner.connect(wet).connect(this.reverbSend);
+        mute.connect(wet).connect(this.reverbSend);
       }
       element.addEventListener("ended", () => this.songEnded?.());
+      this.applyMix();
       this.song = { element, gain, envelope, duck, muffle, panner, analyser, samples: new Float32Array(analyser.fftSize) };
     }
     if (this.songStop) clearTimeout(this.songStop);
