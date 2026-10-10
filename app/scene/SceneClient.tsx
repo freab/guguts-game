@@ -80,8 +80,11 @@ export default function SceneClient() {
   const ready = useLoading().stage === "ready" && level !== null && entered;
   // The game shows no UI over the view. The dev/debug UI — leva controls,
   // minimap, FPS meter, view / maze buttons and the key hints — lives on the
-  // `/#debug` route (toggles live when the hash changes).
+  // `/#debug` route (toggles live when the hash changes). `/#controls` shows
+  // just the leva controls, nothing else.
   const debug = useHashRoute("debug");
+  const controls = useHashRoute("controls");
+  const panel = debug || controls;
   // Phones and tablets get on-screen controls (stick, look drag, view button).
   const touch = useIsTouch();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -286,9 +289,9 @@ export default function SceneClient() {
 
   return (
     <div className="relative h-full w-full">
-      {/* Leva control panel (collapsed by default, top-right): #debug only,
-          and hidden while the preloader is up (it shows just the story). */}
-      <Leva collapsed hidden={!ready || !debug} titleBar={{ title: "Controls" }} />
+      {/* Leva control panel (collapsed by default, top-right): #debug or
+          #controls only, and hidden while the preloader is up (it shows just the story). */}
+      <Leva collapsed hidden={!ready || !panel} titleBar={{ title: "Controls" }} />
 
       {debug && (
         <div className="ui-shell absolute left-3 top-3 z-10 flex items-center gap-1.5 p-1.5">
@@ -385,9 +388,9 @@ export default function SceneClient() {
       )}
 
       {/* Leaderboard, settings and music — always shown (above the title
-          screen too); below the leva panel on #debug. */}
+          screen too); below the leva panel on #debug / #controls. */}
       <div
-        className={`ui-shell absolute right-3 z-[60] flex items-stretch gap-1.5 p-1.5 ${debug ? "top-14" : "top-3"} ${photoActive ? "hidden" : ""}`}
+        className={`ui-shell absolute right-3 z-[60] flex items-stretch gap-1.5 p-1.5 ${panel ? "top-14" : "top-3"} ${photoActive ? "hidden" : ""}`}
       >
         <div className="ui-well flex items-center gap-1 p-1">
         {canFullscreen && (
