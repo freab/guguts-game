@@ -12,7 +12,7 @@ const error = (status: number, message: string) => Response.json({ error: messag
  * the link carries only a one-way hash of it.
  */
 export async function POST(request: Request) {
-  if (!allowWrite(request)) return error(429, "Too many requests — try again in a minute");
+  if (!(await allowWrite(request))) return error(429, "Too many requests — try again in a minute");
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

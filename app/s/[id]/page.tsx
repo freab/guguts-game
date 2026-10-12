@@ -6,12 +6,14 @@ import { LEVELS } from "../../maze/levels";
 import { formatTime, isShareId, type ShareProfile } from "../../leaderboard/shared";
 import { leaderboardStore } from "../../leaderboard/store";
 import { SITE_NAME } from "../../site";
+import { boardName } from "../../leaderboard/names";
 
 // Their times and ranks change with every run.
 export const dynamic = "force-dynamic";
 
 async function load(id: string): Promise<ShareProfile | null> {
-  return isShareId(id) ? leaderboardStore().profile(id).catch(() => null) : null;
+  const profile = isShareId(id) ? await leaderboardStore().profile(id).catch(() => null) : null;
+  return profile && { ...profile, name: boardName(profile.name) };
 }
 
 /** The fastest of their times, for the link's title. */

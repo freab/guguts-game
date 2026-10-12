@@ -1,4 +1,5 @@
 import { allowWrite } from "../../leaderboard/rateLimit";
+import { nameProblem } from "../../leaderboard/names";
 import { cleanName, isPlayerId } from "../../leaderboard/shared";
 import { leaderboardStore } from "../../leaderboard/store";
 
@@ -8,7 +9,7 @@ const error = (status: number, message: string) => Response.json({ error: messag
 
 /** PUT /api/player { playerId, name } — rename a player on every board. */
 export async function PUT(request: Request) {
-  if (!allowWrite(request)) return error(429, "Too many changes — try again in a minute");
+  if (!(await allowWrite(request))) return error(429, "Too many changes — try again in a minute");
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -18,6 +19,8 @@ export async function PUT(request: Request) {
   const name = cleanName(body.name);
   if (!isPlayerId(body.playerId)) return error(400, "Invalid player");
   if (!name) return error(400, "Invalid name");
+  const problem = nameProblem(name);
+  if (problem) return error(422, problem);
   try {
     await leaderboardStore().rename(body.playerId, name);
     return Response.json({ name });

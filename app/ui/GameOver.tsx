@@ -237,7 +237,7 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
           </div>
           {/* The happiest moment: a quiet way to say thanks. */}
           <div className="mt-4 flex justify-center">
-            <SupportButton from="game_over" className="px-4 py-2 text-sm text-gold underline-offset-4 hover:underline" />
+            <SupportButton from="game_over" className="ui-tile px-5 py-2.5 ui-label text-gold!" />
           </div>
         </div>
       </div>

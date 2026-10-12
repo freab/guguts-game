@@ -58,7 +58,30 @@ function loadPosterFont(): Promise<ArrayBuffer | null> {
   return posterFont;
 }
 
-async function frame(children: React.ReactNode) {
+/** A gold-edged pill beside the wordmark (the game's card: its win). */
+const badge = (text: string) => (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      border: `2px solid ${C.gold}`,
+      background: "rgba(20,16,8,0.55)",
+      color: C.gold,
+      borderRadius: 999,
+      padding: "6px 20px",
+      fontSize: 26,
+      letterSpacing: 1,
+    }}
+  >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
+    </svg>
+    {text}
+  </div>
+);
+
+async function frame(children: React.ReactNode, tag?: string, padBottom = 48) {
   const [bg, mark, font] = await Promise.all([backdrop, logo, loadPosterFont()]);
   return new ImageResponse(
     (
@@ -84,9 +107,12 @@ async function frame(children: React.ReactNode) {
             backgroundImage: "linear-gradient(90deg, rgba(20,16,8,0.85) 0%, rgba(20,16,8,0.6) 50%, rgba(20,16,8,0.08) 100%)",
           }}
         />
-        <div style={{ position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", width: 720, height: 630, padding: "48px 56px" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={mark} width={190} height={126} alt="Gugut & the Goat" />
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", width: 720, height: 630, padding: `48px 56px ${padBottom}px` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={mark} width={190} height={126} alt="Gugut & the Goat" />
+            {tag && badge(tag)}
+          </div>
           {children}
         </div>
       </div>
@@ -128,11 +154,53 @@ export function siteCard() {
       <div style={{ display: "flex", flexDirection: "column", textShadow: SHADOW }}>
         <div style={{ fontSize: 76, lineHeight: 1 }}>Gugut&apos;s goat ran into the maze.</div>
         <div style={{ fontSize: 36, color: C.creamDim, marginTop: 16, lineHeight: 1.2 }}>
-          Find her before the sun goes down — call her, follow her bleat, and listen to the kirar by the old tree.
+          A 3D maze game from Ethiopia. Find her before sundown — call her, follow her bleat, rest by Temesgen&apos;s krar.
         </div>
       </div>
       {footer("Play free in your browser")}
-    </div>
+    </div>,
+    "WINNER · STARK HACKATHON"
+  );
+}
+
+/**
+ * The game's card for X (app/twitter-image), which shows only the picture
+ * (no title or description) small in the feed, with the address on a dark
+ * label over its bottom-left corner: fewer, bigger words, and nothing that
+ * matters down in that corner (the play pill sits above it).
+ */
+export function xCard() {
+  return frame(
+    <div style={{ display: "flex", flexDirection: "column", gap: 34 }}>
+      <div style={{ display: "flex", flexDirection: "column", textShadow: SHADOW }}>
+        <div style={{ fontSize: 92, lineHeight: 0.98 }}>Find the goat before sundown.</div>
+        <div style={{ fontSize: 42, color: C.creamDim, marginTop: 18, lineHeight: 1.15 }}>A free 3D maze game from Ethiopia.</div>
+      </div>
+      <div style={{ display: "flex" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            background: C.gold,
+            color: C.goldInk,
+            borderRadius: 999,
+            padding: "10px 10px 10px 30px",
+            fontSize: 38,
+            boxShadow: "0 6px 30px rgba(20,16,8,0.35)",
+          }}
+        >
+          Play free in your browser
+          <svg width="46" height="46" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="12" fill={C.cream} />
+            <path d="M9.5 7.5v9l7-4.5z" fill={C.gold} />
+          </svg>
+        </div>
+      </div>
+    </div>,
+    "WINNER · STARK HACKATHON",
+    // (Clear of X's address label, bottom left.)
+    92
   );
 }
 

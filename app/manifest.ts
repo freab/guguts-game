@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Gugut & the Goat",
     short_name: "Gugut",
-    description: "Find Gugut's runaway goat in the maze before the sun goes down.",
+    description: "Find Gugut's runaway goat in a 3D maze before sundown. A free browser game from Ethiopia, winner of Stark Hackathon. No download: plays on phones and computers.",
     start_url: "/",
     display: "fullscreen",
     orientation: "landscape",

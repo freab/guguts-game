@@ -68,6 +68,8 @@ export function getProfile(): Profile {
 export async function setPlayerName(raw: string): Promise<string | null> {
   const name = cleanName(raw);
   if (!name) return "Please enter a name.";
+  const problem = (await import("../leaderboard/names")).nameProblem(name);
+  if (problem) return problem;
   const p = current();
   profile = { ...p, name };
   write(NAME_KEY, name);

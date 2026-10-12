@@ -19,6 +19,8 @@ import LeaderboardDialog from "../ui/LeaderboardDialog";
 import RunTimer from "../ui/RunTimer";
 import SettingsDialog from "../ui/SettingsDialog";
 import CreditsDialog from "../ui/CreditsDialog";
+import SupportDialog, { CUP_PATH } from "../ui/SupportDialog";
+import { stat } from "../game/stats";
 import { runStore, useRun } from "../game/runStore";
 import ControlsHelp, { controlsSeen } from "../ui/ControlsHelp";
 import PauseMenu from "../ui/PauseMenu";
@@ -94,6 +96,8 @@ export default function SceneClient() {
   const [creditsOpen, setCreditsOpen] = useState(false);
   const closeCredits = useCallback(() => setCreditsOpen(false), []);
   const closeBoard = useCallback(() => setBoardOpen(false), []);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const closeSupport = useCallback(() => setSupportOpen(false), []);
   // Pause menu, controls help, and the phone "turn sideways" prompt.
   const run = useRun();
   const { talking, seated } = useTemesgen();
@@ -407,6 +411,16 @@ export default function SceneClient() {
             )}
           </IconButton>
         )}
+        <IconButton
+          label="Buy Gugut a buna"
+          gold
+          onClick={() => {
+            stat("support_open", { from: "top_bar" });
+            setSupportOpen(true);
+          }}
+        >
+          <path d={CUP_PATH} />
+        </IconButton>
         <IconButton label="Leaderboard" onClick={() => setBoardOpen(true)}>
           <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
         </IconButton>
@@ -456,6 +470,7 @@ export default function SceneClient() {
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {creditsOpen && <CreditsDialog onClose={closeCredits} />}
       {boardOpen && <LeaderboardDialog initial={level ?? "easy"} onClose={closeBoard} />}
+      {supportOpen && <SupportDialog from="top_bar" onClose={closeSupport} />}
 
       {/* "made by GUGUT STUDIOS": over everything, first thing on a page load. */}
       <StudioSplash />
@@ -469,11 +484,14 @@ const noSubscribe = () => () => {};
 function IconButton({
   label,
   primary = false,
+  gold = false,
   onClick,
   children,
 }: {
   label: string;
   primary?: boolean;
+  /** Tinted gold, to stand out (the support button). */
+  gold?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -483,7 +501,7 @@ function IconButton({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`flex items-center justify-center ${primary ? "ui-cta w-10" : "ui-tile h-8 w-9"}`}
+      className={`flex items-center justify-center ${primary ? "ui-cta w-10" : "ui-tile h-8 w-9"} ${gold ? "text-gold!" : ""}`}
     >
       <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         {children}

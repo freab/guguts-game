@@ -75,10 +75,10 @@ export default function PauseMenu(actions: PauseActions) {
             <button type="button" onClick={actions.onCredits} className={button}>
               Credits
             </button>
+            <SupportButton from="pause" className={`${button} text-gold!`} />
             <button type="button" onClick={actions.onChangeLevel} className={button}>
               Change level
             </button>
-            <SupportButton from="pause" className="w-full px-5 py-2 text-sm text-gold underline-offset-4 hover:underline" />
           </div>
         </div>
       </div>
