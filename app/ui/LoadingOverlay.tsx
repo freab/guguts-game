@@ -95,30 +95,30 @@ export function Counter({ onFull }: { onFull: () => void }) {
 
   return (
     <div
-      className={`absolute right-[6vw] bottom-[5vh] leading-none text-[#fdf3d4] opacity-0 ${SHADOW}`}
+      className={`absolute right-[6vw] bottom-[5svh] leading-none text-[#fdf3d4] opacity-0 ${SHADOW}`}
       style={{ animation: `notice-in 700ms ease-out forwards` }}
     >
-      <span ref={counterRef} className="text-[clamp(4.5rem,min(11vw,22vh),11rem)] tabular-nums">
+      <span ref={counterRef} className="text-[clamp(4.5rem,min(11vw,22svh),11rem)] tabular-nums">
         0
       </span>
-      <span className="text-[clamp(2rem,min(4.5vw,9vh),4.5rem)] text-[#fdf3d4]/70">%</span>
+      <span className="text-[clamp(2rem,min(4.5vw,9svh),4.5rem)] text-[#fdf3d4]/70">%</span>
     </div>
   );
 }
 
 /** The glass card the title screen's choices are made of (PLAY pill on hover / focus — always on touch). */
 const CARD =
-  "group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6vh] text-left transition-[background-color,border-color] duration-300 hover:border-cream/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-cream/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-cream/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25";
+  "group flex items-end justify-between gap-4 rounded-2xl border border-transparent px-6 py-[1.6svh] text-left transition-[background-color,border-color] duration-300 hover:border-cream/50 hover:bg-white/20 hover:backdrop-blur-sm focus-visible:border-cream/50 focus-visible:bg-white/20 focus-visible:backdrop-blur-sm focus-visible:outline-none pointer-coarse:border-cream/40 pointer-coarse:bg-white/12 pointer-coarse:active:bg-white/25";
 const PILL =
-  "flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3vh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100";
+  "flex shrink-0 translate-x-1 items-center gap-2 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-4 text-[clamp(1.1rem,min(1.4vw,3svh),1.5rem)] leading-none text-[#2a2312] opacity-0 transition-[opacity,translate] duration-300 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 pointer-coarse:translate-x-0 pointer-coarse:opacity-100";
 
 /** A choice on the setup step: a glass pill, gold when picked. */
 const CHIP =
-  "rounded-full border px-[1.1em] py-[0.45em] text-[clamp(1.1rem,min(1.8vw,4.2vh),1.8rem)] leading-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdf3d4]";
+  "rounded-full border px-[1.1em] py-[0.45em] text-[clamp(1.1rem,min(1.8vw,4.2svh),1.8rem)] leading-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#fdf3d4]";
 const CHIP_ON = "border-[#c9a45c] bg-[#c9a45c] text-[#2a2312]";
 const CHIP_OFF = "border-cream/50 bg-black/30 text-[#fdf3d4] hover:bg-white/20";
-const HEADING = `pl-1 text-[clamp(1.4rem,min(2.2vw,5vh),2.4rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`;
-const BLURB = `mt-[1vh] min-h-[2.4em] pl-1 text-[clamp(0.9rem,min(1vw,2.2vh),1.1rem)] leading-tight text-[#fdf3d4]/70 ${SHADOW}`;
+const HEADING = `pl-1 text-[clamp(1.4rem,min(2.2vw,5svh),2.4rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`;
+const BLURB = `mt-[1svh] min-h-[2.4em] pl-1 text-[clamp(0.9rem,min(1vw,2.2svh),1.1rem)] leading-tight text-[#fdf3d4]/70 ${SHADOW}`;
 
 const GRAPHICS_OPTIONS: { id: Graphics; label: string; blurb: string }[] = [
   { id: "low", label: "Low", blurb: "Smooth on phones and older laptops" },
@@ -151,7 +151,7 @@ function SetupChooser({ onDone }: { onDone: (graphics: Graphics, voice: boolean)
   return (
     <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,24vw,28rem)]">
       <h2 className={HEADING}>Graphics</h2>
-      <div role="radiogroup" aria-label="Graphics" className="mt-[1.4vh] flex gap-2">
+      <div role="radiogroup" aria-label="Graphics" className="mt-[1.4svh] flex gap-2">
         {GRAPHICS_OPTIONS.map((o) => (
           <button
             key={o.id}
@@ -166,8 +166,8 @@ function SetupChooser({ onDone }: { onDone: (graphics: Graphics, voice: boolean)
       </div>
       <p className={BLURB}>{GRAPHICS_OPTIONS.find((o) => o.id === g)!.blurb}</p>
 
-      <h2 className={`${HEADING} mt-[2.5vh]`}>Voiceovers</h2>
-      <div role="radiogroup" aria-label="Voiceovers" className="mt-[1.4vh] flex gap-2">
+      <h2 className={`${HEADING} mt-[2.5svh]`}>Voiceovers</h2>
+      <div role="radiogroup" aria-label="Voiceovers" className="mt-[1.4svh] flex gap-2">
         {VOICE_OPTIONS.map((o) => (
           <button
             key={o.label}
@@ -185,7 +185,7 @@ function SetupChooser({ onDone }: { onDone: (graphics: Graphics, voice: boolean)
       <button
         autoFocus
         onClick={() => onDone(g, v)}
-        className="group mt-[3vh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-6 text-[clamp(1.3rem,min(2vw,4.6vh),2.2rem)] leading-none text-[#2a2312] shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
+        className="group mt-[3svh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-1.5 pr-1.5 pl-6 text-[clamp(1.3rem,min(2vw,4.6svh),2.2rem)] leading-none text-[#2a2312] shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
       >
         Continue
         <svg viewBox="0 0 24 24" aria-hidden className="size-[1.3em] transition-transform duration-300 group-hover:translate-x-0.5">
@@ -208,15 +208,15 @@ function LevelChooser({ onChoose, onSetup }: { onChoose: (level: Level) => void;
   const graphics = GRAPHICS_OPTIONS.find((o) => o.id === (prefs.graphics ?? fallback))!;
   return (
     <div className="w-[min(24rem,88vw)] landscape:w-[clamp(18rem,22vw,26rem)]">
-      <h2 className={`mb-[2vh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
+      <h2 className={`mb-[2svh] pl-6 text-[clamp(1.6rem,min(2.6vw,5.5svh),2.8rem)] leading-none text-[#fdf3d4]/85 ${SHADOW}`}>
         Choose your path
       </h2>
-      <div className="flex flex-col gap-[1.5vh]">
+      <div className="flex flex-col gap-[1.5svh]">
         {LEVELS.map((level) => (
           <button key={level.id} autoFocus={level === LEVELS[0]} onClick={() => onChoose(level)} className={CARD}>
             <span className={SHADOW}>
-              <span className="block text-[clamp(2rem,min(3.4vw,7vh),3.6rem)] leading-none">{level.label}</span>
-              <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] leading-tight text-[#fdf3d4]/70">
+              <span className="block text-[clamp(2rem,min(3.4vw,7svh),3.6rem)] leading-none">{level.label}</span>
+              <span className="mt-1 block text-[clamp(0.95rem,min(1vw,2.2svh),1.15rem)] leading-tight text-[#fdf3d4]/70">
                 {level.blurb}
               </span>
             </span>
@@ -232,7 +232,7 @@ function LevelChooser({ onChoose, onSetup }: { onChoose: (level: Level) => void;
       </div>
       <button
         onClick={onSetup}
-        className={`mt-[1.5vh] pl-6 text-[clamp(0.95rem,min(1vw,2.2vh),1.15rem)] text-[#fdf3d4]/60 transition-colors hover:text-[#fdf3d4] focus-visible:text-[#fdf3d4] focus-visible:outline-none ${SHADOW}`}
+        className={`mt-[1.5svh] pl-6 text-[clamp(0.95rem,min(1vw,2.2svh),1.15rem)] text-[#fdf3d4]/60 transition-colors hover:text-[#fdf3d4] focus-visible:text-[#fdf3d4] focus-visible:outline-none ${SHADOW}`}
       >
         {graphics.label} graphics · Voice {prefs.voice ? "on" : "off"} ·{" "}
         <span className="underline underline-offset-4">change</span>
@@ -369,7 +369,7 @@ export default function LoadingOverlay({
       {/* Title screen: chooser left, title right (stacked on portrait: the
           title on the image, the chooser below). */}
       <div
-        className={`absolute inset-0 flex flex-col-reverse items-center justify-between px-6 py-[6vh] transition-opacity duration-500 portrait:pt-[10svh] landscape:flex-row landscape:px-[8vw] landscape:py-0 ${
+        className={`absolute inset-0 flex flex-col-reverse items-center justify-between px-6 py-[6svh] transition-opacity duration-500 portrait:pt-[max(10svh,4.75rem)] landscape:flex-row landscape:px-[8vw] landscape:py-0 ${
           titleShown ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -383,7 +383,7 @@ export default function LoadingOverlay({
         </div>
         <h1
           key={cherry}
-          className="w-[clamp(15rem,min(26vw,48vh),30rem)]"
+          className="w-[clamp(15rem,min(26vw,48svh),30rem)]"
           style={cherry ? { animation: "logo-cherry 1100ms ease-in-out" } : undefined}
         >
           <Image

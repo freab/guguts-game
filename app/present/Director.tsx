@@ -8,7 +8,11 @@ import { EYE_HEIGHT } from "../character/config";
 import { spawnYaw } from "../character/PlayerController";
 import { playerStore } from "../character/playerStore";
 import { WallCollider } from "../character/WallCollider";
+import { carvingPlace } from "../game/carving";
 import { goat } from "../game/goat";
+import { jebenaPlace } from "../game/jebena";
+import { mapleTreeLayout } from "../scene/tree/mapleTree";
+import { nearestFlowerHead } from "../scene/flowers/FlowerField";
 import { CELL, COLS, ROWS, WALL_HEIGHT, cellAt, clearingRadius, restingSpot, startPosition, treeScale } from "../maze/mazeData";
 import { useLoading } from "../scene/bake/loadingStore";
 import { lightmapBounds, lightmapView } from "../scene/bake/lightmap";
@@ -44,6 +48,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), h
 /** Ease in and out (quintic): a glide that starts and lands softly. */
 const ease = (t: number) => (t < 0.5 ? 16 * t ** 5 : 1 - (-2 * t + 2) ** 5 / 2);
 const follow = (from: number, to: number, rate: number, dt: number) => from + (to - from) * (1 - Math.exp(-rate * dt));
+
+/** The flower the macro shot frames (reused). */
+const macroHead = new THREE.Vector3();
 
 /** Which way the maze runs from the exit tile (the goat's): the open neighbour, as a world direction. */
 function exitCorridor(): [number, number] {
@@ -187,6 +194,143 @@ function shotPose(shot: Shot, t: number, out: Pose) {
       out.fov = 60;
       return;
     }
+    case "portrait": {
+      // A still: low in the clearing at golden hour, looking up at the old
+      // maple, the tree to the right of the frame (words on the left).
+      const [sx, , sz] = startPosition();
+      const len = Math.hypot(sx, sz) || 1;
+      const ox = sx / len;
+      const oz = sz / len;
+      const r = clearingRadius() * 0.85;
+      out.pos.set(ox * r, 1.5, oz * r);
+      // (Aimed a little to the left of the trunk, so the tree sits right of
+      // centre: the camera looks along -(ox, oz), so its left is (-oz, ox).)
+      const side = 2.4 * treeScale();
+      out.target.set(-oz * side, 3.2 * treeScale(), ox * side);
+      out.fov = 58;
+      return;
+    }
+    case "goatHero": {
+      // Down at her eye level in her corridor, close, looking up a touch:
+      // she sits right of the frame (the words on the left).
+      const [gx, gz] = goat.position();
+      const [dx, dz] = exitCorridor();
+      out.pos.set(gx + dx * 1.45, 0.42, gz + dz * 1.45);
+      // (The camera looks along -(dx, dz): its left is (-dz, dx).)
+      out.target.set(gx - dz * 0.55, 0.62, gz + dx * 0.55);
+      out.fov = 48;
+      return;
+    }
+    case "flowerMacro": {
+      // A hand's width from one Adey Abeba, at its height, looking down the
+      // first corridor past it: the flower sharp and big, the walls behind.
+      const [sx, , sz] = startPosition();
+      const yaw = spawnYaw();
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      const head = macroHead;
+      if (!nearestFlowerHead(sx + fx * 2, sz + fz * 2, head)) return shotPose("corridor", 0, out);
+      out.pos.set(head.x - fx * 0.32, head.y + 0.05, head.z - fz * 0.32);
+      // (Aimed a little to its left, so it sits right of centre: the camera's left is (fz, -fx).)
+      out.target.set(head.x + fz * 0.07, head.y + 0.02, head.z - fx * 0.07);
+      out.fov = 42;
+      return;
+    }
+    case "carving": {
+      // Square on to the ጉጉት carving, close, the low sun raking across it.
+      const place = carvingPlace();
+      if (!place) return shotPose("stone", 0, out);
+      const fx = Math.sin(place.facing);
+      const fz = Math.cos(place.facing);
+      out.pos.set(place.x + fx * 1.5 + fz * 0.35, 1.35, place.z + fz * 1.5 - fx * 0.35);
+      out.target.set(place.x, 1.3, place.z);
+      out.fov = 44;
+      return;
+    }
+    case "lantern": {
+      // Under the maple, looking up at the lantern on its chain, the sky behind it.
+      const tree = mapleTreeLayout();
+      const lamp = tree.lanternAnchor;
+      const [sx, , sz] = startPosition();
+      const len = Math.hypot(sx, sz) || 1;
+      const ly = lamp.y - 0.7 * tree.scale;
+      out.pos.set(lamp.x + (sx / len) * 2.4, Math.max(1.2, ly - 1.4), lamp.z + (sz / len) * 2.4);
+      out.target.set(lamp.x, ly, lamp.z);
+      out.fov = 46;
+      return;
+    }
+    case "jebena": {
+      // Low, in front of the monks' coffee pot at the end of its dead end.
+      const place = jebenaPlace();
+      if (!place) return shotPose("corridor", 0, out);
+      const fx = Math.sin(place.facing);
+      const fz = Math.cos(place.facing);
+      out.pos.set(place.x + fx * 0.95 - fz * 0.2, 0.55, place.z + fz * 0.95 + fx * 0.2);
+      out.target.set(place.x, 0.28, place.z);
+      out.fov = 46;
+      return;
+    }
+    case "wormsEye": {
+      // Lying in the first corridor, looking up the towering walls to a strip of sky.
+      const [sx, , sz] = startPosition();
+      const yaw = spawnYaw();
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      out.pos.set(sx, 0.12, sz);
+      out.target.set(sx + fx * 1.6, 5, sz + fz * 1.6);
+      out.fov = 78;
+      return;
+    }
+    case "vanishing": {
+      // Dead centre down the first corridor, the walls converging into the distance.
+      const [sx, , sz] = startPosition();
+      const yaw = spawnYaw();
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      out.pos.set(sx - fx * 0.6, 1.1, sz - fz * 0.6);
+      out.target.set(sx + fx * 30, 1.15, sz + fz * 30);
+      out.fov = 40;
+      return;
+    }
+    case "silhouette": {
+      // Low at the clearing's edge, looking up at the maple against the sky: dark shapes on light.
+      const [sx, , sz] = startPosition();
+      const len = Math.hypot(sx, sz) || 1;
+      const r = clearingRadius() * 0.95;
+      out.pos.set((sx / len) * r, 0.35, (sz / len) * r);
+      out.target.set(0, 4.2 * treeScale(), 0);
+      out.fov = 62;
+      return;
+    }
+    case "fromMaze": {
+      // From inside the maze, at the clearing's edge, looking in at the tree and Temesgen.
+      const [sx, , sz] = startPosition();
+      const len = Math.hypot(sx, sz) || 1;
+      const r = clearingRadius() + 1.4;
+      out.pos.set((sx / len) * r, 1.35, (sz / len) * r);
+      out.target.set(0, 1.8, 0);
+      out.fov = 50;
+      return;
+    }
+    case "overShoulder": {
+      // Behind Temesgen, over his shoulder, looking out past him at the clearing and the maze.
+      const spot = restingSpot();
+      const fx = Math.sin(spot.facing);
+      const fz = Math.cos(spot.facing);
+      out.pos.set(spot.x - fx * 0.85 + fz * 0.3, 1.25, spot.z - fz * 0.85 - fx * 0.3);
+      out.target.set(spot.x + fx * 6, 0.9, spot.z + fz * 6);
+      out.fov = 55;
+      return;
+    }
+    case "aerial": {
+      // High over a corner, looking across the whole maze to the far side and
+      // the sky: long evening shadows, the maze filling the right of the frame.
+      const half = (COLS * CELL) / 2;
+      out.pos.set(-half * 1.05, half * 0.62, half * 1.05);
+      out.target.set(half * 0.35, 0, -half * 0.05);
+      out.fov = 52;
+      return;
+    }
     case "intro": {
       // The intro fly-in's first shot (scene/IntroFlight): low by the tree, on the start's side.
       const [sx, , sz] = startPosition();
@@ -270,7 +414,7 @@ function placeLightmapView(view: THREE.Mesh, dt: number) {
  * stands the player's "feet" where it looks, so the grass, flowers and tree
  * (culled around the player) are drawn there.
  */
-export default function Director({ slides }: { slides: Slide[] }) {
+export default function Director({ slides, still = false }: { slides: Slide[]; /** Hold every shot still: no drift, no motion (a picture). */ still?: boolean }) {
   const ready = useLoading().stage === "ready";
   // The sky's background, kept while it's hidden (black instead).
   const sky = useRef<{ saved: THREE.Scene["background"]; black: THREE.Color }>({ saved: null, black: new THREE.Color(0) });
@@ -354,11 +498,13 @@ export default function Director({ slides }: { slides: Slide[] }) {
       bend.current.y = Math.max(bend.current.y + clamp(distance * 0.18, 0.4, 5), low ? OVER_WALLS + 0.5 : 0);
     }
     const t = now - g.at;
-    shotPose(name, t, p);
-    // A little life in every shot: a slow, handheld drift.
-    p.pos.x += Math.sin(t * 0.37) * 0.05;
-    p.pos.y += Math.sin(t * 0.29 + 1) * 0.035;
-    p.pos.z += Math.cos(t * 0.31) * 0.05;
+    shotPose(name, still ? 0 : t, p);
+    // A little life in every shot: a slow, handheld drift (none in a still).
+    if (!still) {
+      p.pos.x += Math.sin(t * 0.37) * 0.05;
+      p.pos.y += Math.sin(t * 0.29 + 1) * 0.035;
+      p.pos.z += Math.cos(t * 0.31) * 0.05;
+    }
 
     const k = g.seconds ? Math.min(1, t / g.seconds) : 1;
     const u = ease(k);

@@ -54,7 +54,7 @@ export default function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="ui-shell flex max-h-[90vh] w-full max-w-md flex-col p-1.5"
+        className="ui-shell flex max-h-[90svh] w-full max-w-md flex-col p-1.5"
       >
         <div className="ui-well min-h-0 overflow-y-auto p-5">
           <div className="mb-4 flex items-center justify-between gap-4">

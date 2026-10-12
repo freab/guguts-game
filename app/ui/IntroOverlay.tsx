@@ -52,7 +52,7 @@ export default function IntroOverlay({ title, subtitle, touch }: { title: string
     return () => clearTimeout(t);
   }, [phase]);
 
-  const bar = "absolute inset-x-0 h-[9vh] bg-black transition-transform duration-700 ease-in-out";
+  const bar = "absolute inset-x-0 h-[9svh] bg-black transition-transform duration-700 ease-in-out";
   return (
     <div className="pointer-events-none absolute inset-0 z-[55] overflow-hidden" aria-hidden={!flying}>
       <div className={`${bar} top-0 ${flying ? "translate-y-0" : "-translate-y-full"}`} />
@@ -60,11 +60,11 @@ export default function IntroOverlay({ title, subtitle, touch }: { title: string
         <div
           className={`${posterFont.className} leading-none text-[#fdf3d4] transition-opacity duration-700 ${prompt && phase === "playing" ? "opacity-100" : "opacity-0"}`}
         >
-          <span className="text-[clamp(1.4rem,min(2.4vw,4.5vh),2.4rem)]">{title}</span>
-          <span className="ml-3 text-[clamp(0.9rem,min(1.2vw,2.4vh),1.2rem)] text-[#fdf3d4]/60">{subtitle}</span>
+          <span className="text-[clamp(1.4rem,min(2.4vw,4.5svh),2.4rem)]">{title}</span>
+          <span className="ml-3 text-[clamp(0.9rem,min(1.2vw,2.4svh),1.2rem)] text-[#fdf3d4]/60">{subtitle}</span>
         </div>
         <div
-          className={`flex items-center gap-2 text-[clamp(0.8rem,min(1vw,2.2vh),1rem)] tracking-wide text-cream/70 transition-opacity duration-500 ${prompt && phase === "playing" ? "opacity-100" : "opacity-0"}`}
+          className={`flex items-center gap-2 text-[clamp(0.8rem,min(1vw,2.2svh),1rem)] tracking-wide text-cream/70 transition-opacity duration-500 ${prompt && phase === "playing" ? "opacity-100" : "opacity-0"}`}
         >
           {touch ? (
             "Tap to skip"

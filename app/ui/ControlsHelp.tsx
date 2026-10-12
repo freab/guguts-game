@@ -90,7 +90,7 @@ export default function ControlsHelp({ touch, onClose }: { touch: boolean; onClo
 
   return (
     <div className="absolute inset-0 z-[66] flex items-center justify-center bg-night/70 p-4">
-      <div className="ui-shell flex max-h-[92vh] w-full max-w-md flex-col p-1.5">
+      <div className="ui-shell flex max-h-[92svh] w-full max-w-md flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-6">
           <h2 className={`${posterFont.className} text-center text-4xl tracking-wide`}>Find the goat</h2>
           <p className="mt-2 text-center text-sm text-cream/70">

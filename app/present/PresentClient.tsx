@@ -7,7 +7,7 @@ import { preload } from "react-dom";
 import QRCode from "qrcode";
 import { getPreferences, setPreferences, type Graphics } from "../game/preferences";
 import { Leva, levaStore } from "leva";
-import { ethiopicFont, posterFont } from "../fonts";
+import { cardSans, cardSerif, ethiopicFont, posterFont } from "../fonts";
 import { audio, MIX_LAYERS, type MixLayer } from "../audio/audioEngine";
 import { goat } from "../game/goat";
 import { revealPreview } from "../game/revealPreview";
@@ -28,6 +28,8 @@ import StudioSplash from "../ui/StudioSplash";
 import { enterFullscreen, exitFullscreen, fullscreenSupported, useIsFullscreen } from "../ui/fullscreen";
 import CullingMap from "./CullingMap";
 import { presentLive, presentStore, usePresent } from "./presentStore";
+import { requestFrame } from "../game/photo";
+import { drawThanks, type CardFonts, type ThanksText } from "../thanks/thanksCard";
 import { PRESENTER_POLL_IDLE_MS, PRESENTER_POLL_LIVE_MS, isRoomCode, newRoomCode, type RemoteAction, type RemoteState } from "../remote/shared";
 import { GOLDEN_HOUR, PLAY_URL, PLAYERS, type Readout, type Slide } from "./slides";
 
@@ -69,10 +71,13 @@ function bleat() {
 export default function PresentClient({
   slides: SLIDES,
   silentUntil,
+  still = false,
 }: {
   slides: Slide[];
   /** No ambience and no mix before this slide (only the slides' own moments, e.g. the reveal's swell). */
   silentUntil?: number;
+  /** A still picture, not a talk (app/thanks): no splash, no remote, no slide count, no camera motion. */
+  still?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const loaded = useLoading().stage === "ready";
@@ -126,10 +131,10 @@ export default function PresentClient({
         // (Not remembered.)
       }
     }
-    // (After mount: the code lives in this browser only.)
-    const t = window.setTimeout(() => setRoom(code), 0);
+    // (After mount: the code lives in this browser only. No remote for a still.)
+    const t = window.setTimeout(() => setRoom(still ? null : code), 0);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [still]);
   const [shown, setShown] = useState({ index, step });
   const [leaving, setLeaving] = useState<{ index: number; step: number } | null>(null);
   if (shown.index !== index) {
@@ -437,7 +442,7 @@ export default function PresentClient({
         titleBar={{ title: "Controls", filter: true, position: { x: 0, y: 56 } }}
         theme={{ sizes: { rootWidth: "340px", controlWidth: "170px" } }}
       />
-      {mounted && <Scene director={<Director slides={SLIDES} />} maxDpr={MAX_DPR} />}
+      {mounted && <Scene director={<Director slides={SLIDES} still={still} />} maxDpr={still ? 2 : MAX_DPR} />}
 
       {/* Loading: the game's own counter, while the maze is baked and compiled. */}
       {!ready && <Loading room={room} />}
@@ -477,17 +482,119 @@ export default function PresentClient({
         </div>
       )}
 
-      <StudioSplash />
+      {ready && slide.thanks && <ThanksCard key={index} card={slide.thanks} index={index} count={SLIDES.length} />}
+
+      {!still && <StudioSplash />}
     </div>
   );
 }
 
 const noop = () => {};
 
+/** The cards' faces: Fraunces for titles, Inter for words, Noto Serif Ethiopic for አመሰግናለሁ. */
+function cardFonts(): CardFonts {
+  return {
+    title: cardSerif.style.fontFamily,
+    body: cardSans.style.fontFamily,
+    amharic: ethiopicFont.style.fontFamily,
+  };
+}
+
+/**
+ * The thank-you card (app/thanks): drawn on a canvas over the scene — the
+ * same drawing the download uses — and a button to save the picture. The
+ * button isn't in it: the download is the 3D frame (taken the moment it's
+ * drawn: game/photo requestFrame) with the card drawn on top.
+ */
+function ThanksCard({ card, index, count }: { card: ThanksText; index: number; count: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const draw = async () => {
+      const fonts = cardFonts();
+      // (The faces first: a canvas doesn't wait for them.)
+      await Promise.all([
+        ...(card.title ? [document.fonts.load(`600 100px ${fonts.title}`, card.title)] : []),
+        ...(card.highlight ? [document.fonts.load(`italic 500 40px ${fonts.title}`, card.highlight)] : []),
+        document.fonts.load(`400 30px ${fonts.body}`, card.paragraphs.join(" ")),
+        document.fonts.load(`500 20px ${fonts.body}`, card.signature),
+        ...(card.amharic ? [document.fonts.load(`700 40px ${fonts.amharic}`, card.amharic)] : []),
+      ]).catch(() => {});
+      const canvas = ref.current;
+      if (!live || !canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(window.innerWidth * dpr);
+      canvas.height = Math.round(window.innerHeight * dpr);
+      const ctx = canvas.getContext("2d");
+      if (ctx) drawThanks(ctx, canvas.width, canvas.height, fonts, card);
+    };
+    void draw();
+    window.addEventListener("resize", draw);
+    return () => {
+      live = false;
+      window.removeEventListener("resize", draw);
+    };
+  }, [card]);
+
+  const save = () => {
+    setSaving(true);
+    requestFrame((frame) => {
+      // (Read the 3D frame now, in the task it was drawn in.)
+      const out = document.createElement("canvas");
+      out.width = frame.width;
+      out.height = frame.height;
+      const ctx = out.getContext("2d");
+      if (!ctx) return setSaving(false);
+      ctx.drawImage(frame, 0, 0);
+      drawThanks(ctx, out.width, out.height, cardFonts(), card);
+      out.toBlob((blob) => {
+        setSaving(false);
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `gugut-stark-hackathon-thank-you-${index + 1}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      }, "image/png");
+    });
+  };
+
+  return (
+    <>
+      <canvas ref={ref} className="pointer-events-none absolute inset-0 z-[21] h-full w-full" />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.currentTarget.blur();
+          save();
+        }}
+        disabled={saving}
+        className="absolute right-[2vw] bottom-[3vh] z-[26] flex items-center gap-2 rounded-2xl bg-[#fdf3d4] px-5 py-3 font-semibold text-[#0b0d08] shadow-[0_8px_30px_rgba(0,0,0,0.5)] disabled:opacity-60"
+      >
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+        </svg>
+        {saving ? "Saving…" : "Download image"}
+      </button>
+      {/* Which card (not in the picture): dots, and the way to the next. */}
+      {count > 1 && (
+        <div className="pointer-events-none absolute bottom-[3.6vh] left-1/2 z-[26] flex -translate-x-1/2 items-center gap-2">
+          {Array.from({ length: count }, (_, i) => (
+            <span key={i} className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-[#fdf3d4]" : "w-2 bg-[#fdf3d4]/35"}`} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 /** True while the user is typing in a field (the panel's number inputs). */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
-  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 }
 
 /** Slide titles: the poster face, and Noto Serif Ethiopic for any Amharic in them (አደይ አበባ). */
@@ -661,6 +768,8 @@ function SlideView({
   /** Leaving: animating out while the next slide's camera move starts. */
   exiting: boolean;
 }) {
+  // (The thank-you card draws its own words: ThanksCard.)
+  if (slide.thanks) return null;
   const now = slide.steps?.[step];
   const before = slide.steps?.[step - 1];
   const added = now?.mix && before?.mix ? now.mix.find((l) => !before.mix!.includes(l)) : undefined;
@@ -788,9 +897,11 @@ function SlideView({
         </div>
       )}
 
-      <div className="absolute top-6 right-[calc(1.5vw+3.5rem)] text-sm tracking-[0.2em] text-[#fdf3d4]/50 tabular-nums">
-        {index + 1} / {count}
-      </div>
+      {count > 1 && (
+        <div className="absolute top-6 right-[calc(1.5vw+3.5rem)] text-sm tracking-[0.2em] text-[#fdf3d4]/50 tabular-nums">
+          {index + 1} / {count}
+        </div>
+      )}
     </div>
   );
 }

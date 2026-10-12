@@ -1,4 +1,4 @@
-import { Jolly_Lodger, Noto_Serif_Ethiopic } from "next/font/google";
+import { Fraunces, Inter, Jolly_Lodger, Noto_Serif_Ethiopic } from "next/font/google";
 
 /**
  * Display face matching the "GUGUT & THE GOAT" poster lettering (tall,
@@ -21,6 +21,23 @@ export const posterFont = Jolly_Lodger({
 export const ethiopicFont = Noto_Serif_Ethiopic({
   weight: "700",
   subsets: ["ethiopic"],
+  display: "swap",
+  preload: false,
+});
+
+/**
+ * The thank-you cards' pairing (app/thanks): Fraunces, a warm soft serif, for
+ * the titles and the gold line (italic), with Inter for the words. Loaded only
+ * where the cards are drawn (they wait for them: document.fonts.load).
+ */
+export const cardSerif = Fraunces({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+  preload: false,
+});
+export const cardSans = Inter({
+  subsets: ["latin"],
   display: "swap",
   preload: false,
 });

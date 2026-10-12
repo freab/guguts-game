@@ -60,7 +60,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** The call-the-goat key (press to rebind), and the sound captions and voiceovers switches. */
+/** The call-the-goat key (press to rebind), and the sound captions, voiceovers and subtitles switches. */
 function GameplaySettings() {
   const prefs = usePreferences();
   const [listening, setListening] = useState(false);
@@ -123,6 +123,18 @@ function GameplaySettings() {
           type="checkbox"
           checked={prefs.voice}
           onChange={(e) => setPreferences({ voice: e.target.checked })}
+          className="h-5 w-5 accent-gold"
+        />
+      </label>
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="text-sm text-cream/70">
+          Subtitles
+          <span className="block text-xs text-cream/40">What Gugut says, in English</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={prefs.subtitles}
+          onChange={(e) => setPreferences({ subtitles: e.target.checked })}
           className="h-5 w-5 accent-gold"
         />
       </label>

@@ -177,6 +177,7 @@ class AudioEngine {
   private voiceUntil = 0;
   private voiceSource: AudioBufferSourceNode | null = null;
   private voiceLine: VoiceLine | null = null;
+  private voiceTake = 0;
   private readonly lastTake = new Map<VoiceLine, number>();
   private song: {
     element: HTMLAudioElement;
@@ -817,6 +818,11 @@ class AudioEngine {
     return !!this.ctx && this.ctx.currentTime < this.voiceUntil;
   }
 
+  /** Which take of which line Gugut is saying right now (for subtitles: audio/subtitles), if any. */
+  speakingTake(): { line: VoiceLine; take: number } | null {
+    return this.isSpeaking() && this.voiceLine ? { line: this.voiceLine, take: this.voiceTake } : null;
+  }
+
   /** What Gugut is saying right now, if anything. */
   speaking(): VoiceLine | null {
     return this.isSpeaking() ? this.voiceLine : null;
@@ -852,6 +858,7 @@ class AudioEngine {
     src.start(now, offset, duration);
     this.voiceSource = src;
     this.voiceLine = line;
+    this.voiceTake = pick;
     this.voiceUntil = now + duration;
     if (duck && this.ambienceDuck) {
       const g = this.ambienceDuck.gain;

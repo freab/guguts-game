@@ -98,6 +98,18 @@ const smoothstep = (e0: number, e1: number, x: number) => {
  * of them was ~80% of the frame's triangles). All drawn heads are packed into
  * one mesh per LOD, so every flower is three draws.
  */
+/** The fields alive, in the order built: the scene draws the latest (nearestFlowerHead). */
+const fields = new Set<FlowerField>();
+
+/**
+ * The flower head nearest to (x, z), into `out` (world position): for a
+ * close-up of one (app/thanks). False if there's no field or no flower.
+ */
+export function nearestFlowerHead(x: number, z: number, out: THREE.Vector3): boolean {
+  const latest = [...fields].at(-1);
+  return latest ? latest.nearestHead(x, z, out) : false;
+}
+
 export class FlowerField {
   readonly group = new THREE.Group();
   private readonly chunks: Chunk[] = [];
@@ -196,6 +208,7 @@ export class FlowerField {
       }
     }
     this.total = total;
+    fields.add(this);
 
     // Covers the chunk diagonal plus the highest heads and their sway.
     const radius = CHUNK_SIZE * 0.75 + height * 1.5;
@@ -361,7 +374,27 @@ export class FlowerField {
     this.packedAt.copy(this.eye);
   }
 
+  /** The head nearest to (x, z), into `out`. */
+  nearestHead(x: number, z: number, out: THREE.Vector3): boolean {
+    let best = Infinity;
+    for (const ch of this.chunks) {
+      // (Whole chunks too far to hold anything nearer are skipped.)
+      if (Math.hypot(ch.center.x - x, ch.center.z - z) - ch.half * Math.SQRT2 > Math.sqrt(best)) continue;
+      for (let i = 0; i < ch.count; i++) {
+        const dx = ch.positions[i * 3] - x;
+        const dz = ch.positions[i * 3 + 2] - z;
+        const d = dx * dx + dz * dz;
+        if (d < best) {
+          best = d;
+          out.set(ch.positions[i * 3], ch.positions[i * 3 + 1], ch.positions[i * 3 + 2]);
+        }
+      }
+    }
+    return best < Infinity;
+  }
+
   dispose() {
+    fields.delete(this);
     for (const m of this.meshes) {
       m.geometry.dispose();
       m.dispose();

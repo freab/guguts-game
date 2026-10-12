@@ -1,6 +1,7 @@
 import type { MixLayer, VoiceLine } from "../audio/audioEngine";
 import type { SceneLayer, UvSurface } from "../scene/sceneLayers";
 import type { CullingMode } from "./CullingMap";
+import type { ThanksText } from "../thanks/thanksCard";
 
 /**
  * What a slide of the presentation (app/present, the deck in
@@ -26,7 +27,19 @@ export type Shot =
   | "tree"
   | "stone"
   | "soundStage"
-  | "spin";
+  | "spin"
+  | "portrait"
+  | "goatHero"
+  | "aerial"
+  | "flowerMacro"
+  | "carving"
+  | "lantern"
+  | "jebena"
+  | "wormsEye"
+  | "vanishing"
+  | "silhouette"
+  | "fromMaze"
+  | "overShoulder";
 
 /** A live readout in the corner. */
 export type Readout = "render" | "grass" | "energy" | "compass" | "renderer";
@@ -105,6 +118,8 @@ export interface Slide {
   leaderboard?: boolean;
   /** The game's control panel (leva, as on /#controls), open and live; put back as it was after. */
   panel?: boolean;
+  /** A thank-you card (app/thanks): its words, drawn over the scene, downloadable as a picture. */
+  thanks?: ThanksText;
   /** Pictures on the right, as framed cards: a file in public/, a caption, and whether it's landscape. */
   images?: { src: string; caption: string; wide?: boolean }[];
   /** The culling map (present/CullingMap): the maze from above, live, explaining one kind of culling. */

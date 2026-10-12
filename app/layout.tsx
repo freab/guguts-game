@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   description: "Find Gugut's runaway goat in the maze before the sun goes down.",
   openGraph: { siteName: SITE_NAME, type: "website" },
   twitter: { card: "summary_large_image" },
-  // Home-screen app on iPhone: fullscreen, no browser bars (see app/manifest.ts).
-  appleWebApp: { capable: true, title: "Gugut", statusBarStyle: "black-translucent" },
+  // Home-screen app on iPhone: no browser bars (see app/manifest.ts); an opaque status bar, so nothing sits under the clock or the notch.
+  appleWebApp: { capable: true, title: "Gugut", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {

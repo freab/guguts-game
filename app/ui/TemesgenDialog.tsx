@@ -179,7 +179,7 @@ export default function TemesgenDialog({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="Talking to Temesgen"
-        className="ui-shell flex w-full max-w-xl flex-col gap-1.5 p-1.5"
+        className="ui-shell flex max-h-[calc(100svh-2.5rem)] w-full max-w-xl flex-col gap-1.5 overflow-y-auto p-1.5"
         style={{ animation: "notice-in 200ms ease-out" }}
       >
         <div key={turn} className="ui-well px-5 py-4" style={{ animation: "notice-in 260ms ease-out" }}>

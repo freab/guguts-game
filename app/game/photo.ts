@@ -27,6 +27,13 @@ export const PHOTO_FOV_DEFAULT = 60;
 const initial: PhotoState = { active: false, fov: PHOTO_FOV_DEFAULT, dusk: null, panel: true, savedAt: 0 };
 let state = initial;
 let captureWanted = false;
+/** A one-off: the next frame drawn, handed to this (it must read the canvas there and then). */
+let frameWanted: ((canvas: HTMLCanvasElement) => void) | null = null;
+
+/** The next frame the post-processing draws, given to `take` the moment it's drawn (photo mode not needed). */
+export function requestFrame(take: (canvas: HTMLCanvasElement) => void) {
+  frameWanted = take;
+}
 const listeners = new Set<() => void>();
 const set = (next: Partial<PhotoState>) => {
   state = { ...state, ...next };
@@ -81,6 +88,12 @@ export const photo = {
  * in the canvas).
  */
 export function takeCapture(canvas: HTMLCanvasElement) {
+  // Someone else wants this frame (the thank-you card, app/thanks): handed over as it's drawn.
+  if (frameWanted) {
+    const take = frameWanted;
+    frameWanted = null;
+    take(canvas);
+  }
   if (!captureWanted) return;
   captureWanted = false;
   canvas.toBlob((blob) => {

@@ -137,7 +137,7 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
   if (chapter === "story") return <OutroStory onContinue={() => setChapter("results")} />;
   return (
     <div className="absolute inset-0 z-[65] flex items-center justify-center bg-night/70 p-4">
-      <div className="ui-shell flex max-h-[92vh] w-full max-w-lg flex-col p-1.5">
+      <div className="ui-shell flex max-h-[92svh] w-full max-w-lg flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-6 sm:p-8">
           <p className="text-center text-xs uppercase tracking-[0.3em] text-gold/80">Run complete</p>
           <h2 className={`${posterFont.className} mt-1 text-center text-5xl tracking-wide sm:text-6xl`}>You found her!</h2>

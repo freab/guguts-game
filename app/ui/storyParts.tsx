@@ -32,7 +32,7 @@ export function StoryText({ lines }: { lines: readonly string[] }) {
   let word = 0;
   return (
     <div
-      className={`absolute right-6 left-6 space-y-[2.2vh] leading-[1.25] tracking-wide text-[#fdf3d4] portrait:top-[40svh] portrait:text-[clamp(1.05rem,4.6vw,1.6rem)] landscape:top-[max(18vh,4.5rem)] landscape:right-[13vw] landscape:left-[41.5vw] landscape:text-[clamp(0.95rem,min(1.9vw,4.4vh),2.2rem)] ${SHADOW}`}
+      className={`absolute right-6 left-6 space-y-[2.2svh] leading-[1.25] tracking-wide text-[#fdf3d4] portrait:top-[40svh] portrait:text-[clamp(1.05rem,4.6vw,1.6rem)] landscape:top-[max(18svh,4.5rem)] landscape:right-[13vw] landscape:left-[41.5vw] landscape:text-[clamp(0.95rem,min(1.9vw,4.4svh),2.2rem)] ${SHADOW}`}
     >
       {lines.map((line) => (
         <p key={line}>
@@ -60,7 +60,7 @@ export function StoryButton({ label, onClick }: { label: string; onClick: () => 
     <button
       autoFocus
       onClick={onClick}
-      className="group absolute right-[6vw] bottom-[6vh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-2 pr-2 pl-7 text-[clamp(1.6rem,min(2.6vw,5.5vh),2.8rem)] leading-none text-[#2a2312] opacity-0 shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
+      className="group absolute right-[6vw] bottom-[6svh] flex items-center gap-3 rounded-full bg-[#c9a45c] py-2 pr-2 pl-7 text-[clamp(1.6rem,min(2.6vw,5.5svh),2.8rem)] leading-none text-[#2a2312] opacity-0 shadow-[0_6px_30px_rgba(20,16,8,0.35)] transition-[background-color,scale] duration-300 hover:scale-105 hover:bg-[#d8b46a] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#fdf3d4]"
       style={{ animation: "notice-in 700ms ease-out forwards" }}
     >
       {label}

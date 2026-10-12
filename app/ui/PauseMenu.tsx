@@ -36,7 +36,7 @@ export default function PauseMenu(actions: PauseActions) {
     "ui-tile w-full px-5 py-2.5 ui-label";
   return (
     <div className="absolute inset-0 z-[66] flex items-center justify-center bg-night/70 p-4">
-      <div className="ui-shell flex max-h-[92vh] w-full max-w-xs flex-col p-1.5">
+      <div className="ui-shell flex max-h-[92svh] w-full max-w-xs flex-col p-1.5">
         <div className="ui-well min-h-0 overflow-y-auto p-5">
           <h2 className={`${posterFont.className} text-center text-6xl tracking-wide`}>Paused</h2>
           {run.phase === "running" && (

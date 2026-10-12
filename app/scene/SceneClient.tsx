@@ -27,6 +27,7 @@ import CallButton from "../ui/CallButton";
 import CallMap from "../ui/CallMap";
 import GameNotice from "../ui/GameNotice";
 import BleatIndicator from "../ui/BleatIndicator";
+import Subtitles from "../ui/Subtitles";
 import DrinkPrompt from "../ui/DrinkPrompt";
 import TalkPrompt from "../ui/TalkPrompt";
 import TemesgenDialog from "../ui/TemesgenDialog";
@@ -362,6 +363,7 @@ export default function SceneClient() {
       {ready && <BunaGlow />}
       {ready && <PhotoOverlay touch={touch} />}
       {ready && <BleatIndicator />}
+      {ready && <Subtitles />}
       {ready && <Monologue key={`voice-${runId}`} />}
       {ready && <DrinkVignette />}
       {playing && <DrinkPrompt touch={touch} />}
