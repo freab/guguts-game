@@ -10,6 +10,7 @@ import { LEVELS, type Level } from "../maze/levels";
 import { defaultGraphics, type Graphics } from "../quality";
 import { audio } from "../audio/audioEngine";
 import { KONAMI, sequenceWatcher } from "../game/secrets";
+import { stat } from "../game/stats";
 import { setLoading, useLoading, type LoadingStage } from "../scene/bake/loadingStore";
 import DissolveCanvas, { DISSOLVE_MS, type DissolveStage } from "./DissolveCanvas";
 import { SHADOW, STORY_SRC, StoryButton, StoryText } from "./storyParts";
@@ -291,6 +292,7 @@ export default function LoadingOverlay({
   const [dissolveDone, setDissolveDone] = useState(false);
   const pick = (level: Level) => {
     if (picked) return;
+    stat("level_chosen", { level: level.id });
     onPick();
     setDissolveDone(false);
     setPicked(level);

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { formatTime } from "../leaderboard/shared";
 import { CARD_FORMATS, drawCard, type CardData, type CardFormat } from "../share/shareCard";
 import { shareLink } from "../share/shareLink";
+import { stat } from "../game/stats";
 import Dialog from "./Dialog";
 
 export type ShareCard = Omit<CardData, "host">;
@@ -93,6 +94,11 @@ export default function ShareDialog({
     }
   };
   const open = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
+  /** Counted in the game's stats (game/stats): which way results get shared. */
+  const via = (how: string, then: () => void) => () => {
+    stat("share", { via: how });
+    then();
+  };
   const enc = encodeURIComponent;
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -122,27 +128,27 @@ export default function ShareDialog({
         </div>
 
         {canNativeShare && (
-          <button type="button" disabled={!ready} onClick={() => void nativeShare()} className="ui-cta w-full px-5 py-2.5 ui-label disabled:opacity-40">
+          <button type="button" disabled={!ready} onClick={via("native", () => void nativeShare())} className="ui-cta w-full px-5 py-2.5 ui-label disabled:opacity-40">
             Share… (Instagram, Telegram, WhatsApp…)
           </button>
         )}
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-          <ShareButton disabled={!ready} onClick={save}>
+          <ShareButton disabled={!ready} onClick={via("image", save)}>
             Save image
           </ShareButton>
-          <ShareButton disabled={!link} onClick={() => open(`https://x.com/intent/post?text=${enc(text)}&url=${enc(link!)}`)}>
+          <ShareButton disabled={!link} onClick={via("x", () => open(`https://x.com/intent/post?text=${enc(text)}&url=${enc(link!)}`))}>
             X
           </ShareButton>
-          <ShareButton disabled={!link} onClick={() => open(`https://t.me/share/url?url=${enc(link!)}&text=${enc(text)}`)}>
+          <ShareButton disabled={!link} onClick={via("telegram", () => open(`https://t.me/share/url?url=${enc(link!)}&text=${enc(text)}`))}>
             Telegram
           </ShareButton>
-          <ShareButton disabled={!link} onClick={() => open(`https://wa.me/?text=${enc(`${text} ${link}`)}`)}>
+          <ShareButton disabled={!link} onClick={via("whatsapp", () => open(`https://wa.me/?text=${enc(`${text} ${link}`)}`))}>
             WhatsApp
           </ShareButton>
-          <ShareButton disabled={!link} onClick={() => open(`https://www.facebook.com/sharer/sharer.php?u=${enc(link!)}`)}>
+          <ShareButton disabled={!link} onClick={via("facebook", () => open(`https://www.facebook.com/sharer/sharer.php?u=${enc(link!)}`))}>
             Facebook
           </ShareButton>
-          <ShareButton disabled={!link} onClick={() => void copy()}>
+          <ShareButton disabled={!link} onClick={via("copy", () => void copy())}>
             Copy link
           </ShareButton>
         </div>

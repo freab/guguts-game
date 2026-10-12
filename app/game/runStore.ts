@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { LevelId } from "../maze/levels";
+import { setupProps, startFrameCount, stat, stopFrameCount } from "./stats";
 
 /**
  * One run through the maze. No time limit — the clock just measures it:
@@ -121,6 +122,9 @@ const set = (next: Partial<RunState>) => {
   listeners.forEach((l) => l());
 };
 
+/** Seconds into the run (paused time left out), for the stats. */
+const secondsIn = (now: number) => Math.round(runStore.elapsed(now) / 1000);
+
 export const runStore = {
   get: () => state,
   /** A fresh run, waiting for the first step. */
@@ -138,6 +142,7 @@ export const runStore = {
   callGoat(now = performance.now()): boolean {
     if (state.phase !== "armed" && state.phase !== "running") return false;
     if (state.calls <= 0) {
+      stat("throat_dry", { level: state.level });
       set({
         dryAt: now,
         notice: {
@@ -148,6 +153,7 @@ export const runStore = {
       return false;
     }
     const calls = state.calls - 1;
+    stat("goat_call", { level: state.level, call: state.callsUsed + 1, seconds: secondsIn(now) });
     set({
       calls,
       callsUsed: state.callsUsed + 1,
@@ -173,6 +179,7 @@ export const runStore = {
   /** Gugut picks up the monks' jebena (game/jebena). */
   findJebena(now = performance.now()) {
     if (state.jebenaFound || (state.phase !== "armed" && state.phase !== "running")) return;
+    stat("jebena_found", { level: state.level, seconds: secondsIn(now) });
     set({
       jebenaFound: true,
       notice: { text: "A jebena on a stone — still warm. The monks were here. You keep it safe for later.", at: now },
@@ -181,6 +188,7 @@ export const runStore = {
   /** The coffee kicks in (game/secrets): faster for a while — and off the leaderboard. */
   caffeinate(now = performance.now()) {
     if (state.phase !== "running") return;
+    stat("buna", { level: state.level, seconds: secondsIn(now) });
     set({
       caffeinated: true,
       ranked: false,
@@ -194,11 +202,13 @@ export const runStore = {
   /** Gugut sees her for the first time this run. */
   seeGoat(now = performance.now()) {
     if (state.sawAt || (state.phase !== "armed" && state.phase !== "running")) return;
+    stat("goat_seen", { level: state.level, seconds: secondsIn(now) });
     set({ sawAt: now });
   },
   /** Drink hidden bottle `i`: Gugut's voice comes back in full. */
   drink(i: number, now = performance.now()) {
     if (state.bottlesTaken[i] || state.phase === "won") return;
+    stat("water_drunk", { level: state.level, bottle: i + 1, seconds: secondsIn(now) });
     const bottlesTaken = state.bottlesTaken.map((taken, j) => taken || j === i);
     set({
       bottlesTaken,
@@ -207,10 +217,22 @@ export const runStore = {
     });
   },
   start(now: number) {
-    if (state.phase === "armed") set({ phase: "running", startedAt: now, pausedTotal: 0, pausedAt: 0 });
+    if (state.phase !== "armed") return;
+    set({ phase: "running", startedAt: now, pausedTotal: 0, pausedAt: 0 });
+    stat("run_start", { level: state.level, ranked: state.ranked, ...setupProps() });
+    startFrameCount();
   },
   finish(now: number) {
-    if (state.phase === "running") set({ phase: "won", finishedAt: now });
+    if (state.phase !== "running") return;
+    set({ phase: "won", finishedAt: now });
+    stat("goat_found", {
+      level: state.level,
+      ranked: state.ranked,
+      seconds: secondsIn(now),
+      callsUsed: state.callsUsed,
+      water: state.bottlesTaken.filter(Boolean).length,
+      fps: stopFrameCount(),
+    });
   },
   /** Pause (or un-pause) for a reason; the clock stops while any reason holds. */
   setPaused(reason: PauseReason, on: boolean, now = performance.now()) {
@@ -243,6 +265,14 @@ export const runStore = {
     };
   },
 };
+
+// Left mid-maze (tab closed, app switched away for good): how far they got.
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    if (state.phase !== "running") return;
+    stat("run_abandoned", { level: state.level, seconds: secondsIn(performance.now()), sawGoat: !!state.sawAt, fps: stopFrameCount() }, true);
+  });
+}
 
 export function useRun(): RunState {
   return useSyncExternalStore(runStore.subscribe, runStore.get, runStore.get);

@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { runStore } from "./runStore";
+import { stat } from "./stats";
 
 /**
  * Photo mode (F, or the pause menu): the game freezes (runStore "photo": no
@@ -104,6 +105,7 @@ export function takeCapture(canvas: HTMLCanvasElement) {
     a.href = url;
     a.download = `gugut-photo-${stamp}.png`;
     a.click();
+    stat("photo_taken", { level: runStore.get().level });
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
     set({ savedAt: performance.now() });
   }, "image/png");

@@ -1,5 +1,6 @@
 import { DefaultLoadingManager } from "three/webgpu";
 import { gustAt, windNow } from "../scene/wind";
+import { stat } from "../game/stats";
 
 /**
  * The game's sound, on one Web Audio graph:
@@ -1022,6 +1023,7 @@ class AudioEngine {
   playSong(x: number, y: number, z: number, onEnded: () => void, track: SongTrack = "main") {
     const song = this.ensureSong(track);
     if (!song || !this.ctx) return;
+    stat("temesgen_song", { track });
     this.placeSong(x, y, z);
     const now = this.ctx.currentTime;
     song.envelope.gain.cancelScheduledValues(now);

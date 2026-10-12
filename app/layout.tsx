@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { posterFont } from "./fonts";
 import { SITE_NAME, SITE_URL } from "./site";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,6 +27,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Gugut", statusBarStyle: "black" },
 };
 
+/* Vercel: Web Analytics (visitors, countries, devices, pages) and Speed Insights
+   (how fast it loads for real players). The game's own stats: PostHog (game/stats). */
 export const viewport: Viewport = {
   themeColor: "#0b0d08",
 };
@@ -35,7 +39,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${posterFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col overflow-hidden m-0">{children}</body>
+      <body className="min-h-full flex flex-col overflow-hidden m-0">
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }

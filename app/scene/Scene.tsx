@@ -21,6 +21,7 @@ import Goat from "../maze/Goat";
 import CoffeeBush from "../maze/CoffeeBush";
 import Temesgen from "../maze/Temesgen";
 import { perfCalls, perfTris } from "./perf/renderStats";
+import { statContext } from "../game/stats";
 import LayerGroup from "./LayerGroup";
 import WaterBottles from "../maze/WaterBottles";
 import Birds from "./atmosphere/Birds";
@@ -589,6 +590,7 @@ export default function Scene({ director, maxDpr }: { director?: ReactNode; /** 
           "[gugut] renderer backend:",
           backend?.isWebGPUBackend ? "WebGPU" : "WebGL"
         );
+        statContext({ renderer: backend?.isWebGPUBackend ? "webgpu" : "webgl" });
         return renderer;
       }}
     >
