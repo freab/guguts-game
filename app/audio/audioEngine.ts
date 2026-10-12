@@ -211,7 +211,11 @@ class AudioEngine {
 
   /* ---------- state ---------- */
 
-  /** Is the music (ambience) switched on? Remembered across visits. */
+  /**
+   * Is the music switched on? Remembered across visits. Off silences the
+   * ambience, Temesgen's songs and Gugut's voice (still subtitled); the
+   * game's own sounds (steps, bleats, calls, drinking) stay.
+   */
   isMusicOn(): boolean {
     if (!this.loadedPreference && typeof window !== "undefined") {
       this.loadedPreference = true;
@@ -242,6 +246,7 @@ class AudioEngine {
     }
     this.unlock();
     this.applyAmbience();
+    this.applyMix();
     this.listeners.forEach((l) => l());
   }
 
@@ -263,19 +268,20 @@ class AudioEngine {
     this.applyMix();
   }
 
-  /** Fade each layer of the mix to on or off. */
+  /** Fade each layer of the mix to on or off (the song and the voice also follow the music switch). */
   private applyMix() {
     const ctx = this.ctx;
     if (!ctx) return;
+    const music = this.isMusicOn();
     const now = ctx.currentTime;
     const fade = (node: GainNode | null, on: boolean, level = 1) => node?.gain.setTargetAtTime(on ? level : 0, now, MIX_FADE);
     const [birds, wind] = this.tracks;
     fade(wind?.mute ?? null, this.mix.has("wind"));
     fade(birds?.mute ?? null, this.mix.has("birds"));
-    fade(this.songMute, this.mix.has("song"));
+    fade(this.songMute, this.mix.has("song") && music);
     fade(this.calls, this.mix.has("goat"), dbToGain(CALLS_DB));
     fade(this.farSend, this.mix.has("goat"));
-    fade(this.voice, this.mix.has("voice"), dbToGain(VOICE_DB));
+    fade(this.voice, this.mix.has("voice") && music, dbToGain(VOICE_DB));
   }
 
   /* ---------- graph ---------- */
@@ -307,7 +313,7 @@ class AudioEngine {
     this.ambience.connect(this.ambienceDuck).connect(master);
 
     this.voice = ctx.createGain();
-    this.voice.gain.value = dbToGain(VOICE_DB);
+    this.voice.gain.value = this.isMusicOn() ? dbToGain(VOICE_DB) : 0;
     this.voice.connect(master);
 
     this.footsteps = ctx.createGain();

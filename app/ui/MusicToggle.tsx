@@ -24,8 +24,8 @@ function SpeakerIcon({ on }: { on: boolean }) {
 }
 
 /**
- * Music on / off (also the M key): the birds-and-wind ambience
- * (audio/audioEngine.ts), which plays once the game is running. Shown on every
+ * Music on / off (also the M key): the birds-and-wind ambience, Temesgen's
+ * songs and Gugut's voice (audio/audioEngine.ts isMusicOn). Shown on every
  * screen, including the title screen; the choice is remembered.
  */
 export default function MusicToggle({ className = "" }: { className?: string }) {

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { posterFont } from "../fonts";
 import { GOAT_CALLS, runStore, useRun } from "../game/runStore";
 import { formatTime } from "../leaderboard/shared";
+import { SupportButton } from "./SupportDialog";
 
 export interface PauseActions {
   onResume: () => void;
@@ -77,6 +78,7 @@ export default function PauseMenu(actions: PauseActions) {
             <button type="button" onClick={actions.onChangeLevel} className={button}>
               Change level
             </button>
+            <SupportButton from="pause" className="w-full px-5 py-2 text-sm text-gold underline-offset-4 hover:underline" />
           </div>
         </div>
       </div>

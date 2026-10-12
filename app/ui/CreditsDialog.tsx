@@ -1,6 +1,7 @@
 "use client";
 
 import Dialog from "./Dialog";
+import { SupportLink } from "./SupportDialog";
 
 /** Who made the game, and whose work is in it (the same list as the README's Credits). */
 const CREDITS: { role: string; who: string; detail?: string; href?: string }[] = [
@@ -39,6 +40,10 @@ export default function CreditsDialog({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </dl>
+      <div className="mt-6 border-t border-cream/10 pt-5">
+        <p className="mb-3 text-sm text-cream/70">Enjoyed it? Buy Gugut a buna.</p>
+        <SupportLink from="credits" />
+      </div>
     </Dialog>
   );
 }

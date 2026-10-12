@@ -12,6 +12,7 @@ import OutroStory from "./OutroStory";
 import { isGugut } from "../game/secrets";
 import { goldenGoat } from "../game/goldenGoat";
 import { LEVELS } from "../maze/levels";
+import { SupportButton } from "./SupportDialog";
 
 /**
  * One submission per finished run (and retry): React runs effects twice in
@@ -233,6 +234,10 @@ function Panel({ run, onPlayAgain, onChangeLevel, onChangeName, onCredits }: Act
             <button type="button" onClick={onCredits} className={`${button} ui-tile`}>
               Credits
             </button>
+          </div>
+          {/* The happiest moment: a quiet way to say thanks. */}
+          <div className="mt-4 flex justify-center">
+            <SupportButton from="game_over" className="px-4 py-2 text-sm text-gold underline-offset-4 hover:underline" />
           </div>
         </div>
       </div>
