@@ -31,6 +31,12 @@ let captureWanted = false;
 /** A one-off: the next frame drawn, handed to this (it must read the canvas there and then). */
 let frameWanted: ((canvas: HTMLCanvasElement) => void) | null = null;
 
+/** Every frame, as it's drawn (app/trailer: composited and recorded), or null to stop. */
+let frameTap: ((canvas: HTMLCanvasElement) => void) | null = null;
+export function tapFrames(tap: ((canvas: HTMLCanvasElement) => void) | null) {
+  frameTap = tap;
+}
+
 /** The next frame the post-processing draws, given to `take` the moment it's drawn (photo mode not needed). */
 export function requestFrame(take: (canvas: HTMLCanvasElement) => void) {
   frameWanted = take;
@@ -89,6 +95,7 @@ export const photo = {
  * in the canvas).
  */
 export function takeCapture(canvas: HTMLCanvasElement) {
+  frameTap?.(canvas);
   // Someone else wants this frame (the thank-you card, app/thanks): handed over as it's drawn.
   if (frameWanted) {
     const take = frameWanted;

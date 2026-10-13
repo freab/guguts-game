@@ -19,7 +19,7 @@ import { getPreferences } from "./preferences";
  * - `run_abandoned`: the page left mid-maze (how far in);
  * - `share`: a result shared, and how;
  * - `support_open`, `support_click`: "Buy Gugut a buna" opened (where from),
- *   and a link followed (Buy Me a Coffee, or birr on Jami).
+ *   and its link (Jami) followed.
  *
  * Every event also carries (registered once): the browser's language, touch or
  * mouse (instrumentation-client) and the renderer, WebGPU or WebGL (Scene).

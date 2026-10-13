@@ -72,12 +72,18 @@ export default function PresentClient({
   slides: SLIDES,
   silentUntil,
   still = false,
+  trailer = false,
+  dpr,
 }: {
   slides: Slide[];
   /** No ambience and no mix before this slide (only the slides' own moments, e.g. the reveal's swell). */
   silentUntil?: number;
   /** A still picture, not a talk (app/thanks): no splash, no remote, no slide count, no camera motion. */
   still?: boolean;
+  /** The trailer (app/trailer): only the scene, its camera moving cinematically; the page draws the rest. */
+  trailer?: boolean;
+  /** Render at exactly this pixel ratio (the trailer's quality). */
+  dpr?: number;
 }) {
   const [mounted, setMounted] = useState(false);
   const loaded = useLoading().stage === "ready";
@@ -132,9 +138,9 @@ export default function PresentClient({
       }
     }
     // (After mount: the code lives in this browser only. No remote for a still.)
-    const t = window.setTimeout(() => setRoom(still ? null : code), 0);
+    const t = window.setTimeout(() => setRoom(still || trailer ? null : code), 0);
     return () => window.clearTimeout(t);
-  }, [still]);
+  }, [still, trailer]);
   const [shown, setShown] = useState({ index, step });
   const [leaving, setLeaving] = useState<{ index: number; step: number } | null>(null);
   if (shown.index !== index) {
@@ -413,9 +419,9 @@ export default function PresentClient({
     return () => window.clearTimeout(t);
   }, [phoneAt]);
 
-  // Slide keys (a presentation clicker sends Page Up / Down).
+  // Slide keys (a presentation clicker sends Page Up / Down). (The trailer runs on its own clock.)
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || trailer) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || isTyping(e.target)) return;
       const at = presentStore.get().slide;
@@ -432,7 +438,7 @@ export default function PresentClient({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ready, advance, pressX, SLIDES]);
+  }, [ready, trailer, advance, pressX, SLIDES]);
 
   return (
     <div className={`${posterFont.variable} relative h-full w-full overflow-hidden bg-black text-[#fdf3d4]`}>
@@ -442,13 +448,13 @@ export default function PresentClient({
         titleBar={{ title: "Controls", filter: true, position: { x: 0, y: 56 } }}
         theme={{ sizes: { rootWidth: "340px", controlWidth: "170px" } }}
       />
-      {mounted && <Scene director={<Director slides={SLIDES} still={still} />} maxDpr={still ? 2 : MAX_DPR} />}
+      {mounted && <Scene director={<Director slides={SLIDES} still={still} cinematic={trailer} />} maxDpr={still || trailer ? 2 : MAX_DPR} fixedDpr={dpr} />}
 
       {/* Loading: the game's own counter, while the maze is baked and compiled. */}
       {!ready && <Loading room={room} />}
 
       {/* The slides, over the scene (they also keep clicks off it: no pointer lock). */}
-      {ready && (
+      {ready && !trailer && (
         <div
           className="absolute inset-0 z-20 select-none"
           onClick={() => advance(1)}
@@ -467,10 +473,10 @@ export default function PresentClient({
         </div>
       )}
 
-      <FullscreenButton />
+      {!trailer && <FullscreenButton />}
 
       {/* While the camera moves: letterbox bars. */}
-      {ready && <Letterbox />}
+      {ready && !trailer && <Letterbox />}
       {/* X: a pulse of warm light round the edges. */}
       {pulse > 0 && <div key={pulse} className="xray-pulse pointer-events-none absolute inset-0 z-[22]" />}
       {/* N: the presenter's notes. */}
@@ -484,7 +490,7 @@ export default function PresentClient({
 
       {ready && slide.thanks && <ThanksCard key={index} card={slide.thanks} index={index} count={SLIDES.length} />}
 
-      {!still && <StudioSplash />}
+      {!still && !trailer && <StudioSplash />}
     </div>
   );
 }

@@ -39,7 +39,8 @@ export type Shot =
   | "vanishing"
   | "silhouette"
   | "fromMaze"
-  | "overShoulder";
+  | "overShoulder"
+  | "berries";
 
 /** A live readout in the corner. */
 export type Readout = "render" | "grass" | "energy" | "compass" | "renderer";
@@ -98,6 +99,14 @@ export interface Slide {
   uvGrid?: UvSurface[];
   /** Post-processing on (it's off everywhere else: the finishing-touch slide is where it's shown). */
   post?: boolean;
+  /** The trailer (present/Director cinematic): a hard cut to this shot, not a glide. */
+  cut?: boolean;
+  /** The trailer: the glide to this shot takes this long (s). */
+  glide?: number;
+  /** The trailer: the camera eases in towards its subject through the shot (m/s; at most 40% of the way). */
+  push?: number;
+  /** The trailer: the shot's own movement, slower (< 1) or faster. */
+  pace?: number;
   /** Leva controls set while the slide is up (path suffix, value), put back after. */
   set?: [path: string, value: unknown][];
   /** Steps within the slide, one per press (the sound slide's mix, layer by layer). */

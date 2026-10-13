@@ -168,6 +168,8 @@ class AudioEngine {
   private lastBleat = -1;
   private drinkSounds: { buffer: AudioBuffer; index: Record<"open" | "gulps" | "breath", [number, number]> } | null = null;
   private master: GainNode | null = null;
+  /** The very end of the graph (after the compressor): what's heard, and what the trailer records. */
+  private out: AudioNode | null = null;
   /** Between the ambience bus and the master: dips while Gugut speaks. */
   private ambienceDuck: GainNode | null = null;
   private voice: GainNode | null = null;
@@ -306,6 +308,7 @@ class AudioEngine {
     master.gain.value = 0.9;
     master.connect(compressor).connect(ctx.destination);
     this.master = master;
+    this.out = compressor;
 
     this.ambience = ctx.createGain();
     this.ambience.gain.value = 0;
@@ -809,6 +812,52 @@ class AudioEngine {
       osc.start(now);
       osc.stop(end + 0.1);
     }
+  }
+
+  /* ---------- the trailer (app/trailer) ---------- */
+
+  /** Everything heard, as a stream (to record), or null before the sound is unlocked. */
+  captureStream(): MediaStream | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.out) return null;
+    const dest = ctx.createMediaStreamDestination();
+    this.out.connect(dest);
+    return dest.stream;
+  }
+
+  /**
+   * A piece of music straight into the master (outside the game's mix and the
+   * music switch), from `from` s, fading in. Returns its controls: a level to
+   * glide to (a dip under a sound), and a stop with a fade.
+   */
+  playMusic(
+    src: string,
+    from: number,
+    level = 0.9,
+    fadeIn = 1.5
+  ): { stop: (fadeOut: number) => void; level: (to: number, over: number) => void } | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.master) return null;
+    const element = new Audio(src);
+    element.currentTime = from;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(level, ctx.currentTime + fadeIn);
+    ctx.createMediaElementSource(element).connect(gain).connect(this.master);
+    void element.play();
+    const glide = (to: number, over: number) => {
+      const now = ctx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(to, now + over);
+    };
+    return {
+      level: (to, over) => glide(to * level, over),
+      stop: (fadeOut) => {
+        glide(0, fadeOut);
+        window.setTimeout(() => element.pause(), fadeOut * 1000 + 100);
+      },
+    };
   }
 
   /* ---------- Gugut's voice ---------- */

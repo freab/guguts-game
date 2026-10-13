@@ -10,6 +10,7 @@ import { playerStore } from "../character/playerStore";
 import { WallCollider } from "../character/WallCollider";
 import { carvingPlace } from "../game/carving";
 import { goat } from "../game/goat";
+import { bushPlace } from "../maze/CoffeeBush";
 import { jebenaPlace } from "../game/jebena";
 import { mapleTreeLayout } from "../scene/tree/mapleTree";
 import { nearestFlowerHead } from "../scene/flowers/FlowerField";
@@ -47,6 +48,8 @@ interface Pose {
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 /** Ease in and out (quintic): a glide that starts and lands softly. */
 const ease = (t: number) => (t < 0.5 ? 16 * t ** 5 : 1 - (-2 * t + 2) ** 5 / 2);
+/** Gentler (sine): the trailer's glides, moving the whole way rather than leaping in the middle. */
+const easeSoft = (t: number) => 0.5 - Math.cos(Math.PI * t) / 2;
 const follow = (from: number, to: number, rate: number, dt: number) => from + (to - from) * (1 - Math.exp(-rate * dt));
 
 /** The flower the macro shot frames (reused). */
@@ -322,6 +325,21 @@ function shotPose(shot: Shot, t: number, out: Pose) {
       out.fov = 55;
       return;
     }
+    case "berries": {
+      // Low by the coffee bush on her tile, its red cherries close, looking in
+      // from the open side of the tile (she's there, beyond them).
+      const bush = bushPlace();
+      const [gx, gz] = goat.position();
+      let dx = gx - bush.x;
+      let dz = gz - bush.z;
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+      out.pos.set(bush.x + dx * 1.05 - dz * 0.3, 0.72, bush.z + dz * 1.05 + dx * 0.3);
+      out.target.set(bush.x, 0.55, bush.z);
+      out.fov = 40;
+      return;
+    }
     case "aerial": {
       // High over a corner, looking across the whole maze to the far side and
       // the sky: long evening shadows, the maze filling the right of the frame.
@@ -414,7 +432,17 @@ function placeLightmapView(view: THREE.Mesh, dt: number) {
  * stands the player's "feet" where it looks, so the grass, flowers and tree
  * (culled around the player) are drawn there.
  */
-export default function Director({ slides, still = false }: { slides: Slide[]; /** Hold every shot still: no drift, no motion (a picture). */ still?: boolean }) {
+export default function Director({
+  slides,
+  still = false,
+  cinematic = false,
+}: {
+  slides: Slide[];
+  /** Hold every shot still: no drift, no motion (a picture). */
+  still?: boolean;
+  /** The trailer: slower, longer glides (or a slide's own: glide, cut). */
+  cinematic?: boolean;
+}) {
   const ready = useLoading().stage === "ready";
   // The sky's background, kept while it's hidden (black instead).
   const sky = useRef<{ saved: THREE.Scene["background"]; black: THREE.Color }>({ saved: null, black: new THREE.Color(0) });
@@ -488,7 +516,8 @@ export default function Director({ slides, still = false }: { slides: Slide[]; /
       g.key = key;
       g.at = now;
       // (The first shot just cuts in.)
-      g.seconds = first ? 0 : glideSeconds(distance);
+      const s = slides[slide];
+      g.seconds = first || s.cut ? 0 : (s.glide ?? (cinematic ? Math.max(2.6, glideSeconds(distance) * 1.6) : glideSeconds(distance)));
       g.landed = false;
       from.current.pos.copy(cam.position);
       from.current.target.copy(first ? p.target : aim.current);
@@ -498,7 +527,7 @@ export default function Director({ slides, still = false }: { slides: Slide[]; /
       bend.current.y = Math.max(bend.current.y + clamp(distance * 0.18, 0.4, 5), low ? OVER_WALLS + 0.5 : 0);
     }
     const t = now - g.at;
-    shotPose(name, still ? 0 : t, p);
+    shotPose(name, still ? 0 : t * (cinematic ? (slides[slide].pace ?? 1) : 1), p);
     // A little life in every shot: a slow, handheld drift (none in a still).
     if (!still) {
       p.pos.x += Math.sin(t * 0.37) * 0.05;
@@ -506,8 +535,16 @@ export default function Director({ slides, still = false }: { slides: Slide[]; /
       p.pos.z += Math.cos(t * 0.31) * 0.05;
     }
 
+    // The trailer: easing in towards the subject all through the shot.
+    const push = cinematic ? slides[slide].push : 0;
+    if (push) {
+      const toward = fwd.current.subVectors(p.target, p.pos);
+      const d = toward.length();
+      p.pos.addScaledVector(toward.normalize(), Math.min(push * t, d * 0.4));
+    }
+
     const k = g.seconds ? Math.min(1, t / g.seconds) : 1;
-    const u = ease(k);
+    const u = cinematic ? easeSoft(k) : ease(k);
     // Letterbox bars while it moves: in quickly, out as it lands.
     presentLive.bars = g.seconds && k < 1 ? Math.min(1, k / 0.15) * Math.min(1, (1 - k) / 0.3) : 0;
     if (u >= 1) cam.position.copy(p.pos);
@@ -529,7 +566,7 @@ export default function Director({ slides, still = false }: { slides: Slide[]; /
     // The aim sweeps from the old subject to the new one.
     aim.current.lerpVectors(from.current.target, p.target, u);
     cam.lookAt(aim.current);
-    const fov = from.current.fov + (p.fov - from.current.fov) * u + Math.sin(Math.PI * u) * FOV_BREATH;
+    const fov = from.current.fov + (p.fov - from.current.fov) * u + Math.sin(Math.PI * u) * (cinematic ? 2 : FOV_BREATH);
     if (Math.abs(cam.fov - fov) > 1e-3) {
       cam.fov = fov;
       cam.updateProjectionMatrix();

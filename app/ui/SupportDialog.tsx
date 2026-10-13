@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { stat } from "../game/stats";
-import { SUPPORT_BIRR_URL, SUPPORT_URL } from "../support";
+import { SUPPORT_URL } from "../support";
 import Dialog from "./Dialog";
 
 /** A coffee cup, steaming (also the top bar's support button: scene/SceneClient). */
@@ -17,33 +17,18 @@ export function CupIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-/**
- * The ways to support the game (app/support): Buy Me a Coffee, and in birr
- * (Jami). `from`: where, for the stats (support_click).
- */
+/** The way to support the game (app/support): a tip on Jami. `from`: where, for the stats (support_click). */
 export function SupportLink({ from }: { from: string }) {
-  const clicked = (via: string) => () => stat("support_click", { from, via });
   return (
-    <div className="space-y-2">
-      <a
-        href={SUPPORT_URL}
-        target="_blank"
-        rel="noreferrer"
-        onClick={clicked("coffee")}
-        className="ui-cta flex w-full items-center justify-center gap-2 px-5 py-2.5 ui-label"
-      >
-        <CupIcon /> Buy me a coffee
-      </a>
-      <a
-        href={SUPPORT_BIRR_URL}
-        target="_blank"
-        rel="noreferrer"
-        onClick={clicked("birr")}
-        className="ui-tile flex w-full items-center justify-center gap-2 px-5 py-2.5 ui-label"
-      >
-        In Ethiopia? Tip in birr · በብር
-      </a>
-    </div>
+    <a
+      href={SUPPORT_URL}
+      target="_blank"
+      rel="noreferrer"
+      onClick={() => stat("support_click", { from })}
+      className="ui-cta flex w-full items-center justify-center gap-2 px-5 py-2.5 ui-label"
+    >
+      <CupIcon /> Buy Gugut a buna
+    </a>
   );
 }
 

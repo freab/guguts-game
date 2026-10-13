@@ -1,4 +1,4 @@
-import { Fraunces, Inter, Jolly_Lodger, Noto_Serif_Ethiopic } from "next/font/google";
+import { Fraunces, Inter, Jolly_Lodger, Lexend, Noto_Serif_Ethiopic } from "next/font/google";
 
 /**
  * Display face matching the "GUGUT & THE GOAT" poster lettering (tall,
@@ -38,6 +38,14 @@ export const cardSerif = Fraunces({
 });
 export const cardSans = Inter({
   subsets: ["latin"],
+  display: "swap",
+  preload: false,
+});
+
+/** The trailer's face (app/trailer): Lexend, light for the story, medium for the small gold labels. */
+export const trailerFont = Lexend({
+  subsets: ["latin"],
+  weight: ["300", "500"],
   display: "swap",
   preload: false,
 });
